@@ -1,6 +1,6 @@
 name: Verify live deployment
 
-# Checks the deployed API and the live GitHub Pages frontend together, with synthetic data only.
+# Checks the deployed API and the live frontend (Vercel by default) together, with synthetic data only.
 # Runs on demand (Actions → Verify live deployment → Run workflow) and on pull requests that change it.
 # It writes synthetic @example.test accounts and cases to the deployed database.
 on:
@@ -8,6 +8,9 @@ on:
     inputs:
       api_url:
         description: Public URL of the deployed API (defaults to the MEDGUARD_API_URL repository variable)
+        required: false
+      site_url:
+        description: Public URL of the frontend to test (defaults to the Vercel production site)
         required: false
       idle_minutes:
         description: Minutes without traffic before re-reading (a free instance stops after 15)
@@ -29,8 +32,8 @@ jobs:
     timeout-minutes: 45
     env:
       API_URL: ${{ inputs.api_url || vars.MEDGUARD_API_URL || 'https://medguard-api-duti.onrender.com' }}
-      SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-      SITE_ORIGIN: https://${{ github.repository_owner }}.github.io
+      SITE_URL: ${{ inputs.site_url || vars.MEDGUARD_SITE_URL || 'https://medguard-sigma.vercel.app/' }}
+      PAGES_ORIGIN: https://${{ github.repository_owner }}.github.io
       IDLE_MINUTES: ${{ inputs.idle_minutes || '17' }}
       MEDGUARD_LIVE_STATE: live-state.json
     steps:
@@ -40,14 +43,25 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Derive the frontend origin
+        run: echo "SITE_ORIGIN=$(echo "$SITE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')" >> "$GITHUB_ENV"
+      - name: Frontend is public (no login redirect) and serves MedGuard
+        run: |
+          out=$(curl -s -o page.html -w '%{http_code} %{url_effective}' -L --max-time 30 "$SITE_URL"); echo "$out"
+          [ "$out" = "200 $SITE_URL" ] || { echo "::error::$SITE_URL did not answer 200 without a redirect"; exit 1; }
+          grep -q '<title>MedGuard' page.html || { echo "::error::MedGuard title missing"; exit 1; }
       - name: Wake the API (a free instance may take about a minute)
         run: |
           for i in $(seq 1 18); do curl -sf --max-time 30 "$API_URL/api/health" >/dev/null && echo "awake" && exit 0; echo "attempt $i"; sleep 10; done
           echo "::error::$API_URL did not answer"; exit 1
       - name: API checks (health, readiness, PostgreSQL, CORS, auth, records, detection, review, notes, files, isolation)
         run: node --import tsx tests/live/verify-api.mts write "$API_URL" "$SITE_ORIGIN"
+      - name: The GitHub Pages origin is still allowed by CORS
+        run: |
+          curl -s -o /dev/null -D h.txt -X OPTIONS "$API_URL/api/auth/login" -H "Origin: $PAGES_ORIGIN" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type"
+          grep -i "^access-control-allow-origin: $PAGES_ORIGIN" h.txt || { cat h.txt; exit 1; }
       - run: npx playwright install --with-deps chromium
-      - name: Live GitHub Pages frontend against the live API (two-user shared-workspace browser tests)
+      - name: Live frontend against the live API (two-user shared-workspace browser tests)
         run: BASE_URL="$SITE_URL" API_URL="$API_URL" npx playwright test tests/e2e/shared.spec.ts --project=desktop
       - name: Stay idle so the free instance stops
         run: sleep $(( IDLE_MINUTES * 60 ))
