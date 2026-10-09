@@ -5,7 +5,7 @@
 **Healthcare Record Contradiction Detector** · *Find contradictions. Preserve clinical context. Support better decisions.*
 
 > **Audit basis:** branch `claude/optimistic-tesla-466st5`; code audited at commit `a77a427` on 2026-10-09. The identifier renames from base commit `16ebafa` were merged in afterwards and are reflected below; checks were re-run on the merged tree (see §5). Every claim below cites repository files. Anything not verifiable from the repository is labelled **UNKNOWN** or **INFERENCE**.
-> **Naming:** the product name rendered by the application is **MEDGUARD** (`index.html`, `AppShell.tsx`, `BrandMark.tsx`). Internal identifiers also use `medguard` / `MEDGUARD_*` since commit `16ebafa`. Only the GitHub repository name, and therefore the Pages URL, keeps the original `cliniscope-healthcare-contradiction-detector`.
+> **Naming:** the product name rendered by the application is **MEDGUARD** (`index.html`, `AppShell.tsx`, `BrandMark.tsx`). Internal identifiers also use `medguard` / `MEDGUARD_*` since commit `16ebafa`. The GitHub repository name, and therefore the Pages URL path, is renamed separately (see `docs/backend/DEPLOYMENT.md`, "Repository and URL").
 
 ## Documentation map
 
@@ -120,7 +120,7 @@ The system does not diagnose and does not decide which record is correct.
 
 ## 6. Open questions / not verifiable from the repository
 
-1. **Product-name spelling.** The code says **MEDGUARD** (commit `a77a427` changed MEDGAURD → MEDGUARD). The request for this audit uses both "MEDGuard" and "MEDGAURD". The documentation follows the code.
+1. **Product-name spelling.** The code says **MEDGUARD** (commit `a77a427` corrected an earlier misspelling). The documentation follows the code: **MEDGUARD** as the wordmark, **MedGuard** in prose.
 2. **Live site.** The GitHub Pages URL could not be opened from the audit sandbox (egress proxy 403). Its status relies on CI's `verify-production` result.
 3. **Default branch** is `claude/fervent-euler-bsgy2t` (confirmed from repository metadata).
 4. **Provider data retention** for the AI path is UNKNOWN.

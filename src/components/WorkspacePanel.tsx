@@ -34,7 +34,7 @@ export function WorkspacePanel() {
   return (
     <section id="workspace" className="card scroll-mt-20 p-5 text-sm" aria-labelledby="ws-h" data-testid="workspace-panel">
       <h2 id="ws-h" className="mb-1 flex items-center gap-2 text-base font-semibold"><Cloud size={17} className="text-brand" aria-hidden />Shared workspace</h2>
-      <p className="mb-4 text-xs text-muted">Optional. Connect to a MEDGUARD API server to share cases with other authenticated reviewers and to use AI-assisted analysis. Without it, the app runs in <strong>local demo mode</strong> and data stays in this browser.</p>
+      <p className="mb-4 text-xs text-muted">Optional. Connect to a MedGuard API server to share cases with other authenticated reviewers and to use AI-assisted analysis. Without it, the app runs in <strong>local demo mode</strong> and data stays in this browser.</p>
       <label htmlFor="ws-url" className="label">Server URL</label>
       <div className="flex gap-2">
         <input id="ws-url" className="input" placeholder="https://medguard-api.example.org" value={url} onChange={(e) => setUrl(e.target.value)} data-testid="server-url" />

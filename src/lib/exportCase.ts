@@ -143,7 +143,7 @@ export class BackupError extends Error {}
  */
 export async function restoreBackup(db: MedguardDB, raw: unknown): Promise<CaseRecord> {
   const parsed = BackupSchema.safeParse(raw);
-  if (!parsed.success) throw new BackupError('This file is not a valid MEDGUARD backup (format or required fields do not match).');
+  if (!parsed.success) throw new BackupError('This file is not a valid MedGuard backup (format or required fields do not match).');
   const b = parsed.data;
   const docs = b.documents as unknown as DocumentRecord[];
   const byId = new Map(docs.map((d) => [d.id, d]));
@@ -193,7 +193,7 @@ export async function restoreBackup(db: MedguardDB, raw: unknown): Promise<CaseR
     ...(e.findingId ? { findingId: fdMap.get(e.findingId) ?? e.findingId } : {}),
     ...(e.documentId ? { documentId: mapDoc(e.documentId) } : {}),
   }));
-  newEvents.push({ id: uid('ev'), caseId, kind: 'case_created', at: now, actor: 'Local restore', detail: `Restored from a MEDGUARD backup exported ${String((raw as { exportedAt?: string }).exportedAt ?? 'unknown')} (${docs.length} documents, ${b.findings.length} findings, ${b.events.length} history events). Identifiers were reassigned.` });
+  newEvents.push({ id: uid('ev'), caseId, kind: 'case_created', at: now, actor: 'Local restore', detail: `Restored from a MedGuard backup exported ${String((raw as { exportedAt?: string }).exportedAt ?? 'unknown')} (${docs.length} documents, ${b.findings.length} findings, ${b.events.length} history events). Identifiers were reassigned.` });
 
   await db.transaction('rw', [db.cases, db.documents, db.files, db.statements, db.findings, db.events], async () => {
     await db.cases.add(c);

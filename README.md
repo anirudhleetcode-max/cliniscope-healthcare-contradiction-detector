@@ -1,5 +1,8 @@
 # MEDGUARD
 
+- **Product name:** MEDGUARD · **Display name:** MedGuard · **Purpose:** Healthcare Contradiction Detection
+- MedGuard helps identify potentially contradictory healthcare information and presents findings for review. It does not diagnose and does not replace clinicians.
+
 **Healthcare Record Contradiction Detector** — *Find contradictions. Preserve clinical context. Support better decisions.*
 
 **Evidence-first healthcare record contradiction detection and clinical review.** Built for problem statement **PS-11R3: Healthcare Record Contradiction Detector**.

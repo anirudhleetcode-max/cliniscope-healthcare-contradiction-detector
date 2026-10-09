@@ -17,7 +17,7 @@ const PAGES: Result[] = [
   { id: 'p-queue', group: 'Pages', title: 'Review Queue', sub: 'Pending reviews', to: '/queue' },
   { id: 'p-activity', group: 'Pages', title: 'Activity', sub: 'Local activity log', to: '/activity' },
   { id: 'p-settings', group: 'Pages', title: 'Settings', sub: 'Workspace, data and capabilities', to: '/settings' },
-  { id: 'p-help', group: 'Pages', title: 'Help & About', sub: 'How MEDGUARD works', to: '/help' },
+  { id: 'p-help', group: 'Pages', title: 'Help & About', sub: 'How MedGuard works', to: '/help' },
 ];
 
 const ICON = { Pages: LayoutDashboard, Cases: FolderOpen, Findings: GitCompareArrows, Documents: FileText };

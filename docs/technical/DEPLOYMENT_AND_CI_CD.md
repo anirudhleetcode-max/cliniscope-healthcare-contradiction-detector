@@ -23,7 +23,7 @@ The URL is built in the workflow as `https://<owner>.github.io/<repo>/`. It keep
 ## 2. Base path and asset paths (GitHub Pages sub-path)
 
 - `vite.config.ts` uses `base: './'`, so the built `dist/index.html` references `./assets/…`, `./favicon.svg` (verified in this audit's build output).
-- Routes are hash-based (`#/cases/…`), so the server never needs SPA rewrites and deep links work under `/cliniscope-healthcare-contradiction-detector/`.
+- Routes are hash-based (`#/cases/…`), so the server never needs SPA rewrites and deep links work under the repository sub-path `/<repository>/`.
 - The pdf.js worker, OCR worker, WASM and traineddata resolve with `new URL('./…', document.baseURI)` (`browserExtract.ts`, `browserOcr.ts`). Demo files use `fetch('./demo/…')`. The service worker registers as `./sw.js`.
 - Result: the same build works at `/`, at `/<repo>/`, or from `vite preview`. The production e2e run against the live sub-path URL (`verify-production`) passed.
 
@@ -61,7 +61,7 @@ There is no staging environment, no release tagging, no manual approval gate, no
 |---|---|---|---|
 | CI and deploy #46 | `38e3a54` "Merge PR #3: backend v1.2 …" | test ✓ (24/24 e2e), docker-api ✓, deploy ✓, verify-production ✓ (21 passed, 3 skipped: the shared-workspace and AI specs need an API URL) | success |
 | pages build and deployment #18 | `gh-pages` `320e2e2` ("deploy: 38e3a54…") | n/a | success |
-| CI and deploy #30 | `a77a427` "Rename MEDGAURD to MEDGUARD" | test ✓, docker-api ✓, deploy ✓, verify-production ✓ | success |
+| CI and deploy #30 | `a77a427` (product-name spelling correction) | test ✓, docker-api ✓, deploy ✓, verify-production ✓ | success |
 | pages build and deployment #16 | `gh-pages` `d89580f` ("deploy: a77a427…") | n/a | success |
 | CI and deploy #29 | `fd824f0` | n/a | success |
 | CI and deploy #27 | `4d5a0b1` (a WIP redesign commit) | n/a | failure (e2e specs not yet updated, per its commit message) |
@@ -92,7 +92,7 @@ From `.env.example`, `server/config.ts`, `vite.config.ts`, `playwright.config.ts
 | `BASE_URL`, `API_URL`, `CHROMIUM_PATH` | Tests | none | Run e2e against a deployed URL or API; custom Chromium |
 | `SITE_URL`, `GH_TOKEN` | CI only | from GitHub context / `secrets.GITHUB_TOKEN` | Production verification |
 
-Since commit `16ebafa` (on the base branch, merged into this branch), all internal identifiers use the MEDGUARD name: the `MEDGUARD_*` server variables, `medguard-api`, `medguard-data`, `medguard.db`, the IndexedDB name `medguard`, the `medguard.*` storage keys, the `medguard-v1` offline cache and the `medguard-backup` / `medguard-case-report` formats. **Compatibility consequences (per that commit; not separately tested here):** browser data stored under the old IndexedDB name `cliniscope` is not migrated (the demo workspace reseeds), servers configured with the old `CLINISCOPE_*` variables must be reconfigured, and backups exported in the old `cliniscope-backup` format no longer pass the restore schema (`z.literal('medguard-backup')` in `src/lib/exportCase.ts`). Only the repository name, and therefore the Pages URL, still contains `cliniscope`.
+Since commit `16ebafa` (on the base branch, merged into this branch), all internal identifiers use the MEDGUARD name: the `MEDGUARD_*` server variables, `medguard-api`, `medguard-data`, `medguard.db`, the IndexedDB name `medguard`, the `medguard.*` storage keys, the `medguard-v1` offline cache and the `medguard-backup` / `medguard-case-report` formats. **Compatibility consequences (per that commit; not separately tested here):** browser data stored under the previous IndexedDB name is not migrated (the demo workspace reseeds), servers configured with the previous environment-variable prefix must be reconfigured with the `MEDGUARD_*` names, and backups exported in the previous backup format no longer pass the restore schema (`z.literal('medguard-backup')` in `src/lib/exportCase.ts`). The repository name, and therefore the Pages URL path, is renamed separately (see `docs/backend/DEPLOYMENT.md`).
 
 No secrets are stored in the repository. `.env`, `.env.*`, `*.pem` and `*.key` are git-ignored. `render.yaml` marks `ANTHROPIC_API_KEY` as `sync: false`, so it must be entered in the Render dashboard.
 

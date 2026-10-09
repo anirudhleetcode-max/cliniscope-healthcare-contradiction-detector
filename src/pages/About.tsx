@@ -23,7 +23,7 @@ export function About() {
       <PageHeader title="Settings" description="Demo Workspace · local frontend mode. No backend, database server, login or API key is required; data stays in this browser." />
       <div className="mb-6"><WorkspaceStats /></div>
       <div className="mb-6"><Appearance /></div>
-      <div className="mb-6"><Callout tone="warn" title="Review-support tool — not a diagnostic system">MEDGUARD identifies possible inconsistencies between records and shows the evidence for each. It does not diagnose, does not decide which statement is medically correct, and does not replace professional judgment. It holds no regulatory certification or compliance attestation (e.g. HIPAA) and must not be used with real patient data.</Callout></div>
+      <div className="mb-6"><Callout tone="warn" title="Review-support tool — not a diagnostic system">MedGuard identifies possible inconsistencies between records and shows the evidence for each. It does not diagnose, does not decide which statement is medically correct, and does not replace professional judgment. It holds no regulatory certification or compliance attestation (e.g. HIPAA) and must not be used with real patient data.</Callout></div>
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2"><StatusPanel /></div>
@@ -51,7 +51,7 @@ export function About() {
           <ul className="space-y-1.5">
             <li><strong>Statement extraction:</strong> deterministic vocabulary and pattern rules. No machine-learning or LLM model is used.</li>
             <li><strong>Detection:</strong> {DETECTION_METHOD}.</li>
-            <li><strong>AI-assisted reasoning (optional):</strong> only when a MEDGUARD server with a provider API key is configured and you are signed in. The model's structured output is schema-validated, every quotation is re-located verbatim in the source text (unsupported ones are discarded), one-sided conflicts are downgraded to insufficient evidence, model-invented dates are dropped, and page numbers come only from verified PDF page spans. AI findings are labelled “AI-assisted” and start unreviewed.</li>
+            <li><strong>AI-assisted reasoning (optional):</strong> only when a MedGuard server with a provider API key is configured and you are signed in. The model's structured output is schema-validated, every quotation is re-located verbatim in the source text (unsupported ones are discarded), one-sided conflicts are downgraded to insufficient evidence, model-invented dates are dropped, and page numbers come only from verified PDF page spans. AI findings are labelled “AI-assisted” and start unreviewed.</li>
             <li><strong>Explanations:</strong> rule-specific templates filled from the extracted data. They are interpretation and are labelled separately from quoted evidence.</li>
             <li><strong>OCR:</strong> Tesseract.js (LSTM, English) running on this device. PDF pages without a usable text layer, and PNG/JPEG scans, are rendered and read one page at a time. Engine-reported word confidences are kept; words below 70% are marked “OCR text requires review”, and findings that depend on them are downgraded to insufficient evidence. OCR-derived evidence is never rated above “moderate” availability. Values the OCR could not read are reported as unreadable, never guessed.</li>
             <li><strong>Evidence quality</strong> describes source availability and extraction reliability, not clinical correctness. <strong>Review priority</strong> is a workflow suggestion, not a risk score.</li>
@@ -72,7 +72,7 @@ export function About() {
             <li>All processing happens <strong>in your browser</strong>. Documents are never sent to a server.</li>
             <li>Cases, original files, extracted text, statements, findings and audit events are stored in this browser's <strong>IndexedDB</strong>. They persist across reloads on this device.</li>
             <li>In <strong>local demo mode</strong>, data is not shared between devices or users, and clearing site data deletes it.</li>
-            <li>In <strong>shared workspace mode</strong> (optional MEDGUARD server), shared cases — extracted text, statements, findings, review decisions, notes, audit events and original files — are stored on that server (SQLite + private file storage) and are visible only to authenticated members of the case. Permissions are enforced by the server; the audit table is append-only at the database level.</li>
+            <li>In <strong>shared workspace mode</strong> (optional MedGuard server), shared cases — extracted text, statements, findings, review decisions, notes, audit events and original files — are stored on that server (SQLite + private file storage) and are visible only to authenticated members of the case. Permissions are enforced by the server; the audit table is append-only at the database level.</li>
             <li>The public demo uses fictional, synthetic records only.</li>
           </ul>
         </Section>
