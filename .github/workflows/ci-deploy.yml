@@ -88,6 +88,11 @@ jobs:
             echo "Mirror attempt $i: not serving yet"; sleep 10
           done
           exit 1
+      - name: Show response headers of the live assets
+        run: |
+          base="${{ steps.url.outputs.url }}"; base="${base%index.html}"
+          curl -sI "${base}pdf.worker.min.js" | grep -iE '^(HTTP|content-type)' || true
+          curl -s "${{ steps.url.outputs.url }}" | grep -oE 'assets/[^"]+\.js' | head -1 | xargs -I{} curl -sI "${base}{}" | grep -iE '^(HTTP|content-type)' || true
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Production smoke tests (full e2e suite against the live URL)

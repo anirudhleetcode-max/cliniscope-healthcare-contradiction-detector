@@ -7,8 +7,8 @@ function loadPdfJs(): Promise<PdfJsLike> {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
       const pdfjs = await import('pdfjs-dist');
-      const worker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
-      pdfjs.GlobalWorkerOptions.workerSrc = worker;
+      // Copied to public/ at build time (scripts/copy-pdf-worker.mjs) as a .js file.
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.min.js', document.baseURI).href;
       return pdfjs as unknown as PdfJsLike;
     })();
   }
