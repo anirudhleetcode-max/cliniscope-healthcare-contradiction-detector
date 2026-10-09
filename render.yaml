@@ -1,7 +1,7 @@
 # Render Blueprint for the MEDGUARD shared-workspace API, on Render's FREE instance type.
 # Free instances have no persistent disk and stop after 15 minutes without traffic, so all data
 # lives in an external PostgreSQL database (e.g. a free Neon project) given as DATABASE_URL.
-# The static frontend stays on GitHub Pages; enter this service's URL in Settings → Shared workspace.
+# The static frontend is on Vercel (and GitHub Pages); enter this service's URL in Settings → Shared workspace.
 # Step-by-step guide: docs/backend/DEPLOYMENT.md
 services:
   - type: web
@@ -16,7 +16,7 @@ services:
       # Refuse to start without DATABASE_URL instead of silently writing to the ephemeral disk.
       - key: MEDGUARD_REQUIRE_DATABASE_URL
         value: "true"
-      # The exact frontend origin(s), comma-separated, e.g. https://<user>.github.io (scheme + host, no path).
+      # The exact frontend origin(s), comma-separated, e.g. https://medguard-sigma.vercel.app,https://<user>.github.io (scheme + host, no path).
       - key: MEDGUARD_ALLOWED_ORIGINS
         sync: false
       # true lets anyone create an account (needed for the public demo and the production e2e tests).
