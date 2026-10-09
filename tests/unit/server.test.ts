@@ -200,6 +200,39 @@ describe('shared workspace API: cases, permissions and two-user review', () => {
   });
 });
 
+describe('roles: the owner manages access; reviewers and viewers cannot', () => {
+  it('enforces owner-only membership and case administration on the server, with no self-promotion', async () => {
+    const owner = await register('role-owner@example.test', 'Role Owner');
+    const rev = await register('role-rev@example.test', 'Role Reviewer');
+    const viewer = await register('role-view@example.test', 'Role Viewer');
+    const outsider = await register('role-out@example.test', 'Role Outsider');
+    const id = (await api('/api/cases', { token: owner, body: { label: 'ROLES · synthetic' } })).json.case.id;
+    await api(`/api/cases/${id}/members`, { token: owner, body: { email: 'role-rev@example.test', role: 'reviewer' } });
+    const added = await api(`/api/cases/${id}/members`, { token: owner, body: { email: 'role-view@example.test', role: 'viewer' } });
+    const viewerId = added.json.members.find((m: any) => m.email === 'role-view@example.test').userId;
+    const ownerId = added.json.members.find((m: any) => m.role === 'owner').userId;
+    // Reviewer and viewer can read the case, but not manage it.
+    for (const t of [rev, viewer]) {
+      expect((await api(`/api/cases/${id}`, { token: t })).status).toBe(200);
+      expect((await api(`/api/cases/${id}/members`, { token: t, body: { email: 'role-out@example.test', role: 'viewer' } })).status).toBe(403);
+      expect((await api(`/api/cases/${id}/members/${viewerId}`, { method: 'DELETE', token: t })).status).toBe(403);
+      expect((await api(`/api/cases/${id}`, { method: 'PATCH', token: t, body: { archived: true } })).status).toBe(403);
+    }
+    // No self-promotion: an owner role cannot be granted, and the profile endpoint has no role field.
+    expect((await api(`/api/cases/${id}/members`, { token: owner, body: { email: 'role-rev@example.test', role: 'owner' } })).status).toBe(400);
+    expect((await api('/api/auth/me', { method: 'PATCH', token: rev, body: { displayName: 'X', role: 'owner' } })).status).toBe(400);
+    expect((await api('/api/auth/register', { body: { email: 'role-new@example.test', password: 'correct-horse-battery', displayName: 'N', role: 'owner' } })).json.user?.role).toBeUndefined();
+    // Outsiders learn nothing (404), and the owner can never be removed, so a case always keeps its administrator.
+    expect((await api(`/api/cases/${id}`, { token: outsider })).status).toBe(404);
+    expect((await api(`/api/cases/${id}/members/${ownerId}`, { method: 'DELETE', token: owner })).status).toBe(400);
+    // The owner revokes the viewer; access ends immediately and the change is audited.
+    const rm = await api(`/api/cases/${id}/members/${viewerId}`, { method: 'DELETE', token: owner });
+    expect(rm.status).toBe(200);
+    expect((await api(`/api/cases/${id}`, { token: viewer })).status).toBe(404);
+    expect(rm.json.events.some((e: any) => e.kind === 'member_removed')).toBe(true);
+  });
+});
+
 describe('profile and signed-in overview', () => {
   it('updates only the caller\'s own display name, with validation; the change persists for later sessions', async () => {
     const dana = await register('pv-dana@example.test', 'Dana Draft');
