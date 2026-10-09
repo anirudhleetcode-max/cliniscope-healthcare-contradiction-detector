@@ -152,6 +152,12 @@ describe('API: health, readiness and documentation', () => {
     const { app, api } = await start(await newDatabase());
     expect((await api('/health')).json).toMatchObject({ ok: true, service: 'medguard-api' });
     expect((await api('/api/health')).status).toBe(200);
+    // The root answers with a description and links instead of a bare 404; it exposes no data or configuration.
+    const root = await api('/');
+    expect(root.status).toBe(200);
+    expect(root.json).toMatchObject({ service: 'medguard-api', health: '/api/health', ready: '/api/ready', docs: '/api/openapi.json' });
+    expect(JSON.stringify(root.json)).not.toMatch(/postgres|DATABASE_URL|secret|GOOGLE_|token/i);
+    expect((await api('/no-such-page')).status).toBe(404);
     const ready = await api('/api/ready');
     expect(ready.status).toBe(200);
     expect(ready.json.database).toEqual({ reachable: true, engine: 'postgresql', storage: REAL_PG ? 'external' : 'embedded', schemaVersion: SCHEMA_VERSION, expectedSchemaVersion: SCHEMA_VERSION });

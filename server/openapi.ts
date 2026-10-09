@@ -24,6 +24,7 @@ export const OPENAPI = {
     },
   },
   paths: {
+    '/': { get: { summary: 'Service description with links to health, readiness and this document (no data)', responses: { 200: ok('{service, version, message, health, ready, docs}') } } },
     '/health': { get: { summary: 'Liveness (alias without the /api prefix)', responses: { 200: ok('Service is running') } } },
     '/ready': { get: { summary: 'Readiness (alias)', responses: { 200: ok('Database reachable and migrated'), 503: err } } },
     '/api/health': { get: { summary: 'Liveness, version, AI and registration configuration (no secrets)', responses: { 200: ok('Service is running') } } },

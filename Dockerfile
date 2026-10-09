@@ -7,7 +7,9 @@
 #   docker run -p 8787:8787 -v medguard-data:/data -e MEDGUARD_ALLOWED_ORIGINS=https://<your-frontend-host> medguard-api
 # The server is bundled into one file; the only runtime package is the embedded database (PGlite),
 # which is loaded only when DATABASE_URL is not set.
-FROM node:22-slim AS build
+# NODE_IMAGE lets CI pull the same official image from a mirror; the default is unchanged.
+ARG NODE_IMAGE=node:22-slim
+FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
@@ -15,7 +17,7 @@ COPY server ./server
 COPY src/lib ./src/lib
 RUN npm run server:build
 
-FROM node:22-slim
+FROM ${NODE_IMAGE}
 WORKDIR /app
 ENV NODE_ENV=production MEDGUARD_DATA_DIR=/data PORT=8787 HOST=0.0.0.0
 COPY --from=build /app/dist-server/server.mjs ./server.mjs

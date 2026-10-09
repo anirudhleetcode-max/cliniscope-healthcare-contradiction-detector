@@ -176,6 +176,12 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
   route('GET', '/api/ready', false, ready);
   route('GET', '/ready', false, ready);
   route('GET', '/health', false, () => ({ ok: true, service: 'medguard-api', version: API_VERSION, time: now() }));
+  // Opening the API's address in a browser shows what it is instead of a bare 404 (no data, no configuration).
+  route('GET', '/', false, () => ({
+    service: 'medguard-api', version: API_VERSION,
+    message: 'MedGuard API. Open the MedGuard web app to use it; this address serves the JSON API only.',
+    health: '/api/health', ready: '/api/ready', docs: '/api/openapi.json',
+  }));
   route('GET', '/api/openapi.json', false, () => OPENAPI);
 
   route('POST', '/api/auth/register', false, async (c) => {
@@ -302,8 +308,12 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
     } else if (linked) {
       userId = linked.id;
     } else {
-      // Never attach a Google identity to an existing account because the email matches.
-      if (await db.get('SELECT 1 FROM users WHERE email = ?', [identity.email])) return back({ error: 'account_exists' });
+      // Never attach a Google identity to an existing account because the email matches. Before reporting
+      // that, look the Google subject up again: a concurrent first sign-in may have just created this account.
+      if (await db.get('SELECT 1 FROM users WHERE email = ?', [identity.email])) {
+        const raced = await db.get<{ id: string }>('SELECT id FROM users WHERE google_sub = ?', [identity.sub]);
+        if (!raced) return back({ error: 'account_exists' });
+      }
       const id = newId('usr');
       const created = await db.get<{ id: string }>('INSERT INTO users (id, email, display_name, password_hash, google_sub) VALUES (?,?,?,NULL,?) ON CONFLICT DO NOTHING RETURNING id',
         [id, identity.email, identity.name ?? identity.email.split('@')[0].slice(0, 80), identity.sub]);
