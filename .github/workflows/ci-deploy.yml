@@ -55,15 +55,14 @@ jobs:
           force_orphan: true
           commit_message: 'deploy: ${{ github.sha }}'
 
-  # Production verification: runs the end-to-end suite against the live public URL.
-  # Primary: GitHub Pages. Fallback (if Pages is not enabled in repo settings):
-  # raw.githack.com, a public CDN that serves the gh-pages branch with correct content types.
+  # Production verification: runs the end-to-end suite against the live GitHub Pages URL.
+  # GitHub Pages must be enabled once in Settings > Pages (Deploy from branch: gh-pages, / root);
+  # the workflow token is not permitted to change that setting.
   verify-production:
     needs: deploy
     runs-on: ubuntu-latest
     env:
-      PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-      MIRROR_URL: https://raw.githack.com/${{ github.repository }}/gh-pages/index.html
+      SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
@@ -71,29 +70,22 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Report GitHub Pages configuration
+      - name: Check that the live site is serving this build
+        id: live
         run: |
           gh api "repos/${{ github.repository }}/pages" --jq '{status: .status, url: .html_url, source: .source}' \
             || gh api -X POST "repos/${{ github.repository }}/pages" -f 'source[branch]=gh-pages' -f 'source[path]=/' \
-            || echo "::warning::GitHub Pages is not enabled and GITHUB_TOKEN cannot enable it. Enable it in Settings > Pages (Deploy from branch: gh-pages, / root)."
-      - name: Resolve live URL
-        id: url
-        run: |
-          for i in $(seq 1 18); do
-            if curl -sf "$PAGES_URL" | grep -q 'CLINISCOPE'; then echo "url=$PAGES_URL" >> "$GITHUB_OUTPUT"; echo "Verified GitHub Pages: $PAGES_URL"; exit 0; fi
-            echo "Pages attempt $i: not serving yet"; sleep 10
+            || true
+          for i in $(seq 1 30); do
+            if curl -sf "$SITE_URL" | grep -q 'CLINISCOPE'; then echo "available=true" >> "$GITHUB_OUTPUT"; echo "Live: $SITE_URL"; exit 0; fi
+            echo "attempt $i: $SITE_URL not serving yet"; sleep 10
           done
-          for i in $(seq 1 18); do
-            if curl -sf "$MIRROR_URL" | grep -q 'CLINISCOPE'; then echo "url=$MIRROR_URL" >> "$GITHUB_OUTPUT"; echo "::notice::GitHub Pages unavailable; verified mirror $MIRROR_URL"; exit 0; fi
-            echo "Mirror attempt $i: not serving yet"; sleep 10
-          done
-          exit 1
-      - name: Show response headers of the live assets
-        run: |
-          base="${{ steps.url.outputs.url }}"; base="${base%index.html}"
-          curl -sI "${base}pdf.worker.min.js" | grep -iE '^(HTTP|content-type)' || true
-          curl -s "${{ steps.url.outputs.url }}" | grep -oE 'assets/[^"]+\.js' | head -1 | xargs -I{} curl -sI "${base}{}" | grep -iE '^(HTTP|content-type)' || true
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          echo "::warning title=GitHub Pages not enabled::$SITE_URL is not serving. Enable Settings > Pages > Deploy from a branch > gh-pages / (root), then re-run this workflow."
+      - if: steps.live.outputs.available == 'true'
+        run: npm ci
+      - if: steps.live.outputs.available == 'true'
+        run: npx playwright install --with-deps chromium
       - name: Production smoke tests (full e2e suite against the live URL)
-        run: BASE_URL="${{ steps.url.outputs.url }}" npx playwright test --project=desktop --project=mobile
+        if: steps.live.outputs.available == 'true'
+        run: BASE_URL="$SITE_URL" npx playwright test --project=desktop --project=mobile

@@ -6,7 +6,7 @@
 > From fragmented medical records to traceable, human-verified clinical review.
 
 **Live demo:** https://anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector/
-(served from GitHub Pages; built and deployed by GitHub Actions)
+Every push builds, tests and publishes `dist/` to the `gh-pages` branch. **One-time setup:** a repository admin must enable *Settings → Pages → Deploy from a branch → `gh-pages` / (root)*. The workflow token is not allowed to change that setting. After that, the `verify-production` job runs the full end-to-end suite against the live URL on every deploy.
 
 > ⚠️ **Hackathon prototype. Review-support tool, not a diagnostic system.** CLINISCOPE flags *possible* inconsistencies and shows the source evidence for each. It never decides which statement is medically correct. It has no regulatory certification and no compliance attestation (HIPAA or other), and it has no authentication. Use **synthetic data only**.
 
