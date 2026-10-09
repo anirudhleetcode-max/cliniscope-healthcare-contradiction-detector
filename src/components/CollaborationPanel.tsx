@@ -5,6 +5,7 @@ import { useWorkspace } from '../app/workspace';
 import { applySnapshot, remoteApi, type RemoteMember } from '../lib/remote';
 import { formatDateTime } from '../lib/dates';
 import type { CaseRecord } from '../lib/types';
+import { ConfirmDialog } from './ui';
 
 /** Owner, collaborators and sharing controls for a case stored in the shared workspace. Data comes from the server only. */
 export function CollaborationPanel({ c }: { c: CaseRecord }) {
@@ -14,6 +15,7 @@ export function CollaborationPanel({ c }: { c: CaseRecord }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'reviewer' | 'viewer'>('reviewer');
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<RemoteMember | null>(null);
   const signedIn = !!ws.session && ws.session.serverUrl === c.remote?.serverUrl;
 
   useEffect(() => {
@@ -45,7 +47,7 @@ export function CollaborationPanel({ c }: { c: CaseRecord }) {
             <li key={m.userId} className="flex items-center justify-between gap-2 py-2">
               <span className="min-w-0 truncate">{m.displayName} <span className="text-xs text-muted">&lt;{m.email}&gt;</span></span>
               <span className="flex items-center gap-2"><span className="chip bg-soft text-ink">{m.role}</span>
-                {c.remote?.role === 'owner' && m.role !== 'owner' ? <button className="text-crit" aria-label={`Remove ${m.email}`} disabled={busy} onClick={() => act(async () => { const s = await remoteApi.removeMember(ws.requireSession(), c.id, m.userId); await applySnapshot(db, ws.session!.serverUrl, s); setMembers(s.members); })}><Trash2 size={14} /></button> : null}
+                {c.remote?.role === 'owner' && m.role !== 'owner' ? <button className="text-crit" aria-label={`Remove ${m.email}`} data-testid="remove-member" disabled={busy} onClick={() => setRemoving(m)}><Trash2 size={14} /></button> : null}
               </span>
             </li>
           ))}
@@ -58,6 +60,16 @@ export function CollaborationPanel({ c }: { c: CaseRecord }) {
           <button className="btn-primary" disabled={busy || !email} data-testid="add-member" onClick={() => act(async () => { const s = await remoteApi.addMember(ws.requireSession(), c.id, email, role); await applySnapshot(db, ws.session!.serverUrl, s); setMembers(s.members); setEmail(''); toast('success', `${email} can now access this case as ${role}.`); })}><UserPlus size={15} />Share</button>
         </div>
       ) : null}
+      <ConfirmDialog open={!!removing} onClose={() => setRemoving(null)} title="Remove access?" confirmLabel="Remove" danger busy={busy} testId="confirm-remove-member"
+        onConfirm={() => { const m = removing!; void act(async () => {
+          const s = await remoteApi.removeMember(ws.requireSession(), c.id, m.userId);
+          await applySnapshot(db, ws.session!.serverUrl, s);
+          setMembers(s.members);
+          setRemoving(null);
+          toast('success', `${m.email} no longer has access to this case.`);
+        }); }}>
+        {removing ? <p className="text-sm">{removing.displayName} ({removing.email}) will lose access to this case immediately. You can share it with them again later.</p> : null}
+      </ConfirmDialog>
     </section>
   );
 }
