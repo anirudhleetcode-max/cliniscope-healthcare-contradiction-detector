@@ -89,7 +89,7 @@ curl -s $API/api/ready     # → {"ok":true,"database":{"reachable":true,"engine
 
 ### 4. Connect the live frontend
 1. Open the live site, then **Settings → Shared workspace**.
-2. Paste the backend URL and choose **Connect**. "Connecting…" can last up to a minute while the server wakes; then it shows **Reachable · API v1.3.0**.
+2. Paste the backend URL and choose **Connect**. "Connecting…" can last up to a minute while the server wakes; then it shows **Reachable · API v1.3.1** (or later).
 3. **Create account** with a made-up name and an `@example.test` address. Use synthetic data only.
 
 The URL is stored in that browser only. Local demo mode stays the default for every other visitor.

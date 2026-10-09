@@ -12,7 +12,7 @@ import { validateTransition, ReviewError, isReviewStatus } from '../src/lib/revi
 import { verifyAiOutput, AiOutputError } from '../src/lib/ai';
 import type { AuditEvent, CaseRole, ClinicalStatement, DocumentRecord, Finding, ReviewStatus } from '../src/lib/types';
 
-export const API_VERSION = '1.3.0';
+export const API_VERSION = '1.3.1';
 
 class HttpError extends Error {
   constructor(public status: number, message: string, public code = 'error') { super(message); }
