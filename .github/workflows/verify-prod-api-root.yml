@@ -5,23 +5,21 @@ on:
 permissions:
   contents: read
 jobs:
-  profile-menu:
+  read-only:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     env:
-      BASE_URL: https://medguard-sigma.vercel.app/
-      API_URL: https://medguard-api-duti.onrender.com
+      SITE: https://medguard-sigma.vercel.app/
+      API: https://medguard-api-duti.onrender.com
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Live bundle contains the fix
+      - name: Read-only production checks (no accounts or records are created)
         run: |
-          js=$(curl -s "$BASE_URL" | grep -o 'assets/index-[^"]*\.js' | head -1); echo "bundle: $js"
-          curl -s "$BASE_URL$js" | grep -c 'menu-register'
-      - run: npx playwright install --with-deps chromium
-      - name: Real browser against production - profile menu Sign in / Create account
-        run: npx playwright test tests/e2e/shared.spec.ts -g "profile menu" --project=desktop --reporter=line
+          js=$(curl -s "$SITE" | grep -o 'assets/index-[^"]*\.js' | head -1); echo "live bundle: $js"
+          curl -s "$SITE$js" -o bundle.js
+          for m in demo-hidden-note shared-cases-error purgeRemoteCache 'not shown while you are signed in' 'medguard-api-duti.onrender.com'; do printf '%-40s %s\n' "$m" "$(grep -c -- "$m" bundle.js)"; done
+          for i in $(seq 1 30); do [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/ready")" = 200 ] && break; sleep 10; done
+          for p in / /api/health /api/ready /nope; do echo "GET $p -> $(curl -s -o b.json -w '%{http_code}' "$API$p") $(head -c 200 b.json)"; echo; done
+          for p in /api/overview /api/cases /api/cases/case_abcdefghijkl /api/activity /api/auth/me; do
+            echo "no session  GET $p -> $(curl -s -o /dev/null -w '%{http_code}' "$API$p")"
+            echo "bad token   GET $p -> $(curl -s -o /dev/null -w '%{http_code}' -H 'authorization: Bearer invalid-token-for-probe' "$API$p")"
+          done
