@@ -1,0 +1,43 @@
+flowchart TD
+    U["Reviewer (browser user)"]
+
+    subgraph Browser["Browser: static React SPA (GitHub Pages or vite preview)"]
+        UI["Presentation layer<br/>src/pages/*, src/components/*<br/>React 18 + Tailwind CSS"]
+        ST["Client state<br/>src/app/state.tsx (AppProvider)<br/>src/app/workspace.tsx (WorkspaceProvider)"]
+        SV["Service layer<br/>src/lib/services.ts<br/>upload, analyze, review, audit"]
+        EX["Text extraction<br/>src/lib/extract.ts + browserExtract.ts<br/>pdf.js, mammoth, UTF-8 decode"]
+        OCR["OCR engine<br/>src/lib/browserOcr.ts<br/>Tesseract.js (self-hosted assets)"]
+        RULES["Rules engine<br/>statements.ts + lexicon.ts + detect.ts"]
+        AIV["AI output verifier<br/>src/lib/ai.ts verifyAiOutput()"]
+        IDB[("IndexedDB 'medguard'<br/>Dexie: cases, documents, files,<br/>statements, findings, events")]
+        LS[("localStorage / sessionStorage<br/>preferences, server URL, session token")]
+        SW["Service worker<br/>public/sw.js (offline cache)"]
+    end
+
+    subgraph Server["Optional API server: server/ (Node 22, node:http)"]
+        API["HTTP router + auth + CORS<br/>server/app.ts"]
+        SQL[("SQLite via node:sqlite<br/>DATA_DIR/medguard.db")]
+        FS[("Private file store<br/>DATA_DIR/files/caseId/docId")]
+        PROV["AI provider adapter<br/>server/aiProvider.ts"]
+    end
+
+    ANT["Anthropic Messages API<br/>(external, only if ANTHROPIC_API_KEY is set)"]
+
+    U -->|"clicks, uploads, review decisions"| UI
+    UI -->|"reads live data, calls actions"| ST
+    ST -->|"invokes"| SV
+    SV -->|"bytes in, text + page spans out"| EX
+    EX -->|"thin or scanned pages, images"| OCR
+    SV -->|"extractStatements(), detectContradictions()"| RULES
+    SV -->|"Dexie transactions + append-only events"| IDB
+    ST -->|"useLiveQuery() subscriptions"| IDB
+    ST -->|"prefs, current case, reviewer name"| LS
+    SW -.->|"caches same-origin GET responses"| UI
+
+    ST -.->|"HTTPS JSON + Bearer token (fetch)"| API
+    API -.->|"SQL, migrations, transactions"| SQL
+    API -.->|"original uploads (mode 0600)"| FS
+    API -.->|"POST /api/ai/analyze"| PROV
+    PROV -.->|"structured-output request (server-side key)"| ANT
+    ST -.->|"re-verify returned AI output locally"| AIV
+    AIV -.->|"addAiFindings()"| SV

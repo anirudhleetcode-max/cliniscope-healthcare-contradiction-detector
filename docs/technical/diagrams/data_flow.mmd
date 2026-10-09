@@ -1,0 +1,31 @@
+flowchart LR
+    subgraph Local["Local demo mode (default, no backend)"]
+        direction TB
+        L1["public/demo/* synthetic files<br/>+ src/lib/demoWorkspace.ts texts"] -->|"fetch ./demo/... on first visit"| L2["seedDemoWorkspace()"]
+        L0["User upload<br/>(Documents page)"] --> L3["uploadDocument()"]
+        L2 --> L3
+        L3 -->|"extracted text, statements"| L4[("IndexedDB")]
+        L4 --> L5["analyzeCase()<br/>rules engine"]
+        L5 -->|"findings + audit events"| L4
+        L4 -->|"useLiveQuery"| L6["UI pages"]
+        L6 -->|"transitionFinding(), addReviewerNote()"| L4
+        L4 -->|"buildCaseReport / buildFindingsCsv / buildBackup"| L7["Downloaded JSON / CSV files"]
+        L8["Backup JSON file"] -->|"restoreBackup() re-verifies quotes + SHA-256"| L4
+    end
+
+    subgraph Shared["Shared-workspace mode (optional server)"]
+        direction TB
+        S1["Browser IndexedDB cache<br/>CaseRecord.remote set"] -->|"PUT /api/cases/:id/snapshot"| S2["server/app.ts<br/>re-verifies quotes"]
+        S1 -->|"PUT .../documents/:docId/file"| S3[("DATA_DIR/files")]
+        S2 --> S4[("SQLite")]
+        S5["Review action"] -->|"POST /api/findings/:id/transition<br/>POST /api/findings/:id/notes"| S2
+        S4 -->|"snapshot JSON response,<br/>GET /api/cases/:id every 15 s and on focus"| S1
+    end
+
+    subgraph AI["AI-assisted mode (optional, needs server + key + consent)"]
+        direction TB
+        A1["AiPanel consent dialog"] -->|"POST /api/ai/analyze<br/>extracted text only"| A2["server: AnthropicProvider"]
+        A2 -->|"structured output"| A3["server verifyAiOutput()"]
+        A3 -->|"raw output + summary"| A4["browser verifyAiOutput()<br/>against local text"]
+        A4 -->|"addAiFindings() origin: ai"| A5[("IndexedDB")]
+    end

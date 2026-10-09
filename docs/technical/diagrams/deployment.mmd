@@ -1,0 +1,28 @@
+flowchart TD
+    DEV["Developer push<br/>(any branch)"] --> GHA["GitHub Actions: 'CI and deploy'"]
+
+    subgraph CI["Jobs"]
+        T["test<br/>npm ci, typecheck, vitest,<br/>vite build, Playwright e2e,<br/>upload dist artifact"]
+        DK["docker-api<br/>docker build, run container,<br/>curl /api/health and /api/ready,<br/>docker restart, /api/ready again"]
+        DP["deploy<br/>default branch or main only;<br/>peaceiris/actions-gh-pages to gh-pages"]
+        VP["verify-production<br/>wait for live HTML containing MEDGUARD,<br/>then Playwright against live URL"]
+    end
+
+    GHA --> T
+    GHA --> DK
+    T -->|"needs: test"| DP
+    DP -->|"needs: deploy"| VP
+    DP --> GHP["gh-pages branch"]
+    GHP --> PAGES["GitHub Pages<br/>(owner).github.io/(repository)/"]
+    VP -->|"HTTPS"| PAGES
+
+    PAGES --> BROWSER["User browser<br/>static SPA, HashRouter,<br/>relative asset paths"]
+
+    DOCKER["Dockerfile<br/>node:22-slim, single bundled server.mjs,<br/>VOLUME /data, HEALTHCHECK"]
+    RENDER["render.yaml<br/>Render web service 'medguard-api',<br/>1 GB disk at /data, health check /api/ready"]
+    VERCEL["Vercel project 'medguard'<br/>(GitHub app, configured outside the repo;<br/>no vercel.json)"]
+    DEV -.->|"push / PR (Vercel GitHub integration)"| VERCEL
+    VERCEL -.->|"production deploy of the default branch;<br/>preview deploy per PR branch"| BROWSER
+    DK -.->|"image built and health-checked in CI only,<br/>not pushed to a registry"| DOCKER
+    RENDER -.->|"blueprint present, never run"| DOCKER
+    BROWSER -.->|"only if a server URL is entered in Settings"| DOCKER
