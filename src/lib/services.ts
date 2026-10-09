@@ -256,8 +256,17 @@ async function runAnalysis(db: CliniscopeDB, caseId: string, actor: string): Pro
         }
       }
       for (const f of existing) {
-        // AI-assisted findings are not produced by the rules engine, so a rules re-run never supersedes them.
-        if (f.origin === 'ai') continue;
+        // AI-assisted findings are not produced by the rules engine: a rules re-run supersedes them
+        // only when one of their source documents no longer exists in the case.
+        if (f.origin === 'ai') {
+          const present = new Set(docs.map((d) => d.id));
+          if (!f.stale && f.sourceDocumentIds.some((id) => !present.has(id))) {
+            superseded++;
+            await db.findings.put({ ...f, stale: true, updatedAt: ts });
+            await logEvent(db, { caseId, findingId: f.id, kind: 'finding_superseded', actor: 'System', detail: `${f.displayId}: a source document of this AI-assisted finding was removed. Its evidence and review history are preserved.` });
+          }
+          continue;
+        }
         if (!produced.has(f.fingerprint) && !f.stale) {
           superseded++;
           await db.findings.put({ ...f, stale: true, updatedAt: ts });
@@ -385,7 +394,11 @@ export async function addAiFindings(
     for (const d of drafts) {
       if (d.caseId !== caseId) continue;
       const prior = await db.findings.where('[caseId+fingerprint]').equals([caseId, d.fingerprint]).first();
-      if (prior) { retained++; continue; }
+      if (prior) {
+        retained++;
+        if (prior.stale) await db.findings.put({ ...prior, stale: false, updatedAt: ts }); // reproduced by a new AI run
+        continue;
+      }
       const f: Finding = { ...d, id: uid('fd'), reviewStatus: 'unreviewed', stale: false, createdAt: ts, updatedAt: ts, isSeededDemo: c.isDemo };
       await db.findings.add(f);
       created++;

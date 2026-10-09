@@ -91,8 +91,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   const publishCase = useCallback(async (c: CaseRecord) => {
     const s = requireSession();
-    const snap = await remoteApi.createCase(s, c.id, c.label);
-    await db.cases.update(c.id, { remote: { serverUrl: s.serverUrl, role: snap.role, owner: snap.case.owner, syncedAt: snap.serverTime } });
+    // Local review decisions and notes cannot be imported into the server's audit trail, so refuse rather than drop them silently.
+    const reviewed = (await db.findings.where('caseId').equals(c.id).toArray()).some((f) => f.reviewStatus !== 'unreviewed');
+    const notes = (await db.events.where('caseId').equals(c.id).toArray()).some((e) => e.kind === 'note_added' || e.kind === 'status_changed');
+    if (reviewed || notes) {
+      throw new RemoteError(409, 'This case already has local review decisions or notes, which cannot be carried into the shared audit trail. Create a new shared case and upload the documents there, or reset the demo case before publishing.');
+    }
+    try {
+      await remoteApi.createCase(s, c.id, c.label);
+    } catch (e) {
+      // A previous publish attempt may have created the server case before its push failed: continue only if we own it.
+      if (!(e instanceof RemoteError && e.status === 409)) throw e;
+      const existing = await remoteApi.getCase(s, c.id).catch(() => null);
+      if (existing?.role !== 'owner') throw e;
+    }
+    // The case becomes "shared" locally only after the first push (documents, findings, files) succeeded.
     await pushCase(db, s, c.id, { detail: 'Local case published to the shared workspace' });
   }, [requireSession]);
 

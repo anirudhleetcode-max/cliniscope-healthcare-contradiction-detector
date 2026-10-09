@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-server
+data
+tmp
+test-results
+playwright-report
+public/ocr
+.git
+.env
+.env.*
+!.env.example

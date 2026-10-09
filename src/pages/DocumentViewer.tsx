@@ -6,7 +6,7 @@ import { db, useApp } from '../app/state';
 import { Callout, EmptyState, Modal, PageSkeleton, ProcessingBadge, StatusBadge, cx } from '../components/ui';
 import { formatDate, formatDateTime, isValidIsoDate } from '../lib/dates';
 import { updateDocumentMeta } from '../lib/services';
-import { getOriginalBlob, type RemoteSession } from '../lib/remote';
+import { SAFE_MIME, getOriginalBlob, withLocalWork, type RemoteSession } from '../lib/remote';
 import { useWorkspace } from '../app/workspace';
 import type { DocumentType, OcrSpan, PageSpan } from '../lib/types';
 import { CATEGORY_LABEL, DOCUMENT_TYPE_LABEL, EXTRACTION_METHOD_LABEL } from '../lib/types';
@@ -16,6 +16,8 @@ export function DocumentViewer() {
   const [params, setParams] = useSearchParams();
   const { toast } = useApp();
   const ws = useWorkspace();
+  const { currentCase } = useApp();
+  const caseRole = currentCase?.remote?.role;
   const doc = useLiveQuery(() => db.documents.get(id ?? '').then((d) => d ?? null), [id]);
   const statements = useLiveQuery(() => db.statements.where('documentId').equals(id ?? '').toArray(), [id]);
   const findings = useLiveQuery(() => (doc ? db.findings.where('caseId').equals(doc.caseId).toArray() : []), [doc?.caseId]);
@@ -51,7 +53,8 @@ export function DocumentViewer() {
     const blob = await getOriginalBlob(db, doc.id, ws.session);
     if (!blob) { toast('error', 'The original file is not available (not stored locally or on the shared workspace).'); return; }
     // Object URL is local to this browser session; there is no public URL.
-    const url = URL.createObjectURL(blob);
+    // Fixed type per validated file kind: an object URL must never be rendered as HTML.
+    const url = URL.createObjectURL(new Blob([blob], { type: SAFE_MIME[doc.fileKind] ?? 'application/octet-stream' }));
     if (doc.fileKind === 'pdf') window.open(url, '_blank', 'noopener');
     else { const a = document.createElement('a'); a.href = url; a.download = doc.originalFilename; a.click(); }
     setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -61,9 +64,13 @@ export function DocumentViewer() {
   const saveEdit = async () => {
     if (form.documentDate && !isValidIsoDate(form.documentDate)) { toast('error', 'Enter a valid document date.'); return; }
     try {
-      await updateDocumentMeta(db, doc.id, { title: form.title, documentType: form.documentType, documentDate: form.documentDate || null });
+      const c = await db.cases.get(doc.caseId);
+      await withLocalWork(async () => {
+        await updateDocumentMeta(db, doc.id, { title: form.title, documentType: form.documentType, documentDate: form.documentDate || null });
+        if (c?.remote) await ws.push(doc.caseId, { detail: `Details of ${form.title} updated` });
+      });
       setEditing(false);
-      toast('success', 'Document details saved. Re-run analysis so findings reflect the change.');
+      toast('success', `Document details saved${c?.remote ? ' to the shared workspace' : ''}. Re-run analysis so findings reflect the change.`);
     } catch (e) { toast('error', e instanceof Error ? e.message : 'Save failed'); }
   };
 
@@ -75,7 +82,7 @@ export function DocumentViewer() {
           <section className="card p-5">
             <div className="mb-3 flex items-start justify-between gap-2">
               <h1 className="text-lg font-semibold leading-snug" data-testid="doc-title">{doc.title}</h1>
-              {!editing ? <button className="btn-ghost px-2 py-1" onClick={startEdit} aria-label="Edit document details"><Pencil size={15} /></button> : null}
+              {!editing && caseRole !== 'viewer' ? <button className="btn-ghost px-2 py-1" onClick={startEdit} aria-label="Edit document details"><Pencil size={15} /></button> : null}
             </div>
             {editing ? (
               <div className="space-y-3">

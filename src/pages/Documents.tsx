@@ -7,7 +7,7 @@ import { Callout, EmptyState, Modal, PageHeader, PageSkeleton, ProcessingBadge, 
 import { findDate, formatDate, formatDateTime, isValidIsoDate } from '../lib/dates';
 import { DEFAULT_MAX_UPLOAD_BYTES } from '../lib/extract';
 import { analyzeCase, deleteDocument, uploadDocument } from '../lib/services';
-import { withLocalWork } from '../lib/remote';
+import { markUnsynced, withLocalWork } from '../lib/remote';
 import { useWorkspace } from '../app/workspace';
 import type { AnalysisSummary, DocumentRecord, DocumentType } from '../lib/types';
 import { DOCUMENT_TYPE_LABEL } from '../lib/types';
@@ -236,7 +236,10 @@ export function Documents() {
           try {
             await withLocalWork(async () => {
               await deleteDocument(db, toDelete.id, reviewer);
-              if (currentCase?.remote) await ws.push(toDelete.caseId, { detail: `${toDelete.title} removed` });
+              if (currentCase?.remote) {
+                await markUnsynced(db, toDelete.caseId, toDelete.id);
+                await ws.push(toDelete.caseId, { detail: `${toDelete.title} removed` });
+              }
             });
             toast('success', `${toDelete.title} removed. Re-run analysis to reconcile findings.`);
           } catch (e) { toast('error', e instanceof Error ? e.message : 'Delete failed'); }

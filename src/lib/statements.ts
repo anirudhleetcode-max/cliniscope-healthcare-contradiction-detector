@@ -373,7 +373,7 @@ function ocrInfo(
   end: number,
   base: 'high' | 'moderate' | 'low',
 ): Partial<ClinicalStatement> {
-  const region = (doc.ocrRegions ?? []).find((r) => start >= r.start && start <= r.end);
+  const region = (doc.ocrRegions ?? []).find((r) => r.start < end && r.end > start); // any overlap with OCR text
   if (!region) return {};
   const low = (doc.ocrLowConfidence ?? []).filter((w) => w.start < end && w.end > start);
   const min = low.length ? Math.min(...low.map((w) => w.confidence)) : null;
