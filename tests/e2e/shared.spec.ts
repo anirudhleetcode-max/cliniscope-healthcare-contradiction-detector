@@ -179,3 +179,30 @@ test('an outsider cannot open a case they were not invited to; signed-out users 
   // The revoked token no longer works.
   expect((await eve.request.get(`${API}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(401);
 });
+
+test('profile menu: Sign in and Create account open the matching form, even when Settings is already open', async ({ page }) => {
+  await page.goto('#/settings');
+  await page.getByTestId('server-url').fill(API);
+  await page.getByTestId('save-server-url').click();
+  await expect(page.getByTestId('server-health')).toContainText('Reachable', { timeout: 100_000 });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole('button', { name: 'User menu' }).click();
+  await page.getByTestId('menu-sign-in').click();
+  await expect(page.getByTestId('workspace-panel')).toBeInViewport();
+  await expect(page.getByRole('tab', { name: 'Sign in' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('ws-name')).toHaveCount(0);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole('button', { name: 'User menu' }).click();
+  await page.getByTestId('menu-register').click();
+  await expect(page.getByTestId('workspace-panel')).toBeInViewport();
+  await expect(page.getByRole('tab', { name: 'Create account' })).toHaveAttribute('aria-selected', 'true');
+  await page.getByTestId('ws-name').fill('Menu Reviewer');
+  await page.getByTestId('ws-email').fill(`menu-${run}@example.test`);
+  await page.getByTestId('ws-password').fill(PASSWORD);
+  await page.getByTestId('ws-submit').click();
+  await expect(page.getByTestId('signed-in-as')).toHaveText('Menu Reviewer');
+  // Signed in: the menu offers sign-out instead of the sign-in entries.
+  await page.getByRole('button', { name: 'User menu' }).click();
+  await expect(page.getByTestId('menu-sign-in')).toHaveCount(0);
+  await expect(page.getByTestId('menu-sign-out')).toBeVisible();
+});

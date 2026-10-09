@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Cloud, LogIn, LogOut, RefreshCw, ServerCrash, UserPlus } from 'lucide-react';
 import { useApp } from '../app/state';
@@ -11,7 +11,10 @@ export function WorkspacePanel() {
   const { toast } = useApp();
   const [url, setUrl] = useState(ws.serverUrl);
   const location = useLocation();
-  const [mode, setMode] = useState<'login' | 'register'>((location.state as { mode?: string } | null)?.mode === 'register' ? 'register' : 'login');
+  const requestedMode = (location.state as { mode?: string } | null)?.mode;
+  const [mode, setMode] = useState<'login' | 'register'>(requestedMode === 'register' ? 'register' : 'login');
+  // "Sign in" / "Create account" links (profile menu, Overview) may arrive while this panel is already shown.
+  useEffect(() => { if (requestedMode === 'login' || requestedMode === 'register') setMode(requestedMode); }, [requestedMode, location.key]);
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [savingName, setSavingName] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
@@ -59,7 +62,7 @@ export function WorkspacePanel() {
               <button className="inline-flex items-center gap-1 text-brand hover:underline" onClick={() => void ws.refreshHealth()}><RefreshCw size={12} />recheck</button>
             </p>
           ) : ws.healthError
-            ? <p className="flex items-center gap-2 text-xs text-crit"><ServerCrash size={14} />{ws.healthError}</p>
+            ? <p className="flex items-center gap-2 text-xs text-crit"><ServerCrash size={14} />{ws.healthError}<button className="inline-flex items-center gap-1 text-brand hover:underline" onClick={() => void ws.refreshHealth()} data-testid="health-retry"><RefreshCw size={12} />retry</button></p>
             : <p className="text-xs text-muted">Connecting… A server on a free hosting plan can take up to a minute to wake up.</p>}
       </div>
       {ws.session ? (
