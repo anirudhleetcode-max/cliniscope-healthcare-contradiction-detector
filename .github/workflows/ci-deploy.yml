@@ -36,6 +36,21 @@ jobs:
           path: dist
           retention-days: 7
 
+  # Builds the API server image and checks that the container serves /api/health.
+  docker-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t cliniscope-api .
+      - name: Run container and check health
+        run: |
+          docker run -d --name api -p 8787:8787 -e CLINISCOPE_ALLOWED_ORIGINS=http://localhost:4173 cliniscope-api
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8787/api/health; then echo; docker logs api | tail -5; exit 0; fi
+            sleep 2
+          done
+          docker logs api; exit 1
+
   # Publishes the static build to the gh-pages branch (served by GitHub Pages).
   deploy:
     needs: test
