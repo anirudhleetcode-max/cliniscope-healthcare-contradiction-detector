@@ -4,7 +4,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { z } from 'zod';
-import { openDb, tx, type Db } from './db';
+import { openDb, schemaVersion, SCHEMA_VERSION, tx, type Db } from './db';
+import { OPENAPI } from './openapi';
 import { RateLimiter, createSession, hashPassword, newId, revokeSession, userForToken, verifyPassword, type User } from './auth';
 import { AiProviderError, providerFromConfig, type AiProvider } from './aiProvider';
 import type { ServerConfig } from './config';
@@ -12,18 +13,27 @@ import { validateTransition, ReviewError, isReviewStatus } from '../src/lib/revi
 import { verifyAiOutput, AiOutputError } from '../src/lib/ai';
 import type { AuditEvent, CaseRole, ClinicalStatement, DocumentRecord, Finding, ReviewStatus } from '../src/lib/types';
 
-export const API_VERSION = '1.1.0';
+export const API_VERSION = '1.2.0';
 
 class HttpError extends Error {
   constructor(public status: number, message: string, public code = 'error') { super(message); }
 }
 
 const ID_RE = /^[a-z]+_[A-Za-z0-9]{6,40}$/;
+
+/** Parses an integer query parameter; out-of-range or malformed values are a 400, never silently clamped. */
+function intParam(q: URLSearchParams, name: string, dflt: number, min: number, max: number): number {
+  const raw = q.get(name);
+  if (raw === null || raw === '') return dflt;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < min || n > max) throw new HttpError(400, `Query parameter "${name}" must be an integer between ${min} and ${max}.`, 'validation');
+  return n;
+}
 const ROLE_RANK: Record<CaseRole, number> = { viewer: 1, reviewer: 2, owner: 3 };
 
 export interface AppDeps { config: ServerConfig; db?: Db; ai?: AiProvider | null; log?: (line: string) => void }
 
-export function createApp(deps: AppDeps): { server: Server; db: Db; close: () => void } {
+export function createApp(deps: AppDeps): { server: Server; db: Db; routes: string[]; close: () => void } {
   const cfg = deps.config;
   const db = deps.db ?? openDb(join(cfg.dataDir, 'medguard.db'));
   const ai = deps.ai === undefined ? providerFromConfig(cfg) : deps.ai;
@@ -47,12 +57,17 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
     const r = db.prepare('SELECT role FROM case_members WHERE case_id = ? AND user_id = ?').get(caseId, user.id) as { role: CaseRole } | undefined;
     return r?.role ?? null;
   }
-  function requireRole(user: User, caseId: string, min: CaseRole): CaseRole {
+  function requireRole(user: User, caseId: string, min: CaseRole, opts: { allowArchived?: boolean } = {}): CaseRole {
     if (!ID_RE.test(caseId)) throw new HttpError(404, 'Case not found.');
     const role = roleFor(user, caseId);
     // Same response for "does not exist" and "not a member", so case IDs cannot be probed.
     if (!role) throw new HttpError(404, 'Case not found or you do not have access.', 'not_found');
     if (ROLE_RANK[role] < ROLE_RANK[min]) throw new HttpError(403, `This action requires the ${min} role; you are a ${role}.`, 'forbidden');
+    // Archived cases are read-only; only the owner's archive/restore request may change them.
+    if (min !== 'viewer' && !opts.allowArchived) {
+      const a = db.prepare('SELECT archived_at FROM cases WHERE id = ?').get(caseId) as { archived_at: string | null } | undefined;
+      if (a?.archived_at) throw new HttpError(409, 'This case is archived and read-only. The owner can restore it.', 'archived');
+    }
     return role;
   }
   function touch(caseId: string, analyzed = false) {
@@ -75,7 +90,7 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
       ...(e.reason ? { reason: e.reason } : {}), ...(e.note ? { note: e.note } : {}), ...(e.detail ? { detail: e.detail } : {}),
     }));
     return {
-      case: { id: c.id, label: c.label, createdAt: c.created_at, updatedAt: c.updated_at, lastAnalyzedAt: c.last_analyzed_at, owner: `${c.owner_name} <${c.owner_email}>` },
+      case: { id: c.id, label: c.label, createdAt: c.created_at, updatedAt: c.updated_at, lastAnalyzedAt: c.last_analyzed_at, archivedAt: c.archived_at ?? null, owner: `${c.owner_name} <${c.owner_email}>` },
       role: roleFor(user, caseId), members, documents, statements, findings, events, serverTime: now(),
     };
   }
@@ -111,7 +126,7 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
   const AiRequest = z.object({ caseId: z.string().max(60), documents: z.array(AiDoc).min(1).max(15), existing: z.array(z.object({ title: z.string().max(300), type: z.string().max(60) })).max(200) });
 
   // ------------------------------------------------------------ routes
-  type Ctx = { req: IncomingMessage; res: ServerResponse; params: string[]; user: User | null; token: string | null; body: () => Promise<unknown>; raw: () => Promise<Buffer> };
+  type Ctx = { req: IncomingMessage; res: ServerResponse; params: string[]; query: URLSearchParams; user: User | null; token: string | null; body: () => Promise<unknown>; raw: () => Promise<Buffer> };
   type Handler = (c: Ctx) => Promise<unknown> | unknown;
   const routes: { method: string; re: RegExp; auth: boolean; h: Handler }[] = [];
   const route = (method: string, path: string, auth: boolean, h: Handler) => routes.push({ method, re: new RegExp(`^${path.replace(/:[a-z]+/g, '([^/]+)')}$`), auth, h });
@@ -121,6 +136,20 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
     ai: { configured: !!ai, provider: ai?.name ?? null, model: ai?.model ?? null },
     registration: cfg.allowRegistration,
   }));
+
+  // Readiness: the database answers a query and is at the schema version this build expects.
+  const ready = () => {
+    let dbOk = false;
+    let version = 0;
+    try { db.prepare('SELECT 1').get(); version = schemaVersion(db); dbOk = true; } catch { dbOk = false; }
+    const ok = dbOk && version === SCHEMA_VERSION;
+    if (!ok) throw new HttpError(503, 'Not ready: database unavailable or schema not migrated.', 'not_ready');
+    return { ok: true, database: { reachable: true, schemaVersion: version, expectedSchemaVersion: SCHEMA_VERSION }, time: now() };
+  };
+  route('GET', '/api/ready', false, ready);
+  route('GET', '/ready', false, ready);
+  route('GET', '/health', false, () => ({ ok: true, service: 'medguard-api', version: API_VERSION, time: now() }));
+  route('GET', '/api/openapi.json', false, () => OPENAPI);
 
   route('POST', '/api/auth/register', false, async (c) => {
     if (!cfg.allowRegistration) throw new HttpError(403, 'Self-registration is disabled on this server. Ask an administrator for an account.');
@@ -146,13 +175,24 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
   route('POST', '/api/auth/logout', true, (c) => { revokeSession(db, c.token!); return { ok: true }; });
   route('GET', '/api/auth/me', true, (c) => ({ user: c.user }));
 
-  route('GET', '/api/cases', true, (c) => ({
-    cases: (db.prepare(`SELECT c.id, c.label, c.updated_at, c.last_analyzed_at, m.role, u.display_name AS owner_name, u.email AS owner_email,
+  route('GET', '/api/cases', true, (c) => {
+    const limit = intParam(c.query, 'limit', 50, 1, 100);
+    const offset = intParam(c.query, 'offset', 0, 0, 1_000_000);
+    const q = (c.query.get('q') ?? '').trim().slice(0, 80);
+    const includeArchived = c.query.get('includeArchived') === 'true';
+    const where = `m.user_id = ?${includeArchived ? '' : ' AND c.archived_at IS NULL'}${q ? ' AND c.label LIKE ? ESCAPE \'\\\'' : ''}`;
+    const args: string[] = [c.user!.id, ...(q ? [`%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`] : [])];
+    const total = (db.prepare(`SELECT COUNT(*) AS n FROM case_members m JOIN cases c ON c.id = m.case_id WHERE ${where}`).get(...args) as { n: number }).n;
+    const rows = db.prepare(`SELECT c.id, c.label, c.updated_at, c.last_analyzed_at, c.archived_at, m.role, u.display_name AS owner_name, u.email AS owner_email,
         (SELECT COUNT(*) FROM documents d WHERE d.case_id = c.id) AS documents,
         (SELECT COUNT(*) FROM findings f WHERE f.case_id = c.id AND f.stale = 0) AS findings
-      FROM case_members m JOIN cases c ON c.id = m.case_id JOIN users u ON u.id = c.owner_id WHERE m.user_id = ? ORDER BY c.updated_at DESC`).all(c.user!.id) as Record<string, unknown>[])
-      .map((r) => ({ id: r.id, label: r.label, updatedAt: r.updated_at, lastAnalyzedAt: r.last_analyzed_at, role: r.role, owner: `${r.owner_name} <${r.owner_email}>`, documents: r.documents, findings: r.findings })),
-  }));
+      FROM case_members m JOIN cases c ON c.id = m.case_id JOIN users u ON u.id = c.owner_id WHERE ${where}
+      ORDER BY c.updated_at DESC, c.id LIMIT ? OFFSET ?`).all(...args, limit, offset) as Record<string, unknown>[];
+    return {
+      cases: rows.map((r) => ({ id: r.id, label: r.label, updatedAt: r.updated_at, lastAnalyzedAt: r.last_analyzed_at, archivedAt: r.archived_at ?? null, role: r.role, owner: `${r.owner_name} <${r.owner_email}>`, documents: r.documents, findings: r.findings })),
+      total, limit, offset,
+    };
+  });
 
   route('POST', '/api/cases', true, async (c) => {
     const b = NewCase.parse(await c.body());
@@ -318,7 +358,7 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
     if (b.expectedStatus && isReviewStatus(b.expectedStatus) && b.expectedStatus !== f.review_status) {
       throw new HttpError(409, `Another reviewer changed this finding to "${f.review_status}" in the meantime. Reload to see the latest state.`, 'conflict');
     }
-    try { validateTransition(f.review_status, b.to, b.reason); } catch (e) { if (e instanceof ReviewError) throw new HttpError(422, e.message, 'invalid_transition'); throw e; }
+    try { validateTransition(f.review_status, b.to, b.reason, 'local'); } catch (e) { if (e instanceof ReviewError) throw new HttpError(422, e.message, 'invalid_transition'); throw e; }
     tx(db, () => {
       const r = db.prepare('UPDATE findings SET review_status = ?, updated_at = ? WHERE id = ? AND review_status = ?').run(b.to, now(), id, f.review_status);
       if (r.changes !== 1) throw new HttpError(409, 'The finding changed concurrently. Reload and try again.', 'conflict');
@@ -336,6 +376,123 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
     const b = Note.parse(await c.body());
     tx(db, () => { audit({ caseId: f.case_id, actor: c.user, kind: 'note_added', findingId: id, note: b.note }); touch(f.case_id); });
     return snapshot(f.case_id, c.user!);
+  });
+
+  const CaseUpdate = z.object({ label: z.string().trim().min(1).max(80).optional(), archived: z.boolean().optional() })
+    .refine((b) => b.label !== undefined || b.archived !== undefined, { message: 'Provide label and/or archived.' });
+  route('PATCH', '/api/cases/([^/]+)', true, async (c) => {
+    const caseId = c.params[0];
+    requireRole(c.user!, caseId, 'owner', { allowArchived: true });
+    const b = CaseUpdate.parse(await c.body());
+    const cur = db.prepare('SELECT label, archived_at FROM cases WHERE id = ?').get(caseId) as { label: string; archived_at: string | null };
+    tx(db, () => {
+      if (b.label !== undefined && b.label !== cur.label) {
+        db.prepare('UPDATE cases SET label = ?, updated_at = ? WHERE id = ?').run(b.label, now(), caseId);
+        audit({ caseId, actor: c.user, kind: 'case_updated', detail: `Case label changed from "${cur.label}" to "${b.label}"` });
+      }
+      if (b.archived !== undefined && b.archived !== !!cur.archived_at) {
+        db.prepare('UPDATE cases SET archived_at = ?, updated_at = ? WHERE id = ?').run(b.archived ? now() : null, now(), caseId);
+        audit({ caseId, actor: c.user, kind: 'case_updated', detail: b.archived ? 'Case archived (read-only; data retained)' : 'Case restored from archive' });
+      }
+    });
+    return snapshot(caseId, c.user!);
+  });
+
+  /** Document metadata without the extracted text (which can be large and is clinical content). */
+  function docMeta(row: { data_json: string; file_path: string | null; file_size: number | null }) {
+    const { extractedText, ocrLowConfidence: _l, ocrRegions: _r, pageSpans: _p, ...meta } = JSON.parse(row.data_json) as DocumentRecord;
+    return { ...meta, textLength: extractedText?.length ?? 0, hasServerFile: !!row.file_path, serverFileSize: row.file_size ?? null };
+  }
+  route('GET', '/api/cases/([^/]+)/documents', true, (c) => {
+    const caseId = c.params[0];
+    requireRole(c.user!, caseId, 'viewer');
+    const rows = db.prepare('SELECT data_json, file_path, file_size FROM documents WHERE case_id = ? ORDER BY id').all(caseId) as { data_json: string; file_path: string | null; file_size: number | null }[];
+    return { documents: rows.map(docMeta) };
+  });
+  route('GET', '/api/cases/([^/]+)/documents/([^/]+)', true, (c) => {
+    const [caseId, docId] = c.params;
+    requireRole(c.user!, caseId, 'viewer');
+    const row = ID_RE.test(docId) ? db.prepare('SELECT data_json, file_path, file_size FROM documents WHERE id = ? AND case_id = ?').get(docId, caseId) as { data_json: string; file_path: string | null; file_size: number | null } | undefined : undefined;
+    if (!row) throw new HttpError(404, 'Document not found in this case.', 'not_found');
+    const meta = docMeta(row);
+    return c.query.get('include') === 'text' ? { document: { ...meta, extractedText: (JSON.parse(row.data_json) as DocumentRecord).extractedText } } : { document: meta };
+  });
+
+  const STATUS_SET = new Set(['unreviewed', 'in_review', 'confirmed', 'resolved', 'dismissed', 'needs_info', 'expected_change', 'undetermined']);
+  const TYPE_SET = new Set(['explicit_conflict', 'potential_discrepancy', 'temporal_inconsistency', 'context_dependent', 'insufficient_evidence']);
+  function findingRow(id: string) {
+    const f = ID_RE.test(id) ? db.prepare('SELECT id, case_id, review_status, stale, data_json, created_at, updated_at FROM findings WHERE id = ?').get(id) as Record<string, string | number> | undefined : undefined;
+    if (!f) throw new HttpError(404, 'Finding not found.', 'not_found');
+    return f;
+  }
+  const toFinding = (f: Record<string, string | number>): Finding => ({ ...(JSON.parse(f.data_json as string) as Finding), id: f.id as string, caseId: f.case_id as string, reviewStatus: f.review_status as ReviewStatus, stale: !!f.stale, createdAt: f.created_at as string, updatedAt: f.updated_at as string });
+
+  route('GET', '/api/cases/([^/]+)/findings', true, (c) => {
+    const caseId = c.params[0];
+    requireRole(c.user!, caseId, 'viewer');
+    const status = c.query.get('status');
+    const type = c.query.get('type');
+    const category = c.query.get('category');
+    if (status && !STATUS_SET.has(status)) throw new HttpError(400, `Unknown review status "${status}".`, 'validation');
+    if (type && !TYPE_SET.has(type)) throw new HttpError(400, `Unknown finding type "${type}".`, 'validation');
+    const rows = db.prepare(`SELECT id, case_id, review_status, stale, data_json, created_at, updated_at FROM findings
+      WHERE case_id = ?${status ? ' AND review_status = ?' : ''}${c.query.get('includeStale') === 'true' ? '' : ' AND stale = 0'} ORDER BY created_at, id`)
+      .all(...[caseId, ...(status ? [status] : [])]) as Record<string, string | number>[];
+    let list = rows.map(toFinding);
+    if (type) list = list.filter((f) => f.findingType === type);
+    if (category) list = list.filter((f) => f.category === category);
+    return { findings: list };
+  });
+  route('GET', '/api/findings/([^/]+)', true, (c) => {
+    const f = findingRow(c.params[0]);
+    requireRole(c.user!, f.case_id as string, 'viewer');
+    return { finding: toFinding(f) };
+  });
+  /** Evidence references, each re-checked against the stored document text (never altered). */
+  route('GET', '/api/findings/([^/]+)/evidence', true, (c) => {
+    const f = findingRow(c.params[0]);
+    requireRole(c.user!, f.case_id as string, 'viewer');
+    const finding = toFinding(f);
+    const texts = new Map<string, string>();
+    for (const id of new Set(finding.evidence.map((e) => e.documentId))) {
+      const d = db.prepare('SELECT data_json FROM documents WHERE id = ? AND case_id = ?').get(id, f.case_id) as { data_json: string } | undefined;
+      if (d) texts.set(id, (JSON.parse(d.data_json) as DocumentRecord).extractedText);
+    }
+    return {
+      findingId: finding.id,
+      evidence: finding.evidence.map((e) => ({
+        ...e,
+        documentAvailable: texts.has(e.documentId),
+        verified: texts.has(e.documentId) && texts.get(e.documentId)!.slice(e.charStart, e.charEnd) === e.quote,
+      })),
+    };
+  });
+  route('GET', '/api/findings/([^/]+)/history', true, (c) => {
+    const f = findingRow(c.params[0]);
+    requireRole(c.user!, f.case_id as string, 'viewer');
+    const rows = db.prepare('SELECT * FROM audit_events WHERE finding_id = ? ORDER BY seq').all(f.id) as Record<string, string | null>[];
+    return { findingId: f.id, reviewStatus: f.review_status, history: rows.map(eventOut) };
+  });
+
+  function eventOut(e: Record<string, string | number | null>) {
+    return {
+      id: e.id, seq: e.seq, caseId: e.case_id, kind: e.kind, at: e.at, actor: e.actor_name,
+      findingId: e.finding_id ?? undefined, documentId: e.document_id ?? undefined,
+      fromStatus: e.from_status ?? undefined, toStatus: e.to_status ?? undefined, reason: e.reason ?? undefined, note: e.note ?? undefined, detail: e.detail ?? undefined,
+    };
+  }
+  route('GET', '/api/cases/([^/]+)/activity', true, (c) => {
+    const caseId = c.params[0];
+    requireRole(c.user!, caseId, 'viewer');
+    const limit = intParam(c.query, 'limit', 50, 1, 200);
+    const before = c.query.has('before') ? intParam(c.query, 'before', 0, 1, Number.MAX_SAFE_INTEGER) : null;
+    const rows = db.prepare(`SELECT * FROM audit_events WHERE case_id = ?${before ? ' AND seq < ?' : ''} ORDER BY seq DESC LIMIT ?`).all(...[caseId, ...(before ? [before] : []), limit]) as Record<string, string | number | null>[];
+    return { events: rows.map(eventOut), nextBefore: rows.length === limit ? rows[rows.length - 1].seq : null };
+  });
+  route('GET', '/api/activity', true, (c) => {
+    const limit = intParam(c.query, 'limit', 50, 1, 200);
+    const rows = db.prepare(`SELECT e.* FROM audit_events e JOIN case_members m ON m.case_id = e.case_id AND m.user_id = ? ORDER BY e.seq DESC LIMIT ?`).all(c.user!.id, limit) as Record<string, string | number | null>[];
+    return { events: rows.map(eventOut) };
   });
 
   route('POST', '/api/ai/analyze', true, async (c) => {
@@ -421,7 +578,7 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
       const user = userForToken(db, token);
       if (r.auth && !user) throw new HttpError(401, token ? 'Your session has expired. Sign in again.' : 'Sign in to use the shared workspace.', 'unauthenticated');
       const ctx: Ctx = {
-        req, res, params, user, token,
+        req, res, params, query: url.searchParams, user, token,
         body: async () => {
           const buf = await readBody(req, cfg.maxJsonBytes);
           try { return JSON.parse(buf.toString('utf8') || '{}'); } catch { throw new HttpError(400, 'Malformed JSON body.'); }
@@ -439,5 +596,5 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
     }
   });
 
-  return { server, db, close: () => { server.close(); db.close(); } };
+  return { server, db, routes: routes.map((r) => `${r.method} ${r.re.source.slice(1, -1)}`), close: () => { server.close(); db.close(); } };
 }

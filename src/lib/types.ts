@@ -307,6 +307,7 @@ export type EventKind =
   | 'member_added'
   | 'member_removed'
   | 'case_synced'
+  | 'case_updated'
   | 'demo_reset';
 
 /** Append-only audit / timeline event. Never updated after insert. */

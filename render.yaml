@@ -1,18 +1,19 @@
 # Render Blueprint for the MEDGUARD shared-workspace API (optional).
-# The static frontend stays on GitHub Pages; point it at this service's URL in About & settings.
+# The static frontend is hosted separately; point it at this service's URL in Settings → Shared workspace.
 services:
   - type: web
     name: medguard-api
     runtime: docker
     plan: starter
-    healthCheckPath: /api/health
+    healthCheckPath: /api/ready
     disk:
       name: medguard-data
       mountPath: /data
       sizeGB: 1
     envVars:
+      # Set in the Render dashboard to the exact frontend origin(s), e.g. https://<your-frontend-host>
       - key: MEDGUARD_ALLOWED_ORIGINS
-        value: https://anirudhleetcode-max.github.io
+        sync: false
       - key: MEDGUARD_ALLOW_REGISTRATION
         value: "true"
       - key: ANTHROPIC_API_KEY

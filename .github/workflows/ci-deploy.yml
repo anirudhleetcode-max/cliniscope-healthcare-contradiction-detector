@@ -36,7 +36,7 @@ jobs:
           path: dist
           retention-days: 7
 
-  # Builds the API server image and checks that the container serves /api/health.
+  # Builds the API server image and checks that the container serves /api/health and /api/ready, including after a restart.
   docker-api:
     runs-on: ubuntu-latest
     steps:
@@ -46,10 +46,17 @@ jobs:
         run: |
           docker run -d --name api -p 8787:8787 -e MEDGUARD_ALLOWED_ORIGINS=http://localhost:4173 medguard-api
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:8787/api/health; then echo; docker logs api | tail -5; exit 0; fi
+            if curl -sf http://localhost:8787/api/health; then echo; break; fi
+            if [ "$i" = 30 ]; then docker logs api; exit 1; fi
             sleep 2
           done
-          docker logs api; exit 1
+          # Readiness: database reachable and migrated to the expected schema version.
+          curl -sf http://localhost:8787/api/ready | tee /dev/stderr | grep -q '"ok":true'
+          # Restart: migrations must be idempotent against the existing database file.
+          docker restart api
+          for i in $(seq 1 30); do curl -sf http://localhost:8787/api/ready >/dev/null && break; sleep 2; done
+          curl -sf http://localhost:8787/api/ready
+          docker logs api | tail -5
 
   # Publishes the static build to the gh-pages branch (served by GitHub Pages).
   deploy:
