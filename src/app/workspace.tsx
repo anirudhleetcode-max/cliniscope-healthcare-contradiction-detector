@@ -17,6 +17,8 @@ interface WorkspaceState {
   signIn: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Saves the display name on the server; the session shows the name the server returned. */
+  updateProfile: (displayName: string) => Promise<void>;
   /** Throws a user-facing error if not signed in. */
   requireSession: () => RemoteSession;
   syncing: boolean;
@@ -81,6 +83,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, [session]);
 
+  const updateProfile = useCallback(async (displayName: string) => {
+    if (!session) throw new RemoteError(401, 'Sign in to edit your profile.');
+    const { user } = await remoteApi.updateProfile(session, displayName);
+    const s = { ...session, user };
+    saveSession(s);
+    setSession(s);
+  }, [session]);
+
   const requireSession = useCallback(() => {
     if (!session) throw new RemoteError(401, 'Sign in to the shared workspace (About & settings) to act on a shared case.');
     if (Date.parse(session.expiresAt) <= Date.now()) { saveSession(null); setSession(null); throw new RemoteError(401, 'Your session has expired. Sign in again.'); }
@@ -142,9 +152,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (lastSyncError && remoteCaseId) toast('error', `Shared workspace: ${lastSyncError}`); }, [lastSyncError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const value = useMemo<WorkspaceState>(() => ({
-    serverUrl, setServerUrl, health, healthError, refreshHealth, session, signIn, register, signOut, requireSession,
+    serverUrl, setServerUrl, health, healthError, refreshHealth, session, signIn, register, signOut, updateProfile, requireSession,
     syncing, lastSyncError, pull, push, publishCase,
-  }), [serverUrl, setServerUrl, health, healthError, refreshHealth, session, signIn, register, signOut, requireSession, syncing, lastSyncError, pull, push, publishCase]);
+  }), [serverUrl, setServerUrl, health, healthError, refreshHealth, session, signIn, register, signOut, updateProfile, requireSession, syncing, lastSyncError, pull, push, publishCase]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

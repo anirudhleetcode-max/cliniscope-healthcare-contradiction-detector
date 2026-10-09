@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { AccountOverview } from '../components/AccountOverview';
 import { ArrowRight, CheckCircle2, Cloud, Cpu, FileStack, FileUp, FlaskConical, FolderOpen, GitCompareArrows, HardDrive, ListChecks, ScanText } from 'lucide-react';
 import { useApp, useWorkspaceData } from '../app/state';
 import { AnalyzeButton } from '../components/AnalyzeButton';
@@ -24,6 +25,7 @@ export const STATUS_COLOR: Record<ReviewStatus, string> = {
 export function Overview() {
   const { seeding, seedStage, seedError, resetDemo, storageError } = useApp();
   const { cases, documents, findings, events, loading } = useWorkspaceData();
+  const navigate = useNavigate();
   const [justRan, setJustRan] = useState<{ caseId: string; summary: AnalysisSummary } | null>(null);
   const metrics = useMemo(() => (loading ? null : workspaceMetrics(cases!, documents!, findings!)), [loading, cases, documents, findings]);
 
@@ -57,7 +59,8 @@ export function Overview() {
         meta={<Badge tone="warn" icon={<FlaskConical size={12} aria-hidden />} testId="local-demo-badge">LOCAL DEMO</Badge>}
         description="Identify conflicting statements across clinical records and organize them for human review."
         actions={<>
-          {primary ? <Link to={`/cases/${primary.id}`} className="btn-primary" data-testid="open-demo-case"><FolderOpen size={16} aria-hidden />Open Demo Case</Link> : null}
+          {primary ? <Link to={`/cases/${primary.id}`} className="btn-primary" data-testid="open-demo-case"><FolderOpen size={16} aria-hidden />
+      <div className="mb-6"><AccountOverview onExploreDemo={() => navigate(primary ? `/cases/${primary.id}` : '/cases')} /></div>Open Demo Case</Link> : null}
           <Link to="/documents#import" className="btn-secondary"><FileUp size={16} aria-hidden />Import Documents</Link>
         </>}
       />

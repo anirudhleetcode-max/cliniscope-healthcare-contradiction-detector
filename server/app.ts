@@ -8,7 +8,7 @@ import { OPENAPI } from './openapi';
 import { RateLimiter, createSession, hashPassword, newId, revokeSession, userForToken, verifyPassword, type User } from './auth';
 import { AiProviderError, providerFromConfig, type AiProvider } from './aiProvider';
 import type { ServerConfig } from './config';
-import { validateTransition, ReviewError, isReviewStatus } from '../src/lib/review';
+import { validateTransition, ReviewError, isReviewStatus, PENDING_STATUSES } from '../src/lib/review';
 import { verifyAiOutput, AiOutputError } from '../src/lib/ai';
 import type { AuditEvent, CaseRole, ClinicalStatement, DocumentRecord, Finding, ReviewStatus } from '../src/lib/types';
 
@@ -119,6 +119,8 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
   // ------------------------------------------------------------ schemas
   const Creds = z.object({ email: z.string().trim().toLowerCase().email().max(200), password: z.string().min(10).max(200) });
   const Register = Creds.extend({ displayName: z.string().trim().min(1).max(80) });
+  // Only the display name is editable; email changes would need a verified email-change flow.
+  const ProfileUpdate = z.object({ displayName: z.string().trim().min(1).max(80) }).strict();
   const NewCase = z.object({ id: z.string().regex(/^case_[A-Za-z0-9]{6,40}$/).optional(), label: z.string().trim().min(1).max(80) });
   const Member = z.object({ email: z.string().trim().toLowerCase().email(), role: z.enum(['reviewer', 'viewer']) });
   const Transition = z.object({ to: z.string(), reason: z.string().max(2000).optional(), expectedStatus: z.string().optional() });
@@ -196,6 +198,31 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
 
   route('POST', '/api/auth/logout', true, async (c) => { await revokeSession(db, c.token!); return { ok: true }; });
   route('GET', '/api/auth/me', true, (c) => ({ user: c.user }));
+  route('PATCH', '/api/auth/me', true, async (c) => {
+    // The account is always the session's own user; the body cannot name another account.
+    const b = ProfileUpdate.parse(await c.body());
+    await db.run('UPDATE users SET display_name = ? WHERE id = ?', [b.displayName, c.user!.id]);
+    return { user: { id: c.user!.id, email: c.user!.email, displayName: b.displayName } };
+  });
+
+  // Signed-in dashboard: totals over the cases the caller is a member of (each case counted once,
+  // archived cases excluded), plus the latest audit events from those cases only.
+  route('GET', '/api/overview', true, async (c) => {
+    const pending = PENDING_STATUSES.map(() => '?').join(',');
+    const t = (await db.get<Record<string, number>>(`SELECT
+        COUNT(*)::int AS cases,
+        COUNT(*) FILTER (WHERE m.role = 'owner')::int AS owned,
+        COUNT(*) FILTER (WHERE m.role <> 'owner')::int AS shared,
+        COALESCE(SUM((SELECT COUNT(*) FROM documents d WHERE d.case_id = c.id)), 0)::int AS documents,
+        COALESCE(SUM((SELECT COUNT(*) FROM findings f WHERE f.case_id = c.id AND f.stale = 0)), 0)::int AS findings,
+        COALESCE(SUM((SELECT COUNT(*) FROM findings f WHERE f.case_id = c.id AND f.stale = 0 AND f.review_status IN (${pending}))), 0)::int AS awaiting_review
+      FROM case_members m JOIN cases c ON c.id = m.case_id WHERE m.user_id = ? AND c.archived_at IS NULL`, [...PENDING_STATUSES, c.user!.id]))!;
+    const rows = await db.all<Record<string, string | number | null>>('SELECT e.* FROM audit_events e JOIN case_members m ON m.case_id = e.case_id AND m.user_id = ? ORDER BY e.seq DESC LIMIT 8', [c.user!.id]);
+    return {
+      totals: { cases: t.cases, owned: t.owned, shared: t.shared, documents: t.documents, findings: t.findings, awaitingReview: t.awaiting_review, reviewed: t.findings - t.awaiting_review },
+      recentActivity: rows.map(eventOut),
+    };
+  });
 
   route('GET', '/api/cases', true, async (c) => {
     const limit = intParam(c.query, 'limit', 50, 1, 100);

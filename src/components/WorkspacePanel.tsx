@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Cloud, LogIn, LogOut, RefreshCw, ServerCrash, UserPlus } from 'lucide-react';
 import { useApp } from '../app/state';
 import { useWorkspace } from '../app/workspace';
@@ -9,7 +10,10 @@ export function WorkspacePanel() {
   const ws = useWorkspace();
   const { toast } = useApp();
   const [url, setUrl] = useState(ws.serverUrl);
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const location = useLocation();
+  const [mode, setMode] = useState<'login' | 'register'>((location.state as { mode?: string } | null)?.mode === 'register' ? 'register' : 'login');
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [savingName, setSavingName] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -57,6 +61,24 @@ export function WorkspacePanel() {
           <span>Signed in as <strong data-testid="signed-in-as">{ws.session.user.displayName}</strong> &lt;{ws.session.user.email}&gt; · session expires {new Date(ws.session.expiresAt).toLocaleTimeString()}</span>
           <button className="btn-secondary py-1.5" onClick={() => void ws.signOut()} data-testid="sign-out"><LogOut size={14} />Sign out</button>
         </div>
+      ) : null}
+      {ws.session ? (
+        <form className="mt-3 flex flex-wrap items-end gap-2" data-testid="profile-form" onSubmit={async (e) => {
+          e.preventDefault();
+          const name = (nameDraft ?? '').trim();
+          if (!name || name.length > 80) { toast('error', 'Enter a display name of 1 to 80 characters.'); return; }
+          setSavingName(true);
+          try { await ws.updateProfile(name); setNameDraft(null); toast('success', 'Profile saved on the server.'); }
+          catch (err) { toast('error', `Profile not saved: ${(err as Error).message}`); }
+          finally { setSavingName(false); }
+        }}>
+          <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium">Display name
+            <input className="input" maxLength={80} value={nameDraft ?? ws.session.user.displayName} onChange={(e) => setNameDraft(e.target.value)} data-testid="profile-name-input" />
+          </label>
+          <button className="btn-primary py-1.5" disabled={savingName || nameDraft === null || nameDraft.trim() === ws.session.user.displayName} data-testid="profile-save">{savingName ? 'Saving…' : 'Save'}</button>
+          {nameDraft !== null ? <button type="button" className="btn-secondary py-1.5" onClick={() => setNameDraft(null)}>Cancel</button> : null}
+          <p className="basis-full text-xs text-muted">Your email ({ws.session.user.email}) cannot be changed here.</p>
+        </form>
       ) : ws.health ? (
         <div className="mt-4 space-y-2">
           <div className="flex gap-1 text-xs" role="tablist">
