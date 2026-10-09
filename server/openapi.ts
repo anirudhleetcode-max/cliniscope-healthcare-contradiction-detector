@@ -14,7 +14,7 @@ export const OPENAPI = {
   openapi: '3.1.0',
   info: {
     title: 'MEDGUARD API',
-    version: '1.3.0',
+    version: '1.3.1',
     description: 'Shared-workspace API for the MEDGUARD healthcare record contradiction detector. Synthetic data only; not for clinical use. Errors are JSON: {"error": string, "code": string}.',
   },
   components: {

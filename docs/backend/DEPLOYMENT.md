@@ -1,6 +1,35 @@
 # MEDGUARD backend — free deployment (₹0)
 
-**Status:** the code, configuration and tests for this deployment are ready. **The API is not deployed yet.** It needs two free accounts that only the repository owner can create (steps 1–2 below). Until then, the live site keeps working in local demo mode, as it does today.
+**Status (verified 2026-10-09):** the API is **deployed** at `https://medguard-api-duti.onrender.com` on a Render free web service, with its data in a Neon free PostgreSQL database. The live GitHub Pages frontend works with it. The run that verified this is described in [Live verification](#live-verification) below.
+
+## Live verification
+The workflow **Verify live deployment** (`.github/workflows/verify-live.yml`, script `tests/live/verify-api.mts`) runs on GitHub's runners with synthetic `@example.test` data only. It runs on pull requests that change it, and on demand via **Actions → Verify live deployment → Run workflow**.
+
+Run of 2026-10-09 against the deployed API (commit `bb83038`), all steps passed:
+
+| Check | Evidence |
+|---|---|
+| Health | `GET /api/health` → 200, version 1.3.0 |
+| Readiness and database | `GET /api/ready` → 200, `{"reachable":true,"engine":"postgresql","storage":"external","schemaVersion":3,"expectedSchemaVersion":3}` |
+| CORS | Preflight from the GitHub Pages origin → 204 with a matching `Access-Control-Allow-Origin`; another origin → 403 |
+| Authentication | Register two accounts; duplicate → 409; wrong password → 401; login → token; no token → 401 |
+| Records and detection | 4 synthetic documents through the real extraction and rules engine → 37 statements, **9 findings**; the server re-verified every quote, stored all 9, and the evidence endpoint verified them |
+| Review and notes | `unreviewed → in_review`; closing without a reason → 422; `→ needs_info` with a reason; note saved |
+| Files | 705-byte original uploaded and downloaded byte-identical |
+| Isolation | A signed-in non-member gets 404 for the case, a finding, the file, a status change and the activity log; overwriting another case's document → 409; the case is not in their list |
+| Audit log | Case, upload, detection, decision and note entries present |
+| Error handling | Invalid input → 400 with a readable message; unknown finding → 404; no internals in either |
+| Live browser | Two-user shared-workspace browser tests on the **live GitHub Pages site** against the live API: 2/2 |
+| Persistence after a restart | After 17 idle minutes the first request took **22.3 s** (the free instance had stopped and cold-started). Login, the case, 4/37/9 documents/statements/findings, the `needs_info` decision, the note and the original file all read back |
+
+**Not covered by the live run:**
+- The append-only database triggers: the API has no route that edits the audit log. They are tested against PostgreSQL 16 in CI.
+- AI analysis: no `ANTHROPIC_API_KEY` is configured, so it is off.
+- Free-plan status of the two dashboards: only the account owner can check those (see step 7).
+
+**Test data left behind:** each run creates two synthetic accounts (`live-owner-…@example.test`, `live-outsider-…@example.test`) and cases labelled `SYNTHETIC live check …` / `SYNTHETIC outsider …`. The two-user browser test also creates `alice-…`/`bob-…@example.test` accounts and a `SHARED-… · synthetic` case. The API has no delete route for cases or accounts by design (cases are archived), so they stay. They are small (kilobytes per run) and contain only synthetic text.
+
+**Latency:** with the API and the database in different regions, every database round trip costs about 180 ms. A case action took 2–3 s, and the first sync of a 4-document case took 11.5 s. Creating the Render service in the same region as the Neon project (for example both in Singapore) removes most of this. Case snapshots now issue their reads in parallel (API 1.3.1).
 
 ## Architecture
 
@@ -89,7 +118,7 @@ curl -s $API/api/ready     # → {"ok":true,"database":{"reachable":true,"engine
 
 ### 4. Connect the live frontend
 1. Open the live site, then **Settings → Shared workspace**.
-2. Paste the backend URL and choose **Connect**. "Connecting…" can last up to a minute while the server wakes; then it shows **Reachable · API v1.3.0**.
+2. Paste the backend URL and choose **Connect**. "Connecting…" can last up to a minute while the server wakes; then it shows **Reachable · API v1.3.1** (or later).
 3. **Create account** with a made-up name and an `@example.test` address. Use synthetic data only.
 
 The URL is stored in that browser only. Local demo mode stays the default for every other visitor.

@@ -9,7 +9,11 @@
 
 **Live demo (static frontend):** deployed automatically from this repository by the CI workflow (static hosting; no backend required).
 
-**Deployment status:** the static frontend is published to GitHub Pages by the CI workflow on the default branch, and the full browser suite then runs against the live URL (`verify-production`). It runs in local demo mode (browser storage). The optional shared-workspace API and its PostgreSQL database are built and checked in CI but are **not hosted yet**. A ₹0 deployment (Render free + Neon free) is prepared and needs the owner's two free accounts; see [Deployment](#deployment).
+**Deployment status (verified 2026-10-09):**
+- **Frontend:** published to GitHub Pages by the CI workflow; the full browser suite then runs against the live URL.
+- **Backend:** the optional shared-workspace API is deployed at `https://medguard-api-duti.onrender.com` (Render free) with a **Neon free PostgreSQL** database.
+- **Live verification:** health, readiness, CORS, auth, detection, review, notes, files, case isolation, the live-site browser tests and persistence across a free-instance restart all passed. See [`docs/backend/DEPLOYMENT.md`](docs/backend/DEPLOYMENT.md#live-verification).
+- **Default mode:** the site still opens in local demo mode. Connect the API under **Settings → Shared workspace**.
 
 
 > ⚠️ **Hackathon research prototype. Review-support tool, not a diagnostic system.** MEDGUARD flags *possible* inconsistencies and shows the source evidence for each. It never decides which statement is medically correct. It has no regulatory certification and no compliance attestation (HIPAA or other). Use **fictional demonstration data only**: *not for clinical use*.
@@ -186,7 +190,7 @@ Other commands:
 - [API reference](docs/backend/API_REFERENCE.md); OpenAPI is also served at `/api/openapi.json`.
 - [Database architecture](docs/backend/DATABASE_ARCHITECTURE.md).
 - [Local setup](docs/backend/LOCAL_SETUP.md).
-- [Deployment](docs/backend/DEPLOYMENT.md): the free (₹0) Render + Neon deployment, step by step. Not hosted yet.
+- [Deployment](docs/backend/DEPLOYMENT.md): the free (₹0) Render + Neon deployment, step by step, and the live verification results.
 - [Frontend integration](docs/backend/FRONTEND_INTEGRATION.md).
 - [Security & limitations](docs/backend/SECURITY_AND_LIMITATIONS.md).
 
@@ -203,11 +207,11 @@ See [`docs/backend/DATABASE_ARCHITECTURE.md`](docs/backend/DATABASE_ARCHITECTURE
 ## Deployment
 
 - **Frontend:** `.github/workflows/ci-deploy.yml` runs on every push: type-check, unit tests, build, then the full Playwright suite including OCR, two-user and AI-pipeline tests. It then publishes `dist/` to `gh-pages`, and finally runs the e2e suite against the live GitHub Pages URL (`verify-production`).
-- **API server: not deployed yet.** GitHub Pages cannot run a server. The prepared ₹0 deployment:
+- **API server: deployed** (Render free + Neon free, verified 2026-10-09). GitHub Pages cannot run a server, so the API is hosted separately:
   - `render.yaml` runs the `Dockerfile` on a **Render free** web service. Free instances have no disk, so the server refuses to start without `DATABASE_URL`.
   - The data lives in a **Neon free** PostgreSQL database.
   - It needs the owner's two free accounts. The step-by-step guide, cost check and limits are in [`docs/backend/DEPLOYMENT.md`](docs/backend/DEPLOYMENT.md).
-  - Neither provider has been run yet.
+  - Live checks: the **Verify live deployment** workflow.
 - **What CI checks on every push:**
   - the API and database tests run on embedded PostgreSQL and on a real `postgres:16`;
   - the `docker-api` job builds the image, writes data through it to an external `postgres:16` **without a volume**, replaces the container, and reads the data back.
@@ -275,7 +279,7 @@ See [`docs/JUDGE_DEMO.md`](docs/JUDGE_DEMO.md) for the three-minute script.
 - Offline mode needs one complete online visit first. The OCR engine and English language data (about 7 MB) are cached in the background, so offline OCR works only once that has finished.
 - Rules vocabulary is limited (about 25 drugs, 14 allergens, 14 diagnoses, 10 lab tests). OCR is English only, with no handwriting, and takes a few seconds per page in the browser.
 - AI-assisted reasoning has not been validated against a live model in this build, so its real-world precision is unknown.
-- Shared state refreshes by polling, not real-time push. The API server is not publicly deployed yet. On the free plan it sleeps when idle (about a minute to wake).
+- Shared state refreshes by polling, not real-time push. On the free plan the API sleeps after 15 idle minutes; the first request then takes about 20–60 s.
 - Shared-case sync merges by document and finding. Deletions are explicit, so a stale client never removes data it has not seen. Two reviewers editing the same document's metadata at once is still last-writer-wins.
 - The local cache is per browser profile, not per signed-in user. Two accounts in tabs of the **same** browser profile share one cache, so use separate browser profiles or a private window for the second reviewer.
 - Creating a shared case with a client-chosen ID that already exists returns 409, which reveals that the ID exists. IDs are 64-bit random values.

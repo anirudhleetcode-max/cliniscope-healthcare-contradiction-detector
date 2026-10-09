@@ -33,7 +33,7 @@
 - **Headers:** `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`, `Referrer-Policy: no-referrer`. Original files are served as `application/octet-stream` attachments.
 
 ## Limitations
-- **Not hosted yet.** The free Render + Neon deployment is prepared (`DEPLOYMENT.md`) but needs the owner's accounts. The live site is not connected to a backend.
+- **Public demo deployment:** the API runs on Render free + Neon free (`DEPLOYMENT.md`), with open registration. It holds synthetic test accounts and cases created by the live verification. Use synthetic data only.
 - **Free tiers:** the API sleeps after 15 minutes idle (about 1 minute to wake), and storage and compute quotas are small. Encryption at rest and backups are whatever the database provider offers on its free plan.
 - **Accounts:** no SSO, MFA, password reset, email verification or account deletion.
 - **Rate limiting** is in memory and per process; counters reset when a free instance sleeps or restarts.

@@ -20,4 +20,4 @@ The service boundary is per case: `case.remote` decides whether an action goes t
 ## Known integration gaps (not done, by design)
 - **New outcomes in shared mode:** the frontend's shared mode still offers only the original five statuses (`transitionsFor('shared')`). The server now accepts all eight. Enabling `needs_info`, `expected_change` and `undetermined` for shared cases is a one-line client change. It was left off so the live frontend's behaviour does not change without approval.
 - **No archive or rename UI** for shared cases yet: there is no `PATCH` button.
-- **Live site:** it is not connected to any server yet; the free deployment is prepared in `DEPLOYMENT.md`. A server on a free plan sleeps when idle, so the client waits up to 90 s for `/api/health` and shows "Connecting…" meanwhile.
+- **Live site:** it opens in local demo mode. A visitor connects it to the deployed API under Settings → Shared workspace; this was verified with the live browser tests (`DEPLOYMENT.md`). A server on a free plan sleeps when idle, so the client waits up to 90 s for `/api/health` and shows "Connecting…" meanwhile.
