@@ -5,6 +5,9 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:4173/';
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60000,
+  // Against a deployed API (API_URL) every action crosses the internet to a free-tier server and its
+  // database, so UI updates after a server round trip get longer to appear than against localhost.
+  expect: { timeout: process.env.API_URL ? 30000 : 5000 },
   retries: 0,
   reporter: [['list']],
   use: {

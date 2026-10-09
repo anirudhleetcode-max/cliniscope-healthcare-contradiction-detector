@@ -14,7 +14,7 @@ on:
         required: false
         default: '17'
   pull_request:
-    paths: ['.github/workflows/verify-live.yml', 'tests/live/**']
+    paths: ['.github/workflows/verify-live.yml', 'tests/live/**', 'tests/e2e/shared.spec.ts', 'playwright.config.ts']
 
 permissions:
   contents: read

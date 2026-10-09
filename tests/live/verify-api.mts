@@ -115,6 +115,20 @@ if (phase === 'write') {
   check('isolation: outsider cannot overwrite a document of another case (409)', forged.status === 409);
   check('isolation: outsider case list does not include the owner case', !(await call('GET', '/api/cases', { token: O })).json?.cases?.some((c: any) => c.id === caseId));
 
+  // Audit log: every step above left an entry, in order, attributed to the right actor.
+  const act = await call('GET', `/api/cases/${caseId}/activity?limit=200`, { token: T });
+  const kinds = new Set((act.json?.events ?? []).map((e: any) => e.kind));
+  check('audit log records case, upload, detection, decisions and note', ['case_shared', 'document_uploaded', 'finding_created', 'analysis_completed', 'status_changed', 'note_added'].every((k) => kinds.has(k)), `${act.json?.events?.length} events`);
+  check('audit log is not readable by a non-member (404)', (await call('GET', `/api/cases/${caseId}/activity`, { token: O })).status === 404);
+  // The API has no route that edits or deletes audit entries; the database triggers that reject
+  // UPDATE/DELETE/TRUNCATE are exercised by the CI tests against PostgreSQL 16.
+
+  // Error handling: clear messages, no stack traces or internals.
+  const bad = await call('POST', '/api/cases', { token: T, body: { label: '' } });
+  check('invalid input → 400 with a readable message', bad.status === 400 && typeof bad.json?.error === 'string' && !/at \w+ \(|node_modules|postgres|SELECT /i.test(bad.buf.toString()));
+  const missing = await call('GET', '/api/findings/fd_doesnotexist1', { token: T });
+  check('unknown finding → 404 without internals', missing.status === 404 && !/node_modules|postgres|SELECT /i.test(missing.buf.toString()));
+
   writeFileSync(STATE, JSON.stringify({ email: owner.email, password, caseId, fid, docId: docs[2].id, bytes: original.length, documents: docs.length, statements: statements.length, findings: findings.length, run }));
 } else {
   const s = JSON.parse(readFileSync(STATE, 'utf8'));

@@ -88,15 +88,23 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
   }
 
   async function snapshot(caseId: string, user: User) {
-    const c = (await db.get<Record<string, string>>('SELECT c.*, u.display_name AS owner_name, u.email AS owner_email FROM cases c JOIN users u ON u.id = c.owner_id WHERE c.id = ?', [caseId]))!;
-    const members = (await db.all<Record<string, string>>('SELECT m.user_id, m.role, u.email, u.display_name FROM case_members m JOIN users u ON u.id = m.user_id WHERE m.case_id = ? ORDER BY m.created_at, m.user_id', [caseId]))
-      .map((m) => ({ userId: m.user_id, email: m.email, displayName: m.display_name, role: m.role }));
-    const documents = (await db.all<{ data_json: string; file_size: number | null }>('SELECT d.data_json, f.size AS file_size FROM documents d LEFT JOIN document_files f ON f.document_id = d.id WHERE d.case_id = ? ORDER BY d.id', [caseId]))
-      .map((d) => ({ ...(JSON.parse(d.data_json) as DocumentRecord), hasServerFile: d.file_size != null }));
-    const statements = (await db.all<{ data_json: string }>('SELECT data_json FROM statements WHERE case_id = ? ORDER BY document_id, id', [caseId])).map((s) => JSON.parse(s.data_json) as ClinicalStatement);
-    const findings = (await db.all<Record<string, string | number>>('SELECT id, review_status, stale, data_json, created_at, updated_at FROM findings WHERE case_id = ? ORDER BY created_at, id', [caseId]))
+    // Independent reads, issued together: with a remote database each one costs a network round trip.
+    const [cRow, memberRows, docRows, stmtRows, findingRows, eventRows, role] = await Promise.all([
+      db.get<Record<string, string>>('SELECT c.*, u.display_name AS owner_name, u.email AS owner_email FROM cases c JOIN users u ON u.id = c.owner_id WHERE c.id = ?', [caseId]),
+      db.all<Record<string, string>>('SELECT m.user_id, m.role, u.email, u.display_name FROM case_members m JOIN users u ON u.id = m.user_id WHERE m.case_id = ? ORDER BY m.created_at, m.user_id', [caseId]),
+      db.all<{ data_json: string; file_size: number | null }>('SELECT d.data_json, f.size AS file_size FROM documents d LEFT JOIN document_files f ON f.document_id = d.id WHERE d.case_id = ? ORDER BY d.id', [caseId]),
+      db.all<{ data_json: string }>('SELECT data_json FROM statements WHERE case_id = ? ORDER BY document_id, id', [caseId]),
+      db.all<Record<string, string | number>>('SELECT id, review_status, stale, data_json, created_at, updated_at FROM findings WHERE case_id = ? ORDER BY created_at, id', [caseId]),
+      db.all<Record<string, string | null>>('SELECT * FROM audit_events WHERE case_id = ? ORDER BY seq', [caseId]),
+      roleFor(user, caseId),
+    ]);
+    const c = cRow!;
+    const members = memberRows.map((m) => ({ userId: m.user_id, email: m.email, displayName: m.display_name, role: m.role }));
+    const documents = docRows.map((d) => ({ ...(JSON.parse(d.data_json) as DocumentRecord), hasServerFile: d.file_size != null }));
+    const statements = stmtRows.map((s) => JSON.parse(s.data_json) as ClinicalStatement);
+    const findings = findingRows
       .map((f) => ({ ...(JSON.parse(f.data_json as string) as Finding), id: f.id as string, reviewStatus: f.review_status as ReviewStatus, stale: !!f.stale, createdAt: f.created_at as string, updatedAt: f.updated_at as string }));
-    const events: AuditEvent[] = (await db.all<Record<string, string | null>>('SELECT * FROM audit_events WHERE case_id = ? ORDER BY seq', [caseId])).map((e) => ({
+    const events: AuditEvent[] = eventRows.map((e) => ({
       id: e.id!, caseId, kind: e.kind as AuditEvent['kind'], at: e.at!, actor: e.actor_name!,
       ...(e.finding_id ? { findingId: e.finding_id } : {}), ...(e.document_id ? { documentId: e.document_id } : {}),
       ...(e.from_status ? { fromStatus: e.from_status as ReviewStatus } : {}), ...(e.to_status ? { toStatus: e.to_status as ReviewStatus } : {}),
@@ -104,7 +112,7 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
     }));
     return {
       case: { id: c.id, label: c.label, createdAt: c.created_at, updatedAt: c.updated_at, lastAnalyzedAt: c.last_analyzed_at, archivedAt: c.archived_at ?? null, owner: `${c.owner_name} <${c.owner_email}>` },
-      role: await roleFor(user, caseId), members, documents, statements, findings, events, serverTime: now(),
+      role, members, documents, statements, findings, events, serverTime: now(),
     };
   }
 
