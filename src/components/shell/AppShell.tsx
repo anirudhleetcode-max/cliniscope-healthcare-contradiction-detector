@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Activity, Bell, BookOpenText, ChevronRight, ChevronsLeft, ChevronsRight, Cloud, FileStack, FlaskConical, FolderOpen, GitCompareArrows,
-  HardDrive, LayoutDashboard, ListChecks, LogIn, LogOut, Menu, PlayCircle, Search, Settings, UserRound, X,
+  HardDrive, LayoutDashboard, ListChecks, LogIn, UserPlus, LogOut, Menu, PlayCircle, Search, Settings, UserRound, X,
 } from 'lucide-react';
 import { db, useApp } from '../../app/state';
 import { useWorkspace } from '../../app/workspace';
@@ -292,7 +292,10 @@ function UserMenu({ onTour }: { onTour: () => void }) {
             <div className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-faint" data-testid="current-user"><UserRound size={12} aria-hidden />{ws.session ? `${ws.session.user.displayName} (signed in to shared workspace)` : `${reviewer} — not authenticated`}</div>
           </div>
           <div className="py-1">
-            {user ? null : <MenuLink to="/settings" icon={LogIn} onClick={() => setOpen(false)}>Sign in or create account</MenuLink>}
+            {user ? null : <>
+              <MenuLink to="/settings#workspace" state={{ mode: 'login' }} icon={LogIn} testId="menu-sign-in" onClick={() => setOpen(false)}>Sign in</MenuLink>
+              <MenuLink to="/settings#workspace" state={{ mode: 'register' }} icon={UserPlus} testId="menu-register" onClick={() => setOpen(false)}>Create account</MenuLink>
+            </>}
             <MenuLink to="/settings" icon={Settings} onClick={() => setOpen(false)}>Settings</MenuLink>
             <MenuLink to="/help" icon={BookOpenText} onClick={() => setOpen(false)}>Help &amp; About</MenuLink>
             <button role="menuitem" className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-[13.5px] text-ink hover:bg-hover" onClick={() => { setOpen(false); onTour(); }}><PlayCircle size={16} className="text-faint" aria-hidden />Run guided demo</button>
@@ -304,8 +307,8 @@ function UserMenu({ onTour }: { onTour: () => void }) {
   );
 }
 
-function MenuLink({ to, icon: Icon, children, onClick }: { to: string; icon: typeof Settings; children: ReactNode; onClick: () => void }) {
-  return <Link role="menuitem" to={to} onClick={onClick} className="flex items-center gap-2.5 px-4 py-2 text-[13.5px] text-ink hover:bg-hover"><Icon size={16} className="text-faint" aria-hidden />{children}</Link>;
+function MenuLink({ to, state, icon: Icon, testId, children, onClick }: { to: string; state?: unknown; icon: typeof Settings; testId?: string; children: ReactNode; onClick: () => void }) {
+  return <Link role="menuitem" to={to} state={state} data-testid={testId} onClick={onClick} className="flex items-center gap-2.5 px-4 py-2 text-[13.5px] text-ink hover:bg-hover"><Icon size={16} className="text-faint" aria-hidden />{children}</Link>;
 }
 
 function useClickOutside(ref: React.RefObject<HTMLElement>, cb: () => void) {

@@ -17,7 +17,8 @@ export function About() {
   const { reviewer, setReviewer, toast } = useApp();
   const [name, setName] = useState(reviewer);
   const location = useLocation();
-  useEffect(() => { if (location.hash === '#workspace') document.getElementById('workspace')?.scrollIntoView({ block: 'start' }); }, [location.hash]);
+  // Scroll on every navigation to #workspace (location.key changes even when the URL is the same, e.g. from the profile menu).
+  useEffect(() => { if (location.hash === '#workspace') document.getElementById('workspace')?.scrollIntoView({ block: 'start' }); }, [location.hash, location.key]);
   return (
     <div className="animate-fade-up">
       <PageHeader title="Settings" description="Demo Workspace · local frontend mode. No backend, database server, login or API key is required; data stays in this browser." />
