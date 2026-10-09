@@ -94,6 +94,33 @@ test('two authenticated reviewers share a case: decisions and audit history are 
   await expect(alice.getByTestId('finding-audit')).toContainText('Bob Reviewer');
 });
 
+test('a review started while the case is still syncing to a slow server waits for the sync', async ({ browser }) => {
+  test.setTimeout(150000);
+  const carol = await signUp(browser, 'Carol Reviewer', `carol-${run}@example.test`);
+  // Hold every case sync for 6 s, as a free-tier server with a distant database can (seen live: ~11 s).
+  await carol.route('**/api/cases/*/snapshot', async (route) => { await new Promise((r) => setTimeout(r, 6000)); await route.continue(); });
+  await carol.goto('#/cases');
+  await carol.getByTestId('new-case').click();
+  await carol.getByTestId('new-case-label').fill(`SLOW-${run} · synthetic`);
+  await carol.getByTestId('create-shared-case').click();
+  await expect(carol).toHaveURL(/#\/documents/);
+  await carol.getByTestId('file-input').setInputFiles([
+    { name: 'discharge-2026-03-12.txt', mimeType: 'text/plain', buffer: Buffer.from('ALLERGIES\nPenicillin allergy documented.\nMEDICATIONS\nMetformin 500 mg twice daily.') },
+    { name: 'intake-2026-03-15.txt', mimeType: 'text/plain', buffer: Buffer.from('Allergies: No known drug allergies.\nMEDICATIONS\nMetformin 1000 mg twice daily.') },
+  ]);
+  await carol.getByTestId('upload-submit').click();
+  // The local analysis is shown before the (held) sync to the server has finished.
+  await expect(carol.getByTestId('upload-summary')).toContainText('2 findings', { timeout: 30000 });
+  await carol.goto('#/contradictions?case=current&q=penicillin');
+  await carol.getByTestId('finding-link').first().click();
+  await carol.getByRole('button', { name: 'Begin review' }).click();
+  await expect(carol.getByTestId('finding-detail').getByTestId('status-badge').first()).toHaveText(/In review/, { timeout: 30000 });
+  // The decision is on the server, not only in this tab.
+  await carol.reload();
+  await expect(carol.getByTestId('finding-detail').getByTestId('status-badge').first()).toHaveText(/In review/, { timeout: 30000 });
+  await carol.context().close();
+});
+
 test('an outsider cannot open a case they were not invited to; signed-out users cannot act', async ({ browser }) => {
   const eve = await signUp(browser, 'Eve Outsider', `eve-${run}@example.test`);
   await eve.goto('#/cases');

@@ -28,6 +28,20 @@ interface WorkspaceState {
 
 const Ctx = createContext<WorkspaceState | null>(null);
 
+// Pushes in flight, per case. A review action or note on a shared case waits for them, so it never
+// targets findings the server has not received yet: against a free-tier server and database the
+// push that follows an upload can take several seconds, while the findings already show locally.
+const inFlightPush = new Map<string, Promise<unknown>>();
+function trackPush<T>(caseId: string, p: Promise<T>): Promise<T> {
+  inFlightPush.set(caseId, p);
+  p.catch(() => {}).finally(() => { if (inFlightPush.get(caseId) === p) inFlightPush.delete(caseId); });
+  return p;
+}
+async function afterPendingPush(caseId: string) {
+  // A failed push leaves the case marked unsynced; the action then reports the server's own error.
+  await inFlightPush.get(caseId)?.catch(() => {});
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { currentCase, toast } = useApp();
   const [serverUrl, setUrl] = useState(defaultServerUrl);
@@ -86,7 +100,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const push = useCallback(async (caseId: string, opts: { analyzed?: boolean; detail?: string } = {}) => {
     const s = requireSession();
     setSyncing(true);
-    try { await pushCase(db, s, caseId, opts); setLastSyncError(null); } catch (e) { handleAuthError(e); setLastSyncError((e as Error).message); throw e; } finally { setSyncing(false); }
+    try { await trackPush(caseId, pushCase(db, s, caseId, opts)); setLastSyncError(null); } catch (e) { handleAuthError(e); setLastSyncError((e as Error).message); throw e; } finally { setSyncing(false); }
   }, [requireSession, handleAuthError]);
 
   const publishCase = useCallback(async (c: CaseRecord) => {
@@ -106,7 +120,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (existing?.role !== 'owner') throw e;
     }
     // The case becomes "shared" locally only after the first push (documents, findings, files) succeeded.
-    await pushCase(db, s, c.id, { detail: 'Local case published to the shared workspace' });
+    await trackPush(c.id, pushCase(db, s, c.id, { detail: 'Local case published to the shared workspace' }));
   }, [requireSession]);
 
   // Shared cases are refreshed periodically and on focus (polling, not real-time push).
@@ -147,6 +161,7 @@ export function useReviewActions() {
   const transition = useCallback(async (f: Finding, c: CaseRecord | undefined, to: ReviewStatus, reason?: string) => {
     if (c?.remote) {
       const s = requireSession();
+      await afterPendingPush(c.id);
       try {
         await applySnapshot(db, s.serverUrl, await remoteApi.transition(s, f.id, to, reason, f.reviewStatus));
       } catch (e) {
@@ -169,6 +184,7 @@ export function useReviewActions() {
   const note = useCallback(async (f: Finding, c: CaseRecord | undefined, text: string) => {
     if (c?.remote) {
       const s = requireSession();
+      await afterPendingPush(c.id);
       await applySnapshot(db, s.serverUrl, await remoteApi.note(s, f.id, text));
       return;
     }
