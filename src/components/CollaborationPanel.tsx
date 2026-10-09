@@ -57,13 +57,13 @@ export function CollaborationPanel({ c }: { c: CaseRecord }) {
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input className="input" type="email" placeholder="colleague@example.org (must have an account)" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Collaborator email" data-testid="member-email" />
           <select className="input sm:w-36" value={role} onChange={(e) => setRole(e.target.value as 'reviewer' | 'viewer')} aria-label="Role"><option value="reviewer">Reviewer</option><option value="viewer">Viewer (read-only)</option></select>
-          <button className="btn-primary" disabled={busy || !email} data-testid="add-member" onClick={() => act(async () => { const s = await remoteApi.addMember(ws.requireSession(), c.id, email, role); await applySnapshot(db, ws.session!.serverUrl, s); setMembers(s.members); setEmail(''); toast('success', `${email} can now access this case as ${role}.`); })}><UserPlus size={15} />Share</button>
+          <button className="btn-primary" disabled={busy || !email} data-testid="add-member" onClick={() => act(async () => { const s = await remoteApi.addMember(ws.requireSession(), c.id, email, role); await applySnapshot(db, ws.session!, s); setMembers(s.members); setEmail(''); toast('success', `${email} can now access this case as ${role}.`); })}><UserPlus size={15} />Share</button>
         </div>
       ) : null}
       <ConfirmDialog open={!!removing} onClose={() => setRemoving(null)} title="Remove access?" confirmLabel="Remove" danger busy={busy} testId="confirm-remove-member"
         onConfirm={() => { const m = removing!; void act(async () => {
           const s = await remoteApi.removeMember(ws.requireSession(), c.id, m.userId);
-          await applySnapshot(db, ws.session!.serverUrl, s);
+          await applySnapshot(db, ws.session!, s);
           setMembers(s.members);
           setRemoving(null);
           toast('success', `${m.email} no longer has access to this case.`);

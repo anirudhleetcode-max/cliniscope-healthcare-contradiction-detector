@@ -4,6 +4,7 @@ import { getDb } from '../lib/db';
 import { browserExtractor } from '../lib/browserExtract';
 import { DEMO_REVIEWER, seedDemoWorkspace, type DemoFile } from '../lib/services';
 import { DEMO_MANIFEST } from '../../scripts/demo-content.mjs';
+import { defaultServerUrl, loadSession } from '../lib/remote';
 import type { AuditEvent, CaseRecord, ClinicalStatement, DocumentRecord, Finding } from '../lib/types';
 
 export const db = getDb();
@@ -42,6 +43,18 @@ interface AppState {
   storageError: string | null;
   prefs: Prefs;
   setPref: <K extends keyof Prefs>(k: K, v: Prefs[K]) => void;
+  /**
+   * True while signed in to the shared workspace. The fictional demo is then neither seeded nor shown:
+   * the signed-in views contain only the account's server cases and cases created in this browser.
+   */
+  accountMode: boolean;
+  setAccountMode: (v: boolean) => void;
+}
+
+/** Whether a stored session for the configured server exists (read synchronously, before the first render). */
+function hasStoredSession(): boolean {
+  const s = loadSession();
+  return !!s && s.serverUrl === defaultServerUrl();
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -58,7 +71,8 @@ export async function fetchDemoFiles(): Promise<{ meta: DemoFile; bytes: Uint8Ar
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [storageError, setStorageError] = useState<string | null>(null);
-  const cases = useLiveQuery(async () => {
+  const [accountMode, setAccountMode] = useState(hasStoredSession);
+  const allCases = useLiveQuery(async () => {
     try {
       return await db.cases.orderBy('createdAt').toArray();
     } catch (e) {
@@ -66,6 +80,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return [];
     }
   }, []);
+  const cases = useMemo(() => (allCases && accountMode ? allCases.filter((c) => !c.isDemo) : allCases), [allCases, accountMode]);
   const [caseId, setCaseIdState] = useState<string | null>(() => lsGet(LS_CASE));
   const [reviewer, setReviewerState] = useState<string>(() => lsGet(LS_REVIEWER) || DEMO_REVIEWER);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -113,22 +128,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [setCaseId]);
 
-  // First visit: create the synthetic demo case (documents ingested, not yet analyzed).
+  // First signed-out visit: create the synthetic demo case (documents ingested, not yet analyzed).
+  // Never while signed in: an empty account shows empty states, not fictional records.
   useEffect(() => {
-    if (!cases || seededOnce.current || storageError) return;
+    if (!cases || storageError) return;
     if (cases.length === 0) {
+      if (accountMode || seededOnce.current) return;
       seededOnce.current = true;
       void resetDemo({ select: false });
     } else if (!caseId || !cases.some((c) => c.id === caseId)) {
       setCaseId((cases.find((c) => c.demoKey === 'DEMO-0042') ?? cases.find((c) => c.isDemo) ?? cases[0]).id);
     }
-  }, [cases, caseId, resetDemo, setCaseId, storageError]);
+  }, [cases, caseId, resetDemo, setCaseId, storageError, accountMode]);
 
   const currentCase = cases?.find((c) => c.id === caseId);
   const value = useMemo<AppState>(() => ({
     cases, caseId: currentCase ? caseId : null, currentCase, setCaseId, reviewer, setReviewer, toasts, toast, dismissToast,
-    seeding, seedStage, seedError, resetDemo, storageError, prefs, setPref,
-  }), [cases, caseId, currentCase, setCaseId, reviewer, setReviewer, toasts, toast, dismissToast, seeding, seedStage, seedError, resetDemo, storageError, prefs, setPref]);
+    seeding, seedStage, seedError, resetDemo, storageError, prefs, setPref, accountMode, setAccountMode,
+  }), [cases, caseId, currentCase, setCaseId, reviewer, setReviewer, toasts, toast, dismissToast, seeding, seedStage, seedError, resetDemo, storageError, prefs, setPref, accountMode]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -149,9 +166,20 @@ export function useCaseData(caseId: string | null) {
 
 /** Live data for the whole local workspace (all cases). Re-renders automatically on any write. */
 export function useWorkspaceData() {
-  const cases = useLiveQuery<CaseRecord[]>(() => db.cases.orderBy('createdAt').toArray(), []);
-  const documents = useLiveQuery<DocumentRecord[]>(() => db.documents.toArray(), []);
-  const findings = useLiveQuery<Finding[]>(() => db.findings.toArray(), []);
-  const events = useLiveQuery<AuditEvent[]>(() => db.events.orderBy('at').toArray(), []);
-  return { cases, documents, findings, events, loading: !cases || !documents || !findings || !events };
+  const { accountMode } = useApp();
+  const allCases = useLiveQuery<CaseRecord[]>(() => db.cases.orderBy('createdAt').toArray(), []);
+  const allDocuments = useLiveQuery<DocumentRecord[]>(() => db.documents.toArray(), []);
+  const allFindings = useLiveQuery<Finding[]>(() => db.findings.toArray(), []);
+  const allEvents = useLiveQuery<AuditEvent[]>(() => db.events.orderBy('at').toArray(), []);
+  // Signed in: the demo's cases, documents, findings and events are excluded from every view and metric.
+  return useMemo(() => {
+    const loading = !allCases || !allDocuments || !allFindings || !allEvents;
+    if (!accountMode || loading) return { cases: allCases, documents: allDocuments, findings: allFindings, events: allEvents, loading };
+    const cases = allCases.filter((c) => !c.isDemo);
+    const ids = new Set(cases.map((c) => c.id));
+    return {
+      cases, documents: allDocuments.filter((d) => ids.has(d.caseId)), findings: allFindings.filter((f) => ids.has(f.caseId)),
+      events: allEvents.filter((e) => ids.has(e.caseId)), loading,
+    };
+  }, [accountMode, allCases, allDocuments, allFindings, allEvents]);
 }

@@ -14,14 +14,16 @@ import { DEMO_REVIEWER } from '../lib/services';
 import { APP_VERSION, BUILD_LABEL } from '../lib/version';
 
 export function About() {
-  const { reviewer, setReviewer, toast } = useApp();
+  const { reviewer, setReviewer, toast, accountMode } = useApp();
   const [name, setName] = useState(reviewer);
   const location = useLocation();
   // Scroll on every navigation to #workspace (location.key changes even when the URL is the same, e.g. from the profile menu).
   useEffect(() => { if (location.hash === '#workspace') document.getElementById('workspace')?.scrollIntoView({ block: 'start' }); }, [location.hash, location.key]);
   return (
     <div className="animate-fade-up">
-      <PageHeader title="Settings" description="Demo Workspace · local frontend mode. No backend, database server, login or API key is required; data stays in this browser." />
+      <PageHeader title="Settings" description={accountMode
+        ? 'Signed in to the shared workspace. Server cases are authoritative; this browser keeps a working copy of the ones you open. The fictional demo is hidden while signed in.'
+        : 'Demo Workspace · local frontend mode. No backend, database server, login or API key is required; data stays in this browser.'} />
       <div className="mb-6"><WorkspaceStats /></div>
       <div className="mb-6"><Appearance /></div>
       <div className="mb-6"><Callout tone="warn" title="Review-support tool — not a diagnostic system">MedGuard identifies possible inconsistencies between records and shows the evidence for each. It does not diagnose, does not decide which statement is medically correct, and does not replace professional judgment. It holds no regulatory certification or compliance attestation (e.g. HIPAA) and must not be used with real patient data.</Callout></div>
@@ -111,16 +113,17 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
 }
 
 function WorkspaceStats() {
+  const { accountMode } = useApp();
   const { cases, documents, findings, events, loading } = useWorkspaceData();
   if (loading) return null;
   const m = workspaceMetrics(cases!, documents!, findings!);
   const last = events!.length ? new Date(events![events!.length - 1].at).toLocaleString() : '—';
   return (
     <section id="data" aria-label="Data and storage" className="grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="storage-stats">
-      <MetricCard label="Local cases" value={m.caseCount} hint="Stored in IndexedDB" />
+      <MetricCard label={accountMode ? 'Cases in this browser' : 'Local cases'} value={m.caseCount} hint={accountMode ? 'Server cases you opened, plus cases created only in this browser' : 'Stored in IndexedDB'} />
       <MetricCard label="Documents" value={m.documentCount} hint={`${m.documentsProcessed} processed`} />
       <MetricCard label="Findings" value={[...m.byCategory.values()].reduce((a, b) => a + b, 0)} hint={`${m.pendingReviews} pending review`} />
-      <MetricCard label="Last local save" value={<span className="text-[15px]">{last}</span>} hint="Not synchronized to any server" />
+      <MetricCard label="Last local save" value={<span className="text-[15px]">{last}</span>} hint={accountMode ? 'Shared cases synchronize with the server; local cases stay in this browser' : 'Not synchronized to any server'} />
     </section>
   );
 }

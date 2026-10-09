@@ -62,7 +62,8 @@ Design system: [`docs/FIGMA_DESIGN_SYSTEM.md`](docs/FIGMA_DESIGN_SYSTEM.md) (tok
 
 The complete review workflow runs in the browser. Nothing in this list needs a server, a database, a paid API or an AI service:
 
-- **Demonstration case**: seeded on first load. **About & settings → Demonstration** (and the Cases page) has **Load Demonstration Case** and **Reset Demonstration**. Reset asks for confirmation and removes and rebuilds *only* the synthetic demo case; your own cases are untouched.
+- **Signed in vs. signed out**: while signed in, every page shows only the account's server cases (and cases created in this browser); the fictional demo is neither seeded nor shown, and an empty account shows empty states. Cached copies of server cases are tagged with the account and deleted from the browser when that account signs out, its session expires, or another account signs in.
+- **Demonstration case**: seeded on the first signed-out load. **About & settings → Demonstration** (and the Cases page) has **Load Demonstration Case** and **Reset Demonstration**. Reset asks for confirmation and removes and rebuilds *only* the synthetic demo case; your own cases are untouched.
 - **Documents**: upload (PDF, scanned PDF, PNG/JPEG, TXT, DOCX), search by title or file name, filter by processing status, and download the original file.
 - **Detection**: deterministic rules (`src/lib/statements.ts`, `src/lib/detect.ts`). Every finding stores verbatim quotes with document, page, section and character offsets, and each quote is re-verified against the extracted text before it is shown. When nothing is flagged the queue says *"No potential contradictions were detected by the available rules."*, not "no contradictions exist".
 - **Review**: Unreviewed → In review → Confirmed / Dismissed / Resolved. Dismiss, resolve and reopen need a reason. Notes and every transition go to an append-only history.

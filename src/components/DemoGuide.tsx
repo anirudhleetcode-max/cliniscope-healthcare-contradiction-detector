@@ -60,12 +60,13 @@ const STEPS: Step[] = [
 
 export function DemoGuide({ guide }: { guide: ReturnType<typeof useDemoGuide> }) {
   const { state, update } = guide;
-  const { currentCase, caseId } = useApp();
+  const { currentCase, caseId, accountMode } = useApp();
   const { findings, events } = useCaseData(caseId);
   const navigate = useNavigate();
   const [minimized, setMinimized] = useState(false);
   useEffect(() => { if (state.open) setMinimized(false); }, [state.open]);
-  if (!state.open) return null;
+  // The guided tour walks through the fictional demo, which is not shown while signed in.
+  if (!state.open || accountMode) return null;
   const ctx: Ctx = {
     c: currentCase, findings: findings ?? [], events: events ?? [],
     byConcept: (k) => (findings ?? []).find((f) => f.concept === k && !f.stale),
