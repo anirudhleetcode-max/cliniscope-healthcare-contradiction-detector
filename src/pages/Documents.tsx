@@ -77,12 +77,14 @@ export function Documents() {
       patch(s.key, { state: 'working', message: 'Reading file and extracting text…' });
       try {
         const bytes = new Uint8Array(await s.file.arrayBuffer());
-        const doc = await uploadDocument(db, extractor, caseId, { name: s.file.name, mime: s.file.type, bytes }, { title: s.title, documentType: s.documentType, documentDate: s.documentDate || null }, { actor: reviewer, maxBytes: MAX_MB * 1048576 });
+        const doc = await uploadDocument(db, extractor, caseId, { name: s.file.name, mime: s.file.type, bytes }, { title: s.title, documentType: s.documentType, documentDate: s.documentDate || null }, { actor: reviewer, maxBytes: MAX_MB * 1048576, onProgress: (stage) => patch(s.key, { message: `${stage}…` }) });
         if (doc.status === 'failed' || (doc.status === 'needs_attention' && !doc.extractedText)) {
           patch(s.key, { state: 'error', message: doc.extractionErrors[0] ?? 'Extraction failed.' });
         } else {
           ok++;
-          patch(s.key, { state: 'done', message: `${doc.statementCount} statement(s) extracted${doc.pageCount ? ` from ${doc.pageCount} page(s)` : ''}${doc.extractionWarnings.length ? ' — with warnings' : ''}.` });
+          const ocrPages = doc.pageSpans.filter((p) => p.method === 'ocr').map((p) => p.page);
+          const ocrNote = doc.extractionMethod === 'image-ocr' ? ' via OCR' : ocrPages.length ? ` (OCR on page${ocrPages.length > 1 ? 's' : ''} ${ocrPages.join(', ')})` : '';
+          patch(s.key, { state: 'done', message: `${doc.statementCount} statement(s) extracted${doc.pageCount ? ` from ${doc.pageCount} page(s)` : ''}${ocrNote}${doc.extractionWarnings.length ? ' — completed with warnings: ' + doc.extractionWarnings[0] : ''}` });
         }
       } catch (e) {
         patch(s.key, { state: 'error', message: e instanceof Error ? e.message : 'Upload failed.' });
@@ -120,9 +122,9 @@ export function Documents() {
           <UploadCloud size={28} className="text-brand" aria-hidden />
           <p className="mt-2 text-sm font-medium">Drag and drop files here, or</p>
           <button className="btn-primary mt-2" onClick={() => input.current?.click()} data-testid="choose-files"><FileUp size={16} aria-hidden />Choose files</button>
-          <input ref={input} type="file" multiple accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="sr-only" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} data-testid="file-input" aria-label="Choose files to upload" />
-          <p className="mt-3 text-xs text-muted">PDF (text layer), TXT (UTF-8) or DOCX · up to {MAX_MB} MB each · scanned PDFs are detected but OCR is not available</p>
-          <p className="mt-1 text-xs text-muted">Synthetic test files: <a className="font-medium text-brand hover:underline" href="./demo/sample-follow-up-note-2026-03-20.txt" download>follow-up note (TXT)</a> · <a className="font-medium text-brand hover:underline" href="./demo/sample-scanned-no-text-layer.pdf" download>scanned PDF without text</a></p>
+          <input ref={input} type="file" multiple accept=".pdf,.txt,.docx,.png,.jpg,.jpeg,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg" className="sr-only" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} data-testid="file-input" aria-label="Choose files to upload" />
+          <p className="mt-3 text-xs text-muted">PDF (digital or scanned), PNG/JPEG scans, TXT (UTF-8) or DOCX · up to {MAX_MB} MB each · scanned pages are read with on-device OCR (Tesseract.js); OCR text is marked for review</p>
+          <p className="mt-1 text-xs text-muted">Synthetic test files: <a className="font-medium text-brand hover:underline" href="./demo/sample-follow-up-note-2026-03-20.txt" download>follow-up note (TXT)</a> · <a className="font-medium text-brand hover:underline" href="./demo/sample-mixed-text-and-scan-2026-03-22.pdf" download>mixed digital + scanned PDF</a> · <a className="font-medium text-brand hover:underline" href="./demo/sample-scanned-no-text-layer.pdf" download>blank scan (no readable text)</a></p>
         </div>
 
         {staged.length ? (
@@ -192,7 +194,7 @@ export function Documents() {
                     <td className="px-4 py-3">{d.documentDate ? formatDate(d.documentDate) : <span className="text-warn">Not recorded</span>}</td>
                     <td className="px-4 py-3 text-xs text-muted">{formatDateTime(d.uploadedAt)}</td>
                     <td className="px-4 py-3"><ProcessingBadge status={d.status} /></td>
-                    <td className="px-4 py-3 text-xs">{d.extractedText ? <span className="text-ok">{d.extractedText.length.toLocaleString()} chars{d.pageCount ? ` · ${d.pageCount} pp` : ''}</span> : <span className="text-crit">None</span>}</td>
+                    <td className="px-4 py-3 text-xs">{d.extractedText ? <span className="text-ok">{d.extractedText.length.toLocaleString()} chars{d.pageCount ? ` · ${d.pageCount} pp` : ''}</span> : <span className="text-crit">None</span>}{d.extractionMethod && /ocr/.test(d.extractionMethod) ? <div className="mt-1"><span className="chip bg-warn-50 text-warn" title="Text produced by OCR — verify against the original">OCR{d.ocrLowConfidence?.length ? ` · ${d.ocrLowConfidence.length} low-confidence` : ''}</span></div> : null}</td>
                     <td className="px-4 py-3 tabular-nums">{d.statementCount}</td>
                     <td className="px-4 py-3 tabular-nums">{findingCount(d.id)}</td>
                     <td className="px-4 py-3 text-right">

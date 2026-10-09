@@ -56,11 +56,11 @@ describe('ingestion and analysis service', () => {
     await uploadDocument(db, extractor, c.id, file);
     await expect(uploadDocument(db, extractor, c.id, file)).rejects.toThrow(/identical/);
     await expect(uploadDocument(db, extractor, c.id, { name: 'e.txt', mime: 'text/plain', bytes: new Uint8Array() })).rejects.toThrow(UploadValidationError);
-    await expect(uploadDocument(db, extractor, c.id, { name: 'x.png', mime: 'image/png', bytes: enc('x') })).rejects.toThrow(/Unsupported/);
+    await expect(uploadDocument(db, extractor, c.id, { name: 'x.exe', mime: '', bytes: enc('x') })).rejects.toThrow(/Unsupported/);
     await expect(uploadDocument(db, extractor, c.id, { name: 'b.txt', mime: 'text/plain', bytes: enc('x y z') }, { documentDate: '2026-02-30' })).rejects.toThrow(/valid document date/);
   });
 
-  it('marks a scanned PDF as needing attention and never as analyzed with statements', async () => {
+  it('a blank scan (no text even after OCR) needs attention and yields no statements', async () => {
     const c = await createCase(db, 'Case S');
     const d = await uploadDocument(db, extractor, c.id, { name: 's.pdf', mime: 'application/pdf', bytes: new Uint8Array(readFileSync(demoPath('sample-scanned-no-text-layer.pdf'))) });
     expect(d.status).toBe('needs_attention');
@@ -73,7 +73,7 @@ describe('review workflow and audit trail', () => {
   it('TEST 9/10/12: a finding can be inspected, transitioned, and each transition is audited', async () => {
     const c = await demo();
     const findings = await db.findings.where('caseId').equals(c.id).toArray();
-    expect(findings).toHaveLength(7);
+    expect(findings).toHaveLength(8);
     const pen = findings.find((f) => f.concept === 'allergy:penicillin')!;
     expect(pen.evidence.length).toBeGreaterThanOrEqual(2);
     await transitionFinding(db, pen.id, 'in_review');
@@ -119,7 +119,7 @@ describe('review workflow and audit trail', () => {
     await transitionFinding(db, f.id, 'in_review');
     const again = await analyzeCase(db, c.id);
     expect(again.findingsCreated).toBe(0);
-    expect(again.findingsRetained).toBe(7);
+    expect(again.findingsRetained).toBe(8);
     expect((await db.findings.get(f.id))!.reviewStatus).toBe('in_review');
     const intake = (await db.documents.where('caseId').equals(c.id).toArray()).find((d) => d.documentType === 'intake_form')!;
     await deleteDocument(db, intake.id);
@@ -145,7 +145,7 @@ describe('review workflow and audit trail', () => {
     expect(filterFindings(all, { search: 'no known drug allergies' }).map((f) => f.concept).sort()).toEqual(['allergy:penicillin', 'allergy:sulfonamide']);
     expect(filterFindings(all, { type: 'context_dependent' })).toHaveLength(1);
     expect(filterFindings(all, { category: 'lab' })).toHaveLength(1);
-    expect(filterFindings(all, { status: 'unreviewed' })).toHaveLength(7);
-    expect(filterFindings(all, { quality: 'limited' })).toHaveLength(1);
+    expect(filterFindings(all, { status: 'unreviewed' })).toHaveLength(8);
+    expect(filterFindings(all, { quality: 'limited' })).toHaveLength(2);
   });
 });

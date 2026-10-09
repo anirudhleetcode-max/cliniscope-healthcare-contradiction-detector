@@ -16,7 +16,7 @@ import type {
 } from './types';
 import { DOCUMENT_TYPE_LABEL } from './types';
 
-export type Extractor = (kind: FileKind, bytes: Uint8Array) => Promise<ExtractionResult>;
+export type Extractor = (kind: FileKind, bytes: Uint8Array, onProgress?: (stage: string) => void) => Promise<ExtractionResult>;
 
 export const DEMO_CASE_LABEL = 'DEMO-0042 · Synthetic Patient SP-0042';
 export const DEMO_REVIEWER = 'Demo Reviewer (unauthenticated demo identity)';
@@ -84,7 +84,7 @@ export async function uploadDocument(
   caseId: string,
   file: UploadInput,
   meta: DocumentMeta = {},
-  opts: { actor?: string; maxBytes?: number } = {},
+  opts: { actor?: string; maxBytes?: number; onProgress?: (stage: string) => void } = {},
 ): Promise<DocumentRecord> {
   await requireCase(db, caseId);
   const filename = sanitizeFilename(file.name);
@@ -130,8 +130,16 @@ export async function uploadDocument(
   });
 
   let res: ExtractionResult;
+  let ocrMarked = false;
+  const onProgress = (stage: string) => {
+    opts.onProgress?.(stage);
+    if (!ocrMarked && /OCR/.test(stage)) {
+      ocrMarked = true;
+      void db.documents.update(doc.id, { status: 'ocr_running' });
+    }
+  };
   try {
-    res = await extractor(kind, file.bytes);
+    res = await extractor(kind, file.bytes, onProgress);
   } catch {
     res = { ok: false, text: '', method: null, pageCount: null, pageSpans: [], errors: ['Text extraction failed unexpectedly.'], warnings: [], needsAttention: false };
   }
@@ -143,6 +151,8 @@ export async function uploadDocument(
     pageSpans: res.pageSpans,
     extractionErrors: res.errors,
     extractionWarnings: res.warnings,
+    ocrLowConfidence: res.ocrLowConfidence ?? [],
+    ocrRegions: res.ocrRegions ?? [],
     status: !res.ok ? (res.needsAttention ? 'needs_attention' : 'failed') : res.needsAttention ? 'needs_attention' : 'extracted',
   };
   const statements = res.ok ? extractStatements(updated) : [];

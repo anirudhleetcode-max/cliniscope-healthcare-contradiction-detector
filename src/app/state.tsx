@@ -33,7 +33,7 @@ interface AppState {
   dismissToast: (id: number) => void;
   seeding: boolean;
   seedError: string | null;
-  resetDemo: () => Promise<CaseRecord | null>;
+  resetDemo: (opts?: { select?: boolean }) => Promise<CaseRecord | null>;
   storageError: string | null;
 }
 
@@ -76,13 +76,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === 'error' ? 8000 : 4500);
   }, []);
 
-  const resetDemo = useCallback(async () => {
+  const caseIdRef = useRef(caseId);
+  caseIdRef.current = caseId;
+  const resetDemo = useCallback(async (opts: { select?: boolean } = {}) => {
     setSeeding(true);
     setSeedError(null);
+    const before = caseIdRef.current;
     try {
       const files = await fetchDemoFiles();
       const c = await seedDemoCase(db, extractor, files);
-      setCaseId(c.id);
+      // Background auto-seeding must not hijack a case the user opened meanwhile.
+      if (opts.select !== false || !caseIdRef.current || caseIdRef.current === before) setCaseId(c.id);
       return c;
     } catch (e) {
       setSeedError(e instanceof Error ? e.message : 'Demo seeding failed');
@@ -97,7 +101,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!cases || seededOnce.current || storageError) return;
     if (cases.length === 0) {
       seededOnce.current = true;
-      void resetDemo();
+      void resetDemo({ select: false });
     } else if (!caseId || !cases.some((c) => c.id === caseId)) {
       setCaseId((cases.find((c) => c.isDemo) ?? cases[0]).id);
     }

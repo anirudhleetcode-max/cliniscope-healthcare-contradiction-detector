@@ -1,5 +1,6 @@
 // Browser extractor: lazily loads pdf.js and mammoth so the initial bundle stays small.
-import { extractDocx, extractPdf, extractTxt, type MammothLike, type PdfJsLike } from './extract';
+import { extractDocx, extractImage, extractPdf, extractTxt, type MammothLike, type PdfJsLike } from './extract';
+import { browserOcr } from './browserOcr';
 import type { Extractor } from './services';
 
 let pdfjsPromise: Promise<PdfJsLike> | null = null;
@@ -20,8 +21,9 @@ async function loadMammoth(): Promise<MammothLike> {
   return ((m as unknown as { default?: MammothLike }).default ?? m) as MammothLike;
 }
 
-export const browserExtractor: Extractor = async (kind, bytes) => {
+export const browserExtractor: Extractor = async (kind, bytes, onProgress) => {
   if (kind === 'txt') return extractTxt(bytes);
-  if (kind === 'pdf') return extractPdf(bytes, await loadPdfJs());
+  if (kind === 'pdf') return extractPdf(bytes, await loadPdfJs(), { ocr: browserOcr, onProgress });
+  if (kind === 'image') return extractImage(bytes, browserOcr, onProgress);
   return extractDocx(bytes, await loadMammoth());
 };

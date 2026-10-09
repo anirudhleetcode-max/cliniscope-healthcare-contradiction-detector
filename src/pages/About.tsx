@@ -30,13 +30,15 @@ export function About() {
             <li><strong>Statement extraction:</strong> deterministic vocabulary and pattern rules. No machine-learning or LLM model is used.</li>
             <li><strong>Detection:</strong> {DETECTION_METHOD}.</li>
             <li><strong>Explanations:</strong> rule-specific templates filled from the extracted data. They are interpretation and are labelled separately from quoted evidence.</li>
-            <li><strong>OCR:</strong> not available. Scanned PDFs are flagged as “Needs attention” and no statements are invented for them.</li>
+            <li><strong>OCR:</strong> Tesseract.js (LSTM, English) running on this device. PDF pages without a usable text layer, and PNG/JPEG scans, are rendered and read one page at a time. Engine-reported word confidences are kept; words below 70% are marked “OCR text requires review”, and findings that depend on them are downgraded to insufficient evidence. OCR-derived evidence is never rated above “moderate” availability. Values the OCR could not read are reported as unreadable, never guessed.</li>
             <li><strong>Evidence quality</strong> describes source availability and extraction reliability, not clinical correctness. <strong>Review priority</strong> is a workflow suggestion, not a risk score.</li>
           </ul>
         </Section>
         <Section icon={<FileCheck2 size={17} />} title="Supported files">
           <ul className="space-y-1">
             <li>PDF with a selectable text layer: page numbers are verified per page.</li>
+            <li>Scanned PDF (or mixed digital + scanned pages): image-only pages are OCR'd; page numbers are kept.</li>
+            <li>PNG / JPEG scan: OCR'd as a single image (no page number is shown).</li>
             <li>TXT (UTF-8): character offsets and line numbers.</li>
             <li>DOCX: paragraph text (paragraph index shown).</li>
             <li>Maximum size: {Number(import.meta.env.VITE_MAX_UPLOAD_MB) || 10} MB per file. Duplicate files (same SHA-256) are rejected within a case.</li>
@@ -53,7 +55,7 @@ export function About() {
         <Section icon={<AlertTriangle size={17} />} title="Known limitations">
           <ul className="list-disc space-y-1 pl-5">
             <li>The rules cover a limited vocabulary of common drugs, allergens, diagnoses and lab tests; anything outside it is not extracted.</li>
-            <li>Tabular or multi-column layouts may produce imperfect line ordering. Text on scanned pages is not read.</li>
+            <li>Tabular or multi-column layouts may produce imperfect line ordering. OCR quality depends on scan quality; handwriting is not supported; OCR runs in the browser and takes a few seconds per page.</li>
             <li>Negation and hedging detection are pattern-based and can miss unusual phrasing.</li>
             <li>Type 1 and type 2 diabetes are grouped under one concept. Medication formulations are not distinguished.</li>
             <li>There is no authentication. The reviewer name is a self-declared demo identity.</li>

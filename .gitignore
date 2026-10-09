@@ -24,3 +24,4 @@ npm-debug.log*
 .vite/
 tmp/
 public/pdf.worker.min.js
+public/ocr/

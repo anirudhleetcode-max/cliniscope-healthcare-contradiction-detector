@@ -45,7 +45,7 @@ describe('text extraction', () => {
     expect(p2).toContain('Penicillin allergy documented.');
   });
   it('reports a scanned PDF (no text layer) as needing attention instead of pretending OCR ran', async () => {
-    const r = await extractFile('s.pdf', new Uint8Array(readFileSync(demoPath('sample-scanned-no-text-layer.pdf'))));
+    const r = await extractFile('s.pdf', new Uint8Array(readFileSync(demoPath('sample-scanned-no-text-layer.pdf'))), { ocr: false });
     expect(r.ok).toBe(false);
     expect(r.needsAttention).toBe(true);
     expect(r.errors[0]).toMatch(/OCR is not available/);

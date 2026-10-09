@@ -180,11 +180,11 @@ function EvidenceColumn({ side, label, refs, docs }: { side: 'A' | 'B'; label: s
 
 function EvidenceCard({ ev, doc, side }: { ev: EvidenceRef; doc: DocumentRecord | undefined; side: 'A' | 'B' }) {
   const verified = !!doc && doc.extractedText.slice(ev.charStart, ev.charEnd) === ev.quote;
-  const location = ev.page != null ? `Page ${ev.page} (verified PDF page)` : null;
+  const location = ev.page != null ? `Page ${ev.page} (verified PDF page${ev.ocrDerived ? ', OCR' : ''})` : null;
   return (
     <article className={cx('card animate-fade-up overflow-hidden border-t-4', side === 'A' ? 'border-t-brand' : 'border-t-ink')}>
       <div className="px-4 pt-3">
-        <div className="eyebrow">Source {side}</div>
+        <div className="flex items-center justify-between gap-2"><span className="eyebrow">Source {side}</span>{ev.ocrDerived ? <span className="chip bg-warn-50 text-warn" data-testid="ocr-badge" title="This quotation was produced by OCR from a scanned image">OCR text{ev.ocrMinConfidence != null ? ` · min ${Math.round(ev.ocrMinConfidence)}%` : ''}</span> : null}</div>
         {doc ? (
           <Link to={`/documents/${doc.id}`} className="mt-0.5 inline-flex items-center gap-1.5 font-semibold hover:text-brand"><FileText size={15} aria-hidden />{ev.documentTitle}</Link>
         ) : (
@@ -208,6 +208,7 @@ function EvidenceCard({ ev, doc, side }: { ev: EvidenceRef; doc: DocumentRecord 
       <blockquote className="mx-4 my-3 rounded-lg border-l-4 border-warn bg-[#FFFBEB] px-3 py-2.5 font-mono text-[13px] leading-relaxed text-ink" data-testid="evidence-quote">
         “{ev.quote}”
       </blockquote>
+      {ev.ocrDerived ? <p className="mx-4 -mt-1 mb-3 text-xs text-warn">OCR text requires review: characters, decimal points and units may be misread. Compare with the original page.</p> : null}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-soft/40 px-4 py-2">
         {verified ? (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-ok"><CheckCircle2 size={13} aria-hidden />Quote verified against document text</span>
