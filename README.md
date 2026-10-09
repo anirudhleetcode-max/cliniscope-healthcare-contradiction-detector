@@ -179,6 +179,15 @@ Other commands:
 | `MEDGUARD_NEW_USER_PASSWORD=… npx tsx server/index.ts create-user alice@example.org "Alice"` | create an account when registration is disabled |
 | `npm run demo:generate` | regenerate synthetic documents, including the rendered scans |
 
+### Backend (shared workspace API)
+`server/` is a Node + SQLite API with versioned migrations, per-case roles, review decisions, notes and an append-only activity log. It is optional: the default local demo mode needs no server. See [`docs/backend/`](docs/backend/):
+- [API reference](docs/backend/API_REFERENCE.md); OpenAPI is also served at `/api/openapi.json`.
+- [Database architecture](docs/backend/DATABASE_ARCHITECTURE.md).
+- [Local setup](docs/backend/LOCAL_SETUP.md).
+- [Deployment](docs/backend/DEPLOYMENT.md) — not hosted yet.
+- [Frontend integration](docs/backend/FRONTEND_INTEGRATION.md).
+- [Security & limitations](docs/backend/SECURITY_AND_LIMITATIONS.md).
+
 ### Environment variables
 See [`.env.example`](.env.example). It contains placeholders only. Frontend `VITE_*` values are public. Server variables: `PORT`, `MEDGUARD_DATA_DIR`, `MEDGUARD_ALLOWED_ORIGINS`, `MEDGUARD_ALLOW_REGISTRATION`, `MEDGUARD_SESSION_TTL_HOURS`, `MEDGUARD_MAX_UPLOAD_MB`, `ANTHROPIC_API_KEY`, `MEDGUARD_AI_MODEL`, `MEDGUARD_AI_TIMEOUT_MS`, `MEDGUARD_AI_FALLBACKS`.
 
@@ -189,7 +198,7 @@ The server creates `MEDGUARD_DATA_DIR/medguard.db` and applies versioned migrati
 
 - **Frontend:** `.github/workflows/ci-deploy.yml` runs on every push: type-check, unit tests, build, then the full Playwright suite including OCR, two-user and AI-pipeline tests. It then publishes `dist/` to `gh-pages`, and finally runs the e2e suite against the live GitHub Pages URL (`verify-production`).
 - **API server:** not deployed. No hosting credentials were available, and GitHub Pages cannot run a server. Two ready-to-use options:
-  - `Dockerfile`: `docker build -t medguard-api . && docker run -p 8787:8787 -v medguard-data:/data -e MEDGUARD_ALLOWED_ORIGINS=https://anirudhleetcode-max.github.io medguard-api`
+  - `Dockerfile`: `docker build -t medguard-api . && docker run -p 8787:8787 -v medguard-data:/data -e MEDGUARD_ALLOWED_ORIGINS=https://<your-frontend-host> medguard-api`
   - `render.yaml`: a Render Blueprint (Docker service with a persistent disk). Set `ANTHROPIC_API_KEY` in the dashboard to enable AI.
 
   The self-contained bundle (`npm run server:build`) was verified to start and serve `/api/health` without `node_modules`. The Docker image is built and its container health-checked in CI on every push (`docker-api` job). The Render blueprint has not been run. Once deployed, enter its HTTPS URL in the live app (About & settings), or set `VITE_API_BASE_URL` at build time.

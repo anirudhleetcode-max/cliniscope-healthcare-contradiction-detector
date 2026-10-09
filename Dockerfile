@@ -1,7 +1,7 @@
 # MEDGUARD shared-workspace API server.
 # Build: docker build -t medguard-api .
 # Run:   docker run -p 8787:8787 -v medguard-data:/data \
-#          -e MEDGUARD_ALLOWED_ORIGINS=https://anirudhleetcode-max.github.io medguard-api
+#          -e MEDGUARD_ALLOWED_ORIGINS=https://<your-frontend-host> medguard-api
 # The server is bundled into ONE self-contained file, so the runtime image has no node_modules.
 FROM node:22-slim AS build
 WORKDIR /app
@@ -19,5 +19,5 @@ RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME ["/data"]
 EXPOSE 8787
-HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://127.0.0.1:8787/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://127.0.0.1:8787/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server.mjs"]

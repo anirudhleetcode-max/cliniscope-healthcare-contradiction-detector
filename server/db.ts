@@ -90,16 +90,50 @@ const MIGRATIONS: string[] = [
    -- Append-only at the database level: ordinary SQL cannot rewrite or delete history.
    CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit_events BEGIN SELECT RAISE(ABORT, 'audit_events is append-only'); END;
    CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit_events BEGIN SELECT RAISE(ABORT, 'audit_events is append-only'); END;`,
+
+  // v2: soft archiving of cases; the full MEDGUARD review-outcome set (needs_info, expected_change,
+  // undetermined) is accepted by the database; lookup indexes. SQLite cannot alter a CHECK constraint,
+  // so the findings table is rebuilt and every existing row is copied unchanged.
+  `ALTER TABLE cases ADD COLUMN archived_at TEXT;
+   CREATE TABLE findings_v2 (
+     id TEXT PRIMARY KEY,
+     case_id TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+     fingerprint TEXT NOT NULL,
+     review_status TEXT NOT NULL CHECK (review_status IN ('unreviewed','in_review','confirmed','resolved','dismissed','needs_info','expected_change','undetermined')),
+     stale INTEGER NOT NULL DEFAULT 0,
+     data_json TEXT NOT NULL,
+     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+     UNIQUE (case_id, fingerprint)
+   );
+   INSERT INTO findings_v2 (id, case_id, fingerprint, review_status, stale, data_json, created_at, updated_at)
+     SELECT id, case_id, fingerprint, review_status, stale, data_json, created_at, updated_at FROM findings;
+   DROP TABLE findings;
+   ALTER TABLE findings_v2 RENAME TO findings;
+   CREATE INDEX findings_case_status ON findings(case_id, review_status);
+   CREATE INDEX audit_finding ON audit_events(finding_id, seq);
+   CREATE INDEX case_members_user ON case_members(user_id);`,
 ];
 
-export function openDb(file: string): Db {
+/** Latest schema version this build migrates to. */
+export const SCHEMA_VERSION = MIGRATIONS.length;
+
+export function schemaVersion(db: Db): number {
+  return ((db.prepare('SELECT MAX(version) AS v FROM schema_version').get() as { v: number | null }).v) ?? 0;
+}
+
+/** For tests: the SQL of each migration step, so an older schema can be created deliberately. */
+export const _MIGRATIONS_FOR_TESTS = MIGRATIONS;
+
+export function openDb(file: string, opts: { upTo?: number } = {}): Db {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   db.exec('CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)');
   const row = db.prepare('SELECT MAX(version) AS v FROM schema_version').get() as { v: number | null };
   let v = row.v ?? 0;
-  while (v < MIGRATIONS.length) {
+  const target = opts.upTo ?? MIGRATIONS.length;
+  while (v < target) {
     db.exec('BEGIN');
     try {
       db.exec(MIGRATIONS[v]);
