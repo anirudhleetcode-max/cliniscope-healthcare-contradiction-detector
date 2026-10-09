@@ -1,152 +1,124 @@
 # CLINISCOPE: Code Flayer 2.0 presentation content (PS-11R3)
 
-Final text of all eight slides in `CLINISCOPE_PS11R3_Hackathon_Presentation.pptx`, built on the official Code Flayer 2.0 template.
+Final text of all eight slides in `CLINISCOPE_PS11R3_Hackathon_Presentation.pptx`.
+
+**Template use.** This is the supplied Code Flayer 2.0 template, filled strictly. Every template shape keeps its original position, size, colour and font size; only the placeholder text was replaced. The only added object is a QR code on slide 8, which the template's closing line asks for ("Demo or GitHub link / QR code").
+
 Items in square brackets are deliberate placeholders for team details that are not in the repository.
 
-**How the claims were checked (9 Oct 2026):** source code, `package.json`, README, `docs/ARCHITECTURE.md` and the CI workflow were read. Locally, typecheck passed, 34/34 Vitest tests passed and 8/8 Playwright end-to-end tests passed. GitHub Actions run #7 (`CI and deploy`) shows the `verify-production` job ran the e2e suite against the live GitHub Pages URL and passed. The sandbox could not open github.io directly because the proxy blocks it.
+**How the claims were checked (9 Oct 2026):**
+- Read the source code, `package.json`, README, `docs/ARCHITECTURE.md` and the CI workflow.
+- Locally, typecheck passed, 34/34 Vitest tests passed and 8/8 Playwright end-to-end tests passed.
+- GitHub Actions confirms the `verify-production` job ran the e2e suite against the live GitHub Pages URL and passed.
 
 ---
 
 ## Slide 1: Introduction
 
-- CODE FLAYER 2.0 • PROJECT PRESENTATION • PS-11R3
+- CODE FLAYER 2.0 • PROJECT PRESENTATION
 - **CLINISCOPE**
-- **Healthcare Record Contradiction Detector**
-- *Find the conflict. Trace the evidence. Keep humans in control.*
+- Healthcare Record Contradiction Detector
+- Find the conflict. Trace the evidence. Keep humans in control.
 - TEAM [Add official team name]
 - Team leader: [Add team leader]
 - Team members: [Add member names]
-- Domain: Healthcare | Problem statement PS-11R3 | Vishnu Institute of Technology, Bhimavaram
-- 01 / INTRODUCTION
+- Healthcare • PS-11R3 | Vishnu Institute of Technology, Bhimavaram
 
 ## Slide 2: Problem Statement
 
-*PS-11R3 · Healthcare Record Contradiction Detector. The framing below is our own interpretation of the problem.*
+*PS-11R3: Healthcare Record Contradiction Detector. The framing below is the team's interpretation.*
 
-**01 The problem.** Patient information is spread across discharge summaries, intake forms, medication lists and lab reports. Allergies, doses, diagnoses and lab values can differ between records, and finding those differences by hand is slow.
-
-**02 Target users (intended)**
-- **Clinicians** reviewing patient records
-- **Medical-records / HIM teams**
-- **Clinical quality & patient-safety** reviewers
-- **Authorized staff** reconciling records
-
-**03 Current challenges**
-- **Fragmented:** related statements sit in separate documents
-- **Context-sensitive:** dates, negation and dose changes blur conflicts
-- **Hard to trace:** each discrepancy needs its original source
-
-**04 The gap / impact.** A warning alone is not enough. Reviewers need the original evidence, the context (dates, history) to judge it, and a controlled way to record their final decision.
-
-**One-line problem:** How might we help healthcare reviewers identify and investigate inconsistencies across medical documents, with clear source evidence and human oversight?
+- **01 The problem:** Patient information is spread across many documents. Allergies, doses, diagnoses and lab results can differ, and spotting that by hand is slow.
+- **02 Target users:** Intended users: clinicians reviewing records, medical-records (HIM) teams, clinical quality and patient-safety reviewers, and authorized staff reconciling records.
+- **03 Current challenges:**
+  - Fragmented: statements sit in separate files
+  - Context: dates, negation, dose changes
+  - Traceability: each conflict needs its source
+- **04 The gap / impact:** A warning is not enough. Reviewers need the original evidence, its context (dates, history) and a controlled way to record their decision.
+- **One-line problem:** How can reviewers find and investigate conflicts across medical records with clear source evidence and human oversight?
 
 ## Slide 3: Proposed Solution
 
 *An evidence-first review prototype: documents in, traceable findings out, decisions made by people.*
 
-**Solution overview.** CLINISCOPE extracts text from PDF, TXT and DOCX records. It uses deterministic rules to identify allergy, medication, diagnosis, lab, procedure and smoking statements, then compares them across the documents of one case. It flags potential discrepancies with verified source quotations for human review.
-
-**Unique value / USP.** Every finding is traceable: it is created only if each quote is found again at its exact source offsets. Dated or documented changes are separated from true conflicts, and the final decision stays with the reviewer.
-
-Feature flow (with arrows: 01 → 02 → 03):
-- **01 Ingest documents:** PDF (text layer), TXT and DOCX are validated, de-duplicated and extracted in the browser.
-- **02 Detect with evidence:** rules compare statements and label each difference by type, backed by quoted evidence.
-- **03 Review & audit:** confirm, resolve or dismiss with a required reason. Every action lands in an audit log.
-
-**Expected benefit:** Potential inconsistencies become easier to locate and investigate, while evidence traceability and human judgment are preserved.
+- **Solution overview:** CLINISCOPE extracts text from PDF, TXT and DOCX records, finds allergy, medication, diagnosis and lab statements with rules, compares them across a case and flags potential conflicts with verified source quotes for human review.
+- **Unique value / USP:** Every finding is traceable to an exact source quote. Dated or documented changes are separated from true conflicts, and people make the final call.
+- **01 Document ingestion:** PDF (text layer), TXT and DOCX are validated and extracted in the browser.
+- **02 Evidence detection:** Rule-based comparison flags potential conflicts with source quotes.
+- **03 Review & audit:** Decisions need a reason; every action is kept in an audit log.
+- **Expected benefit:** Conflicts become easier to find and investigate, with evidence and human judgment kept.
 
 ## Slide 4: Technical Approach & Architecture
 
-*The whole pipeline runs in the reviewer's browser: there is no backend server, no AI/LLM and no OCR in the current build.*
+*Everything runs in the reviewer's browser: no backend server, no AI/LLM and no OCR in the current build.*
 
-Five-stage flow: **User input** (PDF text layer · TXT · DOCX · synthetic records) → **Frontend** (React + TypeScript · library · queue · finding detail) → **Client services** (validate · dedupe · analyze · review · IndexedDB/Dexie) → **Processing** (statement rules · conflict rules · evidence check) → **Output** (classified findings · quoted evidence · review + audit log)
+User input (PDF · TXT · DOCX) → Frontend (React + TypeScript) → **Client services** (IndexedDB (Dexie)) → Processing (Rule-based engine) → Output (Evidence findings)
 
-**System components**
-1. Extraction: pdf.js, mammoth, UTF-8 text with offsets
-2. Statements: negation, hedging, history, dose changes
-3. Detection: per-case comparison, units & dates
-4. Evidence: quotes re-verified; View in source
-5. Review: state machine, notes, audit log
-
-**Data flow & validation**
-- Uploads: type, magic-byte and size checks; dedupe
-- Findings: only if every quote matches its source
-- Dates: specimen dates and dose changes reclassify
-- Scanned PDFs: flagged; every decision needs a reason
-
-**Architecture note:** Extraction, statement rules, detection and review are separate TypeScript modules with unit tests, so each stage can be tested and replaced independently.
+- **System components:** Extraction (pdf.js, mammoth) → statement rules → contradiction detection → evidence check → review workflow, stored with Dexie.
+- **Data flow & validation:** Uploads are type- and size-checked. A finding is kept only if its quotes match the source text; dates can reclassify it.
+- **Architecture note:** Extraction, detection and review are separate, unit-tested modules.
 
 ## Slide 5: Technology Stack
 
-*Verified against package.json and the CI workflow. No Python, server framework, cloud database, OCR or LLM provider is used.*
+*Technologies verified in package.json and the CI workflow, and the role each one plays.*
 
-| Card | Content |
+| Template card | Content |
 |---|---|
-| Frontend | React 18 + TypeScript, built with Vite and styled with Tailwind CSS. |
-| Backend: none | A TypeScript service layer in the browser runs upload, analysis and review. |
-| Storage | IndexedDB via Dexie: cases, documents, original files, findings and audit events. |
-| Core logic (rules) | Deterministic TypeScript rules: vocabulary, negation, units and date handling. |
-| Document processing | pdfjs-dist reads PDF text layers, mammoth reads DOCX; TXT is read as UTF-8. |
-| Testing & deployment | Vitest + Playwright in GitHub Actions; static build hosted on GitHub Pages. |
+| Frontend | React 18, TypeScript, Vite and Tailwind CSS for the review UI. |
+| Backend | None: a browser-side TypeScript service layer runs the workflow. |
+| Database | IndexedDB via Dexie: cases, files, findings and audit events. |
+| AI / core logic | No AI/LLM: deterministic TypeScript rules for detection. |
+| Integrations | No external APIs. pdfjs-dist (PDF) and mammoth (DOCX) run locally. |
+| Deployment & tools | Git, GitHub Actions (Vitest, Playwright) and GitHub Pages. |
 
-**Why this stack?** A lightweight, testable static web app: documents are processed and stored in the reviewer's own browser, so no server or credentials are needed. A backend, OCR or AI service would be added only when the implementation requires it.
+**Why this stack?** A light, testable static web app: records are processed and stored in the browser, so no server is needed. OCR, AI or a backend would be added only when required.
 
 ## Slide 6: Feasibility & Viability
 
-*A working, tested prototype today, with a staged and cautious path toward real-world evaluation.*
+*A working, tested prototype today, with a staged and cautious path toward real-world use.*
 
 **Technical feasibility**
-- **Tools & skills:** React, TypeScript, rule design, pdf.js / mammoth, Vitest and Playwright, all in use today.
-- **Data & infrastructure:** synthetic demo records and browser storage only; no hospital systems or real patient data.
-- **Status & constraints:** deployed prototype; 34 unit + 8 end-to-end tests pass. Limited vocabulary, no OCR, no login.
-- **Risk → mitigation:** mis-extraction and context false positives → offset-verified quotes, uncertainty labels, human review, regression tests.
+- Required tools and skills: React, TypeScript, rule design, pdf.js, mammoth, Vitest, Playwright.
+- Data / infrastructure: synthetic records and browser storage only; no real patient data.
+- Prototype status: deployed; 34 unit and 8 end-to-end tests pass. No OCR or login yet.
+- Risk + mitigation: false positives → verified quotes, uncertainty labels, human review.
 
 **Business / operational viability**
-- **Users & value:** authorized reviewers who reconcile records and need evidence, not just alerts.
-- **Adoption path:** synthetic prototype → representative test set → clinical reviewer feedback → security & privacy review → approved limited pilot.
-- **Cost drivers:** hosting (static today), document processing, future storage or AI APIs, testing and maintenance.
-- **Possible model (future):** institutional licensing or record-system integration via pilot partners. No partners or customers today.
+- Target users and value: authorized reviewers who need evidence, not just alerts.
+- Adoption plan: synthetic prototype → test set → clinician feedback → approved pilot.
+- Cost and maintenance: hosting, processing, future storage or AI APIs, testing.
+- Revenue (future only): institutional licensing or integration. No partners today.
 
-**Key takeaway:** CLINISCOPE builds on a working software prototype and offers a practical path toward evaluated, evidence-based record review, subject to further validation and secure deployment.
+**Key takeaway:** A working prototype with a practical, validation-first path to evidence-based review.
 
 ## Slide 7: Sustainability, Scalability & Impact
 
-*Scalability items and roadmap stages 02–04 are planned, not built; impact is a goal to be measured in evaluation.*
+*Scalability items are planned, not built. Impact is a goal to be measured in evaluation.*
 
-**Long-term sustainability:** modular engine in src/lib · regression tests run in CI · versioned DB schema · unsupported files flagged openly · synthetic, governed test data
-
-**Scalability (planned):** OCR for scanned records · more formats and vocabulary · evidence-checked AI assistance · secure backend, login, multi-user · record-system integration
-
-**Expected impact (goals):** aims to cut manual searching · more traceable investigations · clearer view of source evidence · structured review records · better awareness of uncertainty
-
-**Future roadmap**
-1. **Prototype (now):** synthetic records: ingestion, evidence, review
-2. **Pilot testing:** measure extraction, accuracy and usability
-3. **Improve:** OCR, context, evidence checks, security
-4. **Deploy & scale:** only after accuracy, privacy and approvals
-
-**Success metrics (to be measured):** detection precision & recall on a labelled set • % of findings with verifiable evidence • false-positive rate • reviewer agreement • median time per finding • extraction success rate
+- **Long-term sustainability:** Modular engine, regression tests in CI, versioned schema, and unsupported files flagged openly rather than guessed.
+- **Scalability:** Planned: OCR for scans, more formats, evidence-checked AI help, secure backend with login and multi-user review.
+- **Expected impact:** Aims to reduce manual searching, make investigations traceable and record review decisions consistently.
+- **Future roadmap (template stages):** 01 Prototype → 02 Pilot testing → 03 Improve → 04 Deploy & scale
+- **Success metric:** Precision/recall on labelled records, % findings with evidence, reviewer agreement.
 
 ## Slide 8: Conclusion
 
-- **Conclusion.** CLINISCOPE helps reviewers identify potential inconsistencies across healthcare documents, trace every finding to verified source evidence, and record decisions with human oversight.
-- **Find the conflict. Trace the evidence. Keep humans in control.**
+- **Conclusion:** CLINISCOPE helps reviewers find potential conflicts across healthcare records, trace each one to source evidence, and record decisions with human oversight.
+- **Closing line:** Find the conflict. Trace the evidence. Keep humans in control.
 - THANK YOU
-- PS-11R3: Healthcare Record Contradiction Detector
-- Live demo: https://anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector/
-- Code: https://github.com/anirudhleetcode-max/cliniscope-healthcare-contradiction-detector
-- Contact: [Add team email]
-- QR code ("Scan for live demo"): encodes the live demo URL. It was decoded successfully from the rendered slide.
+- [Add team email] • github.com/anirudhleetcode-max/cliniscope-healthcare-contradiction-detector
+- Live demo: anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector (scan QR)
+- **QR code:** links to the live demo URL. It was decoded successfully from the rendered slide.
 
 ---
 
 ## Deliberately left out (not implemented in the current code)
 
-- OCR (scanned PDFs are detected and flagged, not read)
-- Any AI/LLM model (all extraction and detection are deterministic rules)
-- A backend server, authentication, shared cases or multi-user collaboration
-- Encryption beyond the browser profile, and any regulatory compliance claim
-- Any healthcare statistics, accuracy figures, customers or partnerships
+- OCR (scanned PDFs are only flagged)
+- Any AI/LLM model
+- A backend server, authentication, or multi-user collaboration
+- Encryption or compliance claims
+- Healthcare statistics, accuracy figures, customers or partners
 
 ## Rebuilding
 
