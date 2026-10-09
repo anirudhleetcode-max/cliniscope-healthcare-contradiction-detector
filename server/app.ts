@@ -5,8 +5,9 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { openDb, schemaVersion, SCHEMA_VERSION, DbConflictError, DbUnavailableError, type Db, type Queryable } from './db';
 import { OPENAPI } from './openapi';
-import { RateLimiter, createSession, hashPassword, newId, revokeSession, userForToken, verifyPassword, type User } from './auth';
+import { RateLimiter, createSession, hashPassword, newId, revokeSession, sha256, userForToken, verifyPassword, type User } from './auth';
 import { AiProviderError, providerFromConfig, type AiProvider } from './aiProvider';
+import { GoogleAuthError, pkceChallenge, randomToken, verifyGoogleIdToken } from './google';
 import type { ServerConfig } from './config';
 import { validateTransition, ReviewError, isReviewStatus, PENDING_STATUSES } from '../src/lib/review';
 import { verifyAiOutput, AiOutputError } from '../src/lib/ai';
@@ -51,6 +52,7 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
   const log = deps.log ?? ((l: string) => console.log(l));
   const loginLimiter = new RateLimiter(10, 15 * 60_000);
   const aiLimiter = new RateLimiter(10, 10 * 60_000);
+  const googleLimiter = new RateLimiter(60, 15 * 60_000);
 
   // ------------------------------------------------------------ helpers
   const now = () => new Date().toISOString();
@@ -158,6 +160,7 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
     ok: true, service: 'medguard-api', version: API_VERSION, time: now(),
     ai: { configured: !!ai, provider: ai?.name ?? null, model: ai?.model ?? null },
     registration: cfg.allowRegistration,
+    googleSignIn: !!cfg.google,
   }));
 
   // Readiness: the database answers a query and is at the schema version this build expects.
@@ -190,7 +193,7 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
     if (!b.success) throw new HttpError(400, 'Enter a valid email and password.');
     if (!loginLimiter.take(`${b.data.email}|${c.req.socket.remoteAddress}`)) throw new HttpError(429, 'Too many sign-in attempts. Try again in 15 minutes.');
     const u = await db.get<Record<string, string>>('SELECT id, email, display_name, password_hash FROM users WHERE email = ?', [b.data.email]);
-    const ok = u ? await verifyPassword(b.data.password, u.password_hash) : (await hashPassword(b.data.password), false);
+    const ok = u?.password_hash ? await verifyPassword(b.data.password, u.password_hash) : (await hashPassword(b.data.password), false);
     if (!u || !ok) throw new HttpError(401, 'Incorrect email or password.', 'invalid_credentials');
     const s = await createSession(db, u.id, cfg.sessionTtlHours);
     return { token: s.token, expiresAt: s.expiresAt, user: { id: u.id, email: u.email, displayName: u.display_name } };
@@ -222,6 +225,110 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
       totals: { cases: t.cases, owned: t.owned, shared: t.shared, documents: t.documents, findings: t.findings, awaitingReview: t.awaiting_review, reviewed: t.findings - t.awaiting_review },
       recentActivity: rows.map(eventOut),
     };
+  });
+
+  // ---- Google sign-in -------------------------------------------------------------------------------------
+  const GoogleStart = z.object({ returnTo: z.string().url().max(500), link: z.boolean().optional() }).strict();
+  const GoogleExchange = z.object({ handoff: z.string().min(20).max(100) }).strict();
+  const requireGoogle = () => {
+    if (!cfg.google) throw new HttpError(404, 'Google sign-in is not configured on this server.', 'google_not_configured');
+    return cfg.google;
+  };
+  /** Only pages of an allowed frontend origin may receive the post-login redirect. */
+  const safeReturnTo = (raw: string) => {
+    let u: URL;
+    try { u = new URL(raw); } catch { throw new HttpError(400, 'Invalid return address.', 'validation'); }
+    if (!cfg.allowedOrigins.includes(u.origin)) throw new HttpError(400, 'This return address is not allowed.', 'validation');
+    return `${u.origin}${u.pathname}`; // drop query and fragment
+  };
+
+  // Returns Google's authorization URL; the browser navigates there. With link=true (signed in), the
+  // Google account is linked to the signed-in account instead of signing in.
+  route('POST', '/api/auth/google/start', false, async (c) => {
+    const g = requireGoogle();
+    const b = GoogleStart.parse(await c.body());
+    if (!googleLimiter.take(String(c.req.socket.remoteAddress))) throw new HttpError(429, 'Too many sign-in attempts. Try again in a few minutes.');
+    if (b.link && !c.user) throw new HttpError(401, 'Sign in first to link a Google account.', 'unauthenticated');
+    const returnTo = safeReturnTo(b.returnTo);
+    const state = randomToken(); const verifier = randomToken(); const nonce = randomToken();
+    await db.run("DELETE FROM oauth_states WHERE expires_at < ?", [now()]);
+    await db.run('INSERT INTO oauth_states (state_hash, code_verifier, nonce, return_to, link_user_id, expires_at) VALUES (?,?,?,?,?,?)',
+      [sha256(state), verifier, nonce, returnTo, b.link ? c.user!.id : null, new Date(Date.now() + 10 * 60_000).toISOString()]);
+    const u = new URL(g.authUrl);
+    u.search = new URLSearchParams({
+      client_id: g.clientId, redirect_uri: g.callbackUrl, response_type: 'code', scope: 'openid email profile',
+      state, nonce, code_challenge: pkceChallenge(verifier), code_challenge_method: 'S256', prompt: 'select_account',
+    }).toString();
+    return { url: u.toString() };
+  });
+
+  route('GET', '/api/auth/google/callback', false, async (c) => {
+    const g = requireGoogle();
+    const state = c.query.get('state') ?? '';
+    // Single use: the row is deleted as it is read.
+    const st = state ? await db.get<Record<string, string | null>>('DELETE FROM oauth_states WHERE state_hash = ? RETURNING code_verifier, nonce, return_to, link_user_id, expires_at', [sha256(state)]) : undefined;
+    if (!st || String(st.expires_at) < now()) throw new HttpError(400, 'This sign-in link is invalid or has expired. Start again from MedGuard.', 'invalid_state');
+    const back = (q: Record<string, string>) => {
+      c.res.writeHead(302, { Location: `${st.return_to}#/auth/google?${new URLSearchParams(q)}` });
+      c.res.end();
+      return SENT;
+    };
+    if (c.query.get('error')) return back({ error: c.query.get('error') === 'access_denied' ? 'cancelled' : 'provider_error' });
+    const code = c.query.get('code');
+    if (!code) return back({ error: 'provider_error' });
+    let identity;
+    try {
+      const tr = await fetch(g.tokenUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(15_000),
+        body: new URLSearchParams({ code, client_id: g.clientId, client_secret: g.clientSecret, redirect_uri: g.callbackUrl, grant_type: 'authorization_code', code_verifier: String(st.code_verifier) }),
+      });
+      const tj = (await tr.json().catch(() => ({}))) as { id_token?: string };
+      if (!tr.ok || !tj.id_token) throw new GoogleAuthError('exchange_failed', 'Google did not accept the sign-in code.');
+      identity = await verifyGoogleIdToken(tj.id_token, { clientId: g.clientId, nonce: String(st.nonce), jwksUrl: g.jwksUrl });
+    } catch (e) {
+      log(`google sign-in failed: ${e instanceof GoogleAuthError ? e.code : 'network'}`); // never the code or tokens
+      return back({ error: e instanceof GoogleAuthError && e.code === 'email_unverified' ? 'email_unverified' : 'verification_failed' });
+    }
+    let userId: string | null = null;
+    const linked = await db.get<{ id: string }>('SELECT id FROM users WHERE google_sub = ?', [identity.sub]);
+    if (st.link_user_id) {
+      // Linking: the caller proved the MedGuard account (session) and the Google account (this callback).
+      if (linked && linked.id !== st.link_user_id) return back({ error: 'google_in_use' });
+      if (!linked) {
+        const r = await db.get<{ id: string }>('UPDATE users SET google_sub = ? WHERE id = ? AND google_sub IS NULL RETURNING id', [identity.sub, st.link_user_id]);
+        if (!r) return back({ error: 'already_linked' });
+      }
+      userId = String(st.link_user_id);
+    } else if (linked) {
+      userId = linked.id;
+    } else {
+      // Never attach a Google identity to an existing account because the email matches.
+      if (await db.get('SELECT 1 FROM users WHERE email = ?', [identity.email])) return back({ error: 'account_exists' });
+      const id = newId('usr');
+      const created = await db.get<{ id: string }>('INSERT INTO users (id, email, display_name, password_hash, google_sub) VALUES (?,?,?,NULL,?) ON CONFLICT DO NOTHING RETURNING id',
+        [id, identity.email, identity.name ?? identity.email.split('@')[0].slice(0, 80), identity.sub]);
+      if (created) userId = created.id;
+      else {
+        // A concurrent callback created it first (same Google subject), or the email was just taken.
+        const again = await db.get<{ id: string }>('SELECT id FROM users WHERE google_sub = ?', [identity.sub]);
+        if (!again) return back({ error: 'account_exists' });
+        userId = again.id;
+      }
+    }
+    // A short-lived single-use code goes in the URL fragment; the session token is only returned by the POST below.
+    const handoff = randomToken();
+    await db.run('INSERT INTO oauth_handoffs (code_hash, user_id, expires_at) VALUES (?,?,?)', [sha256(handoff), userId, new Date(Date.now() + 2 * 60_000).toISOString()]);
+    return back({ handoff });
+  });
+
+  route('POST', '/api/auth/google/exchange', false, async (c) => {
+    requireGoogle();
+    const b = GoogleExchange.parse(await c.body());
+    const h = await db.get<{ user_id: string; expires_at: string }>('DELETE FROM oauth_handoffs WHERE code_hash = ? RETURNING user_id, expires_at', [sha256(b.handoff)]);
+    if (!h || h.expires_at < now()) throw new HttpError(401, 'This Google sign-in has expired. Try again.', 'invalid_handoff');
+    const u = (await db.get<Record<string, string>>('SELECT id, email, display_name FROM users WHERE id = ?', [h.user_id]))!;
+    const s = await createSession(db, u.id, cfg.sessionTtlHours);
+    return { token: s.token, expiresAt: s.expiresAt, user: { id: u.id, email: u.email, displayName: u.display_name } };
   });
 
   route('GET', '/api/cases', true, async (c) => {

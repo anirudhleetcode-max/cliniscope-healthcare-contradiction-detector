@@ -19,6 +19,10 @@ interface WorkspaceState {
   signOut: () => Promise<void>;
   /** Saves the display name on the server; the session shows the name the server returned. */
   updateProfile: (displayName: string) => Promise<void>;
+  /** Navigates to Google; with link=true the Google account is linked to the signed-in account. */
+  startGoogle: (link?: boolean) => Promise<void>;
+  /** Finishes Google sign-in with the one-time hand-off code from the redirect. */
+  completeGoogle: (handoff: string) => Promise<void>;
   /** Throws a user-facing error if not signed in. */
   requireSession: () => RemoteSession;
   syncing: boolean;
@@ -82,6 +86,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     saveSession(null);
     setSession(null);
   }, [session]);
+
+  const startGoogle = useCallback(async (link?: boolean) => {
+    const returnTo = `${window.location.origin}${window.location.pathname}`;
+    const { url } = await remoteApi.googleStart(serverUrl, returnTo, link ? session ?? undefined : undefined);
+    window.location.assign(url);
+  }, [serverUrl, session]);
+  const completeGoogle = useCallback(async (handoff: string) => accept(await remoteApi.googleExchange(serverUrl, handoff)), [serverUrl, accept]);
 
   const updateProfile = useCallback(async (displayName: string) => {
     if (!session) throw new RemoteError(401, 'Sign in to edit your profile.');
@@ -152,9 +163,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => { if (lastSyncError && remoteCaseId) toast('error', `Shared workspace: ${lastSyncError}`); }, [lastSyncError]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const value = useMemo<WorkspaceState>(() => ({
-    serverUrl, setServerUrl, health, healthError, refreshHealth, session, signIn, register, signOut, updateProfile, requireSession,
+    serverUrl, setServerUrl, health, healthError, refreshHealth, session, signIn, register, signOut, updateProfile, startGoogle, completeGoogle, requireSession,
     syncing, lastSyncError, pull, push, publishCase,
-  }), [serverUrl, setServerUrl, health, healthError, refreshHealth, session, signIn, register, signOut, updateProfile, requireSession, syncing, lastSyncError, pull, push, publishCase]);
+  }), [serverUrl, setServerUrl, health, healthError, refreshHealth, session, signIn, register, signOut, updateProfile, startGoogle, completeGoogle, requireSession, syncing, lastSyncError, pull, push, publishCase]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

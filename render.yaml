@@ -22,6 +22,14 @@ services:
       # true lets anyone create an account (needed for the public demo and the production e2e tests).
       - key: MEDGUARD_ALLOW_REGISTRATION
         value: "true"
+      # Optional Google sign-in. All three must be set (in the dashboard, never committed) or the button stays hidden.
+      # GOOGLE_CALLBACK_URL must be registered as an authorized redirect URI of the Google OAuth web client.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        value: https://medguard-api-duti.onrender.com/api/auth/google/callback
       # Optional. Leave empty: AI-assisted analysis stays off and costs nothing.
       - key: ANTHROPIC_API_KEY
         sync: false

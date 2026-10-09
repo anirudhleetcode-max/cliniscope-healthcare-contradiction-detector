@@ -8,7 +8,7 @@ const SS_SESSION = 'medguard.session';
 
 export interface RemoteUser { id: string; email: string; displayName: string }
 export interface RemoteSession { serverUrl: string; token: string; expiresAt: string; user: RemoteUser }
-export interface RemoteHealth { ok: boolean; version: string; ai: { configured: boolean; provider: string | null; model: string | null }; registration: boolean }
+export interface RemoteHealth { ok: boolean; version: string; ai: { configured: boolean; provider: string | null; model: string | null }; registration: boolean; googleSignIn?: boolean }
 export interface RemoteOverview {
   totals: { cases: number; owned: number; shared: number; documents: number; findings: number; awaitingReview: number; reviewed: number };
   recentActivity: AuditEvent[];
@@ -84,6 +84,8 @@ export const remoteApi = {
   register: (url: string, email: string, password: string, displayName: string) => apiFetch<{ token: string; expiresAt: string; user: RemoteUser }>(url, '/api/auth/register', { body: { email, password, displayName } }),
   login: (url: string, email: string, password: string) => apiFetch<{ token: string; expiresAt: string; user: RemoteUser }>(url, '/api/auth/login', { body: { email, password } }),
   logout: (s: RemoteSession) => apiFetch(s.serverUrl, '/api/auth/logout', { method: 'POST', token: s.token }),
+  googleStart: (url: string, returnTo: string, link?: RemoteSession) => apiFetch<{ url: string }>(url, '/api/auth/google/start', { token: link?.token, body: { returnTo, ...(link ? { link: true } : {}) } }),
+  googleExchange: (url: string, handoff: string) => apiFetch<{ token: string; expiresAt: string; user: RemoteUser }>(url, '/api/auth/google/exchange', { body: { handoff } }),
   updateProfile: (s: RemoteSession, displayName: string) => apiFetch<{ user: RemoteUser }>(s.serverUrl, '/api/auth/me', { token: s.token, method: 'PATCH', body: { displayName } }),
   overview: (s: RemoteSession) => apiFetch<RemoteOverview>(s.serverUrl, '/api/overview', { token: s.token }),
   listCases: (s: RemoteSession) => apiFetch<{ cases: RemoteCaseSummary[] }>(s.serverUrl, '/api/cases', { token: s.token }),

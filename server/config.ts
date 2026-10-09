@@ -18,6 +18,8 @@ export interface ServerConfig {
   aiModel: string;
   aiTimeoutMs: number;
   aiFallbacks: boolean;
+  /** Google sign-in (OpenID Connect, authorization code + PKCE). Enabled only when all three are set. */
+  google: { clientId: string; clientSecret: string; callbackUrl: string; authUrl: string; tokenUrl: string; jwksUrl: string } | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -39,5 +41,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     aiModel: env.MEDGUARD_AI_MODEL?.trim() || 'claude-opus-5-5',
     aiTimeoutMs: Number(env.MEDGUARD_AI_TIMEOUT_MS ?? 120000),
     aiFallbacks: (env.MEDGUARD_AI_FALLBACKS ?? 'true') === 'true',
+    google: env.GOOGLE_CLIENT_ID?.trim() && env.GOOGLE_CLIENT_SECRET?.trim() && env.GOOGLE_CALLBACK_URL?.trim()
+      ? {
+        clientId: env.GOOGLE_CLIENT_ID.trim(), clientSecret: env.GOOGLE_CLIENT_SECRET.trim(), callbackUrl: env.GOOGLE_CALLBACK_URL.trim(),
+        // Endpoint overrides exist for tests against a local fake provider; production uses Google's defaults.
+        authUrl: env.MEDGUARD_GOOGLE_AUTH_URL?.trim() || 'https://accounts.google.com/o/oauth2/v2/auth',
+        tokenUrl: env.MEDGUARD_GOOGLE_TOKEN_URL?.trim() || 'https://oauth2.googleapis.com/token',
+        jwksUrl: env.MEDGUARD_GOOGLE_JWKS_URL?.trim() || 'https://www.googleapis.com/oauth2/v3/certs',
+      }
+      : null,
   };
 }

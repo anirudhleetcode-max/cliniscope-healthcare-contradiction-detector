@@ -14,6 +14,12 @@ export function WorkspacePanel() {
   const [mode, setMode] = useState<'login' | 'register'>((location.state as { mode?: string } | null)?.mode === 'register' ? 'register' : 'login');
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [savingName, setSavingName] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const google = async (link: boolean) => {
+    setGoogleBusy(true);
+    try { await ws.startGoogle(link); } // navigates away on success
+    catch (e) { toast('error', `Google sign-in could not start: ${(e as Error).message}`); setGoogleBusy(false); }
+  };
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -78,6 +84,7 @@ export function WorkspacePanel() {
           <button className="btn-primary py-1.5" disabled={savingName || nameDraft === null || nameDraft.trim() === ws.session.user.displayName} data-testid="profile-save">{savingName ? 'Saving…' : 'Save'}</button>
           {nameDraft !== null ? <button type="button" className="btn-secondary py-1.5" onClick={() => setNameDraft(null)}>Cancel</button> : null}
           <p className="basis-full text-xs text-muted">Your email ({ws.session.user.email}) cannot be changed here.</p>
+          {ws.health?.googleSignIn ? <button type="button" className="btn-secondary py-1.5" disabled={googleBusy} onClick={() => void google(true)} data-testid="google-link">{googleBusy ? 'Opening Google…' : 'Link Google account'}</button> : null}
         </form>
       ) : ws.health ? (
         <div className="mt-4 space-y-2">
@@ -90,6 +97,9 @@ export function WorkspacePanel() {
           <div><label className="label" htmlFor="ws-pw">Password {mode === 'register' ? '(min. 10 characters)' : ''}</label><input id="ws-pw" type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }} data-testid="ws-password" /></div>
           {error ? <p className="text-xs font-medium text-crit" role="alert">{error}</p> : null}
           <button className="btn-primary w-full" disabled={busy || !email || !password} onClick={submit} data-testid="ws-submit">{mode === 'login' ? <><LogIn size={15} />Sign in</> : <><UserPlus size={15} />Create account</>}</button>
+          {ws.health.googleSignIn ? (
+            <button className="btn-secondary w-full" disabled={googleBusy} aria-busy={googleBusy} onClick={() => void google(false)} data-testid="google-sign-in">{googleBusy ? 'Opening Google…' : 'Continue with Google'}</button>
+          ) : null}
           <p className="text-[11px] text-muted">Passwords are hashed with scrypt on the server. The session token is kept only for this browser tab.</p>
         </div>
       ) : null}
