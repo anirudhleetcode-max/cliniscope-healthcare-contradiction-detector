@@ -170,3 +170,13 @@ Do not enter one if your requirement is "no payment method at all". Stop there; 
 - A real-process check: the bundled server ran against external PostgreSQL. A synthetic case with 4 documents (37 statements, 9 findings, a decision, a note and a 705-byte original file) was written. The process was killed and a new one started; everything read back unchanged.
 - The CI `docker-api` job builds the image and, with an external `postgres:16` and **no volume**, writes data, removes the container, starts a new one, and reads the data back. It also checks the start-up guard and the embedded mode.
 - **Not tested:** Render and Neon themselves. Nothing has been deployed to either provider from this repository yet.
+
+## Repository and URL
+The public site is served by GitHub Pages at `https://<owner>.github.io/<repository>/`, so its path is the repository name. To publish it at `https://<owner>.github.io/medguard/`:
+
+1. **Rename the repository** to `medguard`. This needs the owner's account: on GitHub open the repository, then **Settings → General → Repository name**, enter `medguard`, and choose **Rename**.
+2. **Nothing in the code needs to change.** The build uses relative asset paths and hash routing, and CI derives the site URL from the repository name. Push or re-run **CI and deploy** on the default branch to republish under the new path.
+3. **Nothing changes for the API.** CORS allows the origin `https://<owner>.github.io`, which has no path, so `MEDGUARD_ALLOWED_ORIGINS` on Render stays as it is.
+4. **Render:** GitHub redirects the old repository URL, but if Render shows the repository as disconnected, reconnect it under the service's **Settings → Build & Deploy → Repository**.
+5. **Old links:** GitHub redirects the old repository URL, but do not count on the old Pages path redirecting; share the new URL.
+6. **Local clones:** `git remote set-url origin https://github.com/<owner>/medguard.git`.

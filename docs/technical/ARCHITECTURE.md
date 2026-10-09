@@ -262,7 +262,7 @@ flowchart TD
 | Decision | Consequence | Evidence |
 |---|---|---|
 | Browser-first, no mandatory backend | Works on static hosting and offline. Data is per-browser and single-user in local mode | `src/lib/db.ts`, `public/sw.js` |
-| `HashRouter` + `base: './'` | Deep links and assets work under the GitHub Pages sub-path `/cliniscope-healthcare-contradiction-detector/` with no server rewrites | `src/main.tsx`, `vite.config.ts`, built `dist/index.html` uses `./assets/...` |
+| `HashRouter` + `base: './'` | Deep links and assets work under the GitHub Pages repository sub-path (`/<repository>/`) with no server rewrites | `src/main.tsx`, `vite.config.ts`, built `dist/index.html` uses `./assets/...` |
 | Self-hosted pdf.js worker, OCR worker, WASM and language data | No third-party CDN at runtime. Compatible with the strict CSP (`script-src 'self' 'wasm-unsafe-eval'`) | `scripts/copy-pdf-worker.mjs`, `index.html` CSP |
 | Pure functions with injected parsers | The same extraction and detection code runs in the browser and in Node tests (real pdf.js, mammoth, Tesseract) | `src/lib/extract.ts` header comment, `tests/unit/*` |
 | Evidence = exact character offsets | Every quote is re-verifiable (detection, server sync, backup restore, AI verification) | `detect.ts:35`, `app.ts:221-241`, `exportCase.ts:144`, `ai.ts:118` |

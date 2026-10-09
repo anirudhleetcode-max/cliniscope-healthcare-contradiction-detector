@@ -40,13 +40,13 @@ try {
   const db = await connect();
   const { server } = await createApp({ config: cfg, db });
   server.listen(cfg.port, cfg.host, () => {
-    console.log(`MEDGUARD API listening on http://${cfg.host}:${cfg.port}`);
+    console.log(`MedGuard API listening on http://${cfg.host}:${cfg.port}`);
     console.log(`  database: PostgreSQL (${db.storage === 'external' ? 'external, DATABASE_URL' : `embedded PGlite in ${cfg.dataDir}/pgdata`})`);
     console.log(`  allowed origins: ${cfg.allowedOrigins.join(', ') || '(none)'}`);
     console.log(`  registration: ${cfg.allowRegistration ? 'open' : 'disabled'}; AI: ${cfg.anthropicApiKey ? `configured (${cfg.aiModel})` : 'not configured'}`);
   });
 } catch (e) {
   // Never print the connection string or other configuration values.
-  console.error(`MEDGUARD API failed to start: ${(e as Error)?.name === 'DbUnavailableError' ? 'the database could not be reached (check DATABASE_URL)' : (e as Error)?.message}`);
+  console.error(`MedGuard API failed to start: ${(e as Error)?.name === 'DbUnavailableError' ? 'the database could not be reached (check DATABASE_URL)' : (e as Error)?.message}`);
   process.exit(1);
 }

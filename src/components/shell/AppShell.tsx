@@ -105,7 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <main id="main" className="mx-auto w-full max-w-[1600px] flex-1 px-4 py-6 md:px-6 md:py-8 lg:px-8" tabIndex={-1}>{children}</main>
           <footer className="mx-auto w-full max-w-[1600px] px-4 pb-6 text-[11.5px] text-faint md:px-6 lg:px-8">
-            MEDGUARD v{APP_VERSION} · frontend demonstration build · review-support prototype: it does not diagnose or determine which record is clinically correct. Synthetic data only.
+            MedGuard v{APP_VERSION} · frontend demonstration build · review-support prototype: it does not diagnose or determine which record is clinically correct. Synthetic data only.
           </footer>
         </div>
       </div>
@@ -168,7 +168,7 @@ function NavItem({ to, label, icon: Icon, end, compact, onNavigate, count }: { t
 
 function Brand({ compact }: { compact?: boolean }) {
   return (
-    <Link to="/" className="flex items-center gap-2.5 rounded-md" aria-label="MEDGUARD home">
+    <Link to="/" className="flex items-center gap-2.5 rounded-md" aria-label="MedGuard home">
       <BrandMark size={32} />
       {!compact ? (
         <span className="leading-tight">

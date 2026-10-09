@@ -14,8 +14,8 @@ test('every primary navigation destination opens without console errors', async 
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await ready(page);
-  await expect(page).toHaveTitle('MEDGUARD — Healthcare Record Contradiction Detector');
-  await expect(page.getByRole('link', { name: 'MEDGUARD home' }).first()).toBeVisible();
+  await expect(page).toHaveTitle('MedGuard — Healthcare Contradiction Detection');
+  await expect(page.getByRole('link', { name: 'MedGuard home' }).first()).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Main' }).first();
   for (const [link, heading] of [['Clinical Cases', 'Clinical Cases'], ['Contradictions', 'Contradictions'], ['Documents', 'Documents'], ['Review Queue', 'Review Queue'], ['Activity', 'Activity'], ['Overview', 'Clinical Overview']]) {
     await nav.getByRole('link', { name: link }).click();

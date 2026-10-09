@@ -13,9 +13,9 @@ const STATUS = ['unreviewed', 'in_review', 'confirmed', 'resolved', 'dismissed',
 export const OPENAPI = {
   openapi: '3.1.0',
   info: {
-    title: 'MEDGUARD API',
+    title: 'MedGuard API',
     version: '1.3.1',
-    description: 'Shared-workspace API for the MEDGUARD healthcare record contradiction detector. Synthetic data only; not for clinical use. Errors are JSON: {"error": string, "code": string}.',
+    description: 'Shared-workspace API for MedGuard, a healthcare contradiction detection tool. Synthetic data only; not for clinical use. Errors are JSON: {"error": string, "code": string}.',
   },
   components: {
     securitySchemes: { bearer: { type: 'http', scheme: 'bearer', description: 'Opaque session token from /api/auth/login or /api/auth/register.' } },
