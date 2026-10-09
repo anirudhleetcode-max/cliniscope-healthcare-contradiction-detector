@@ -1,9 +1,9 @@
-import { useRef, useState, type DragEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Download, FileText, FileUp, Loader2, Trash2, UploadCloud, X, XCircle } from 'lucide-react';
 import { db, extractor, useApp, useCaseData } from '../app/state';
 import { AnalyzeButton } from '../components/AnalyzeButton';
-import { Callout, EmptyState, Modal, PageHeader, PageSkeleton, ProcessingBadge, cx } from '../components/ui';
+import { Callout, EmptyState, Modal, PageHeader, PageSkeleton, ProcessingBadge, SelectField, cx } from '../components/ui';
 import { findDate, formatDate, formatDateTime, isValidIsoDate } from '../lib/dates';
 import { DEFAULT_MAX_UPLOAD_BYTES } from '../lib/extract';
 import { analyzeCase, deleteDocument, uploadDocument } from '../lib/services';
@@ -42,7 +42,10 @@ function guessDate(name: string): string {
 }
 
 export function Documents() {
-  const { caseId, currentCase, reviewer, toast } = useApp();
+  const { caseId, currentCase, reviewer, toast, cases, setCaseId } = useApp();
+  const [search] = useSearchParams();
+  const wantCase = search.get('case');
+  useEffect(() => { if (wantCase && wantCase !== caseId && cases?.some((c) => c.id === wantCase)) setCaseId(wantCase); }, [wantCase, caseId, cases, setCaseId]);
   const ws = useWorkspace();
   const { documents, findings, loading } = useCaseData(caseId);
   const [staged, setStaged] = useState<Staged[]>([]);
@@ -51,6 +54,8 @@ export function Documents() {
   const [summary, setSummary] = useState<AnalysisSummary | null>(null);
   const [toDelete, setToDelete] = useState<DocumentRecord | null>(null);
   const [drag, setDrag] = useState(false);
+  const [docQuery, setDocQuery] = useState('');
+  const [docStatus, setDocStatus] = useState<'all' | 'ok' | 'attention'>('all');
   const input = useRef<HTMLInputElement>(null);
 
   if (!currentCase || loading) return <PageSkeleton />;
@@ -128,9 +133,13 @@ export function Documents() {
 
   return (
     <div className="animate-fade-up">
-      <PageHeader eyebrow="Document library" title="Case records" description="Original files are stored separately from their extracted text and the statements derived from it. Uploaded content is treated as untrusted data and is never executed or rendered as HTML." actions={<AnalyzeButton disabled={!documents!.length} onDone={setSummary} />} />
+      <PageHeader title="Documents" description="Inspect the source records used in the local demonstration workspace. Uploaded content is treated as untrusted text and is never executed or rendered as HTML."
+        actions={<>
+          <SelectField className="w-[240px]" value={caseId ?? ''} onChange={(v) => setCaseId(v)} label="Case" testId="doc-case-select" options={(cases ?? []).map((c) => ({ value: c.id, label: c.label }))} />
+          <AnalyzeButton disabled={!documents!.length} onDone={setSummary} />
+        </>} />
 
-      <section className="card mb-6 p-5" aria-label="Upload documents">
+      <section className="card mb-6 scroll-mt-24 p-5" aria-label="Upload documents" id="import">
         <div
           onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
           onDragLeave={() => setDrag(false)}
@@ -189,6 +198,16 @@ export function Documents() {
         ) : null}
       </section>
 
+      {documents!.length > 0 ? (
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row" role="search">
+          <input className="input sm:max-w-sm" placeholder="Search title, file name, type or text…" aria-label="Search documents" value={docQuery} onChange={(e) => setDocQuery(e.target.value)} data-testid="doc-search" />
+          <select className="input sm:w-56" aria-label="Filter by processing status" value={docStatus} onChange={(e) => setDocStatus(e.target.value as 'all' | 'ok' | 'attention')} data-testid="doc-status-filter">
+            <option value="all">All documents</option>
+            <option value="ok">Processed successfully</option>
+            <option value="attention">Needs attention / failed</option>
+          </select>
+        </div>
+      ) : null}
       {documents!.length === 0 ? (
         <EmptyState title="No documents in this case" body="Upload discharge summaries, intake forms, medication lists or lab reports to compare them." />
       ) : (
@@ -201,7 +220,13 @@ export function Documents() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {[...documents!].sort((a, b) => (a.documentDate ?? '').localeCompare(b.documentDate ?? '')).map((d) => (
+                {[...documents!].filter((d) => {
+                  const q = docQuery.trim().toLowerCase();
+                  const bad = d.status === 'needs_attention' || d.status === 'failed';
+                  if (docStatus === 'ok' && bad) return false;
+                  if (docStatus === 'attention' && !bad) return false;
+                  return !q || [d.title, d.originalFilename, DOCUMENT_TYPE_LABEL[d.documentType], d.extractedText].join(' ').toLowerCase().includes(q);
+                }).sort((a, b) => (a.documentDate ?? '').localeCompare(b.documentDate ?? '')).map((d) => (
                   <tr key={d.id} className="align-top hover:bg-soft/30">
                     <td className="px-4 py-3">
                       <Link to={`/documents/${d.id}`} className="font-medium hover:text-brand">{d.title}</Link>

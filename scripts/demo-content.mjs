@@ -10,6 +10,7 @@ export const DISCHARGE_SUMMARY_PAGES = [
     BANNER,
     'NORTHFIELD GENERAL (FICTIONAL) — DISCHARGE SUMMARY',
     'Patient: Synthetic Patient SP-0042',
+    'Date of birth: 14 February 1961',
     'Admission date: 8 March 2026',
     'Discharge date: 12 March 2026',
     '',
@@ -36,6 +37,7 @@ export const DISCHARGE_SUMMARY_PAGES = [
     'Metformin 500 mg twice daily by mouth.',
     'Lisinopril 10 mg once daily.',
     'Atorvastatin 20 mg at night.',
+    'Aspirin 81 mg once daily discontinued on admission.',
     '',
     'SOCIAL HISTORY',
     'Former smoker, quit in 2015.',
@@ -52,6 +54,7 @@ export const INTAKE_FORM_PARAGRAPHS = [
   BANNER,
   'Patient Intake Form (fictional community clinic)',
   'Patient: Synthetic Patient SP-0042',
+  'Date of birth: 14 February 1961',
   'Visit date: 15 March 2026',
   'Allergies: No known drug allergies.',
   'Current medications (patient reported):',
@@ -67,6 +70,7 @@ export const INTAKE_FORM_PARAGRAPHS = [
 export const MED_REC_TEXT = `${BANNER}
 MEDICATION RECONCILIATION RECORD (fictional pharmacy service)
 Patient: Synthetic Patient SP-0042
+Date of birth: 4 February 1961
 Reconciliation date: 14 March 2026
 Reconciled by: Demo pharmacist (synthetic identity)
 
@@ -78,6 +82,7 @@ ACTIVE MEDICATIONS
 1. Metformin 500 mg twice daily by mouth with meals.
 2. Lisinopril 20 mg once daily (increased from 10 mg on 13 March 2026 by primary care).
 3. Atorvastatin 20 mg at night.
+4. Aspirin 81 mg once daily.
 
 INDICATIONS ON FILE
 Type 2 diabetes mellitus; hypertension.

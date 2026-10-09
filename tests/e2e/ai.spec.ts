@@ -9,7 +9,7 @@ test.skip(!API, 'No AI-configured API server for this run');
 test('AI-assisted findings require consent, keep only verified quotes, and are labelled', async ({ page }) => {
   test.setTimeout(90000);
   const run = Date.now().toString(36);
-  await page.goto('#/about#workspace');
+  await page.goto('#/settings#workspace');
   await page.getByTestId('server-url').fill(API);
   await page.getByTestId('save-server-url').click();
   await expect(page.getByTestId('ai-status')).toContainText('configured');
@@ -21,6 +21,7 @@ test('AI-assisted findings require consent, keep only verified quotes, and are l
   await expect(page.getByTestId('signed-in-as')).toHaveText('AI Tester');
 
   await page.goto('#/cases');
+  await page.getByTestId('new-case').click();
   await page.getByTestId('new-case-label').fill(`AI-${run}`);
   await page.getByTestId('create-case').click(); // local case: AI still goes through the authenticated server
   await page.getByTestId('file-input').setInputFiles([
@@ -30,7 +31,7 @@ test('AI-assisted findings require consent, keep only verified quotes, and are l
   await page.getByTestId('upload-submit').click();
   await expect(page.getByTestId('upload-summary')).toBeVisible({ timeout: 30000 });
 
-  await page.goto('#/');
+  await page.goto('#/case');
   await expect(page.getByTestId('ai-availability')).toContainText('available');
   await page.getByTestId('run-ai').click();
   await expect(page.getByRole('dialog')).toContainText('Send case text to the AI provider?');
@@ -38,7 +39,7 @@ test('AI-assisted findings require consent, keep only verified quotes, and are l
   await expect(page.getByTestId('ai-result')).toContainText('1 new AI-assisted finding', { timeout: 30000 });
   await expect(page.getByTestId('ai-result')).toContainText('1 rejected');
 
-  await page.goto('#/queue?q=shortness');
+  await page.goto('#/contradictions?case=current&q=shortness');
   await page.getByTestId('finding-link').first().click();
   await expect(page.getByTestId('ai-badge')).toBeVisible();
   await expect(page.getByTestId('finding-detail')).toContainText('AI-generated interpretation');

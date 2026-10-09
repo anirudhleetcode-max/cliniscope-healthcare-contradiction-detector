@@ -29,7 +29,7 @@ interface Ctx {
   stats: { evaluated: number; consistent: number; temporal: number };
 }
 
-const SIGNIFICANT_CATEGORIES: Category[] = ['allergy', 'medication'];
+const SIGNIFICANT_CATEGORIES: Category[] = ['allergy', 'medication', 'demographic'];
 
 /** Verifies that a statement's quote still exists at its offsets in the source document. */
 export function verifyStatement(s: ClinicalStatement, doc: DocumentRecord | undefined): boolean {
@@ -573,6 +573,32 @@ function compareProcedures(ctx: Ctx, list: ClinicalStatement[]): void {
   }
 }
 
+// ------------------------------------------------------------- demographics
+function compareDemographic(ctx: Ctx, list: ClinicalStatement[]): void {
+  if (new Set(list.map((s) => s.documentId)).size < 2) return;
+  ctx.stats.evaluated++;
+  const byVal = new Map<string, ClinicalStatement[]>();
+  for (const s of list) byVal.set(s.value!, [...(byVal.get(s.value!) ?? []), s]);
+  if (byVal.size === 1) { ctx.stats.consistent++; return; }
+  const label = list[0].conceptLabel;
+  const vals = [...byVal.keys()].sort();
+  for (let i = 0; i < vals.length; i++) {
+    for (let j = i + 1; j < vals.length; j++) {
+      const A = byVal.get(vals[i])!;
+      const B = byVal.get(vals[j])!;
+      emit(ctx, {
+        category: 'demographic', concept: list[0].concept, type: 'explicit_conflict',
+        title: `${label} differs between records (${formatDate(vals[i])} vs ${formatDate(vals[j])})`,
+        sideA: A, sideB: B, sideALabel: `${label}: ${formatDate(vals[i])}`, sideBLabel: `${label}: ${formatDate(vals[j])}`,
+        explanation: `The records state different values for the patient's ${label.toLowerCase()}. A fixed demographic attribute cannot legitimately change, so at least one record is likely a transcription error — or the documents may not belong to the same patient. ${NEEDS_REVIEW}`,
+        comparisonReason: `Same case; the explicitly labelled attribute "${label}" has different full-date values.`,
+        caveats: ['A mismatched identifier can indicate a record filed under the wrong patient; confirm patient identity before acting on any other finding in these documents.'],
+        alternatives: ['Typing error (e.g. transposed or dropped digit).', 'Document belongs to a different patient.'],
+      });
+    }
+  }
+}
+
 /**
  * Runs cross-document detection for a single case. Statements or documents
  * belonging to any other case are ignored, so records are never compared
@@ -592,6 +618,7 @@ export function detectContradictions(caseId: string, statements: ClinicalStateme
     else if (concept.startsWith('diagnosis:')) comparePolarityConcept(ctx, list, 'diagnosis');
     else if (concept.startsWith('lab:')) compareLabs(ctx, list);
     else if (concept === 'other:smoking-status') compareSmoking(ctx, list);
+    else if (concept.startsWith('demographic:')) compareDemographic(ctx, list);
   }
   return {
     findings: ctx.out,

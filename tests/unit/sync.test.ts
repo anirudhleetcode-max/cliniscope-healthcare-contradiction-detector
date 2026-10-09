@@ -1,13 +1,12 @@
 // Regression tests for shared-workspace sync safety (review findings #1-#5, #9, #11, #12).
 import 'fake-indexeddb/auto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createApp } from '../../server/app';
 import { loadConfig } from '../../server/config';
-import { CliniscopeDB } from '../../src/lib/db';
+import { openDb } from '../../server/db';
+import { newDatabase } from './testDb';
+import { MedguardDB } from '../../src/lib/db';
 import { applySnapshot, markUnsynced, pullCase, pushCase, remoteApi, type RemoteSession } from '../../src/lib/remote';
 import { analyzeCase, createCase, deleteDocument, uploadDocument, type Extractor } from '../../src/lib/services';
 import { extractTxt } from '../../src/lib/extract';
@@ -19,7 +18,7 @@ import { makeDoc } from './helpers';
 const extractor: Extractor = async (_k, bytes) => extractTxt(bytes);
 const enc = (s: string) => new TextEncoder().encode(s);
 let base = '';
-let app: ReturnType<typeof createApp>;
+let app: Awaited<ReturnType<typeof createApp>>;
 let n = 0;
 
 async function session(name: string): Promise<RemoteSession> {
@@ -29,14 +28,13 @@ async function session(name: string): Promise<RemoteSession> {
 }
 
 beforeAll(async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'cliniscope-sync-'));
-  app = createApp({ config: { ...loadConfig({}), dataDir: dir, allowRegistration: true, allowedOrigins: [] }, ai: null, log: () => {} });
+  app = await createApp({ config: { ...loadConfig({}), allowRegistration: true, allowedOrigins: [] }, db: await openDb(await newDatabase()), ai: null, log: () => {} });
   await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', () => r()));
   base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
 });
 afterAll(() => app.close());
 
-async function sharedCaseWithDoc(owner: RemoteSession, db: CliniscopeDB, text: string) {
+async function sharedCaseWithDoc(owner: RemoteSession, db: MedguardDB, text: string) {
   const c = await createCase(db, 'Shared sync test');
   await remoteApi.createCase(owner, c.id, c.label);
   await uploadDocument(db, extractor, c.id, { name: 'a.txt', mime: 'text/plain', bytes: enc(text) }, { documentDate: '2026-03-12' });
@@ -48,8 +46,8 @@ describe('shared-workspace sync safety', () => {
   it('a stale client push never deletes documents it has not seen (merge, not replace); deletions are explicit', async () => {
     const alice = await session('alice');
     const bob = await session('bob');
-    const dbA = new CliniscopeDB(`sync-a-${n}`);
-    const dbB = new CliniscopeDB(`sync-b-${n}`);
+    const dbA = new MedguardDB(`sync-a-${n}`);
+    const dbB = new MedguardDB(`sync-b-${n}`);
     const c = await sharedCaseWithDoc(alice, dbA, 'ALLERGIES\nPenicillin allergy documented.');
     await remoteApi.addMember(alice, c.id, bob.user.email, 'reviewer');
     await pullCase(dbB, bob, c.id);
@@ -71,7 +69,7 @@ describe('shared-workspace sync safety', () => {
 
   it('while a case has unsynced changes, background pulls and other snapshots do not drop local work', async () => {
     const alice = await session('alice');
-    const db = new CliniscopeDB(`sync-u-${n}`);
+    const db = new MedguardDB(`sync-u-${n}`);
     const c = await sharedCaseWithDoc(alice, db, 'Hypertension.');
     const local = await uploadDocument(db, extractor, c.id, { name: 'local.txt', mime: 'text/plain', bytes: enc('Asthma.') });
     await markUnsynced(db, c.id);
@@ -87,7 +85,7 @@ describe('shared-workspace sync safety', () => {
 
   it('original files download as blobs (not cached on error) and MIME types are derived server-side', async () => {
     const alice = await session('alice');
-    const db = new CliniscopeDB(`sync-f-${n}`);
+    const db = new MedguardDB(`sync-f-${n}`);
     const c = await sharedCaseWithDoc(alice, db, 'Hypertension.');
     const snap = await remoteApi.getCase(alice, c.id);
     const doc = snap.documents[0];
@@ -103,7 +101,7 @@ describe('shared-workspace sync safety', () => {
 
   it('evidence citing a missing document cannot replace the evidence stored for an existing finding', async () => {
     const alice = await session('alice');
-    const db = new CliniscopeDB(`sync-e-${n}`);
+    const db = new MedguardDB(`sync-e-${n}`);
     const c = await sharedCaseWithDoc(alice, db, 'ALLERGIES\nPenicillin allergy documented.');
     await uploadDocument(db, extractor, c.id, { name: 'b.txt', mime: 'text/plain', bytes: enc('Allergies: No known drug allergies.') });
     await analyzeCase(db, c.id);
@@ -115,7 +113,7 @@ describe('shared-workspace sync safety', () => {
   });
 
   it('AI findings are superseded when a source document is removed', async () => {
-    const db = new CliniscopeDB(`sync-ai-${n}`);
+    const db = new MedguardDB(`sync-ai-${n}`);
     const c = await createCase(db, 'AI stale');
     const a = await uploadDocument(db, extractor, c.id, { name: 'a.txt', mime: 'text/plain', bytes: enc('Patient reports shortness of breath.') });
     const b = await uploadDocument(db, extractor, c.id, { name: 'b.txt', mime: 'text/plain', bytes: enc('Denies shortness of breath.') });

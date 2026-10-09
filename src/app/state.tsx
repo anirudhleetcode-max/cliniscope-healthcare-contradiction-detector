@@ -2,15 +2,19 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDb } from '../lib/db';
 import { browserExtractor } from '../lib/browserExtract';
-import { DEMO_REVIEWER, seedDemoCase, type DemoFile } from '../lib/services';
+import { DEMO_REVIEWER, seedDemoWorkspace, type DemoFile } from '../lib/services';
 import { DEMO_MANIFEST } from '../../scripts/demo-content.mjs';
 import type { AuditEvent, CaseRecord, ClinicalStatement, DocumentRecord, Finding } from '../lib/types';
 
 export const db = getDb();
 export const extractor = browserExtractor;
 
-const LS_CASE = 'cliniscope.currentCase';
-const LS_REVIEWER = 'cliniscope.reviewer';
+const LS_CASE = 'medguard.currentCase';
+const LS_REVIEWER = 'medguard.reviewer';
+const LS_PREFS = 'medguard.prefs';
+
+export interface Prefs { sidebarCompact: boolean; reduceMotion: boolean }
+const DEFAULT_PREFS: Prefs = { sidebarCompact: false, reduceMotion: false };
 
 function lsGet(k: string): string | null {
   try { return localStorage.getItem(k); } catch { return null; }
@@ -36,6 +40,8 @@ interface AppState {
   seedError: string | null;
   resetDemo: (opts?: { select?: boolean }) => Promise<CaseRecord | null>;
   storageError: string | null;
+  prefs: Prefs;
+  setPref: <K extends keyof Prefs>(k: K, v: Prefs[K]) => void;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -67,6 +73,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [seedStage, setSeedStage] = useState<string | null>(null);
   const [seedError, setSeedError] = useState<string | null>(null);
   const seededOnce = useRef(false);
+  const [prefs, setPrefs] = useState<Prefs>(() => {
+    try { return { ...DEFAULT_PREFS, ...JSON.parse(lsGet(LS_PREFS) ?? '{}') }; } catch { return DEFAULT_PREFS; }
+  });
+  const setPref = useCallback(<K extends keyof Prefs>(k: K, v: Prefs[K]) => {
+    setPrefs((p) => { const n = { ...p, [k]: v }; lsSet(LS_PREFS, JSON.stringify(n)); return n; });
+  }, []);
+  useEffect(() => { document.documentElement.classList.toggle('reduce-motion', prefs.reduceMotion); }, [prefs.reduceMotion]);
   const toastId = useRef(0);
 
   const setCaseId = useCallback((id: string) => { setCaseIdState(id); lsSet(LS_CASE, id); }, []);
@@ -87,7 +100,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       setSeedStage('Downloading the synthetic demo documents');
       const files = await fetchDemoFiles();
-      const c = await seedDemoCase(db, extractor, files, setSeedStage);
+      const c = await seedDemoWorkspace(db, extractor, files, setSeedStage);
       // Background auto-seeding must not hijack a case the user opened meanwhile.
       if (opts.select !== false || !caseIdRef.current || caseIdRef.current === before) setCaseId(c.id);
       return c;
@@ -107,15 +120,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       seededOnce.current = true;
       void resetDemo({ select: false });
     } else if (!caseId || !cases.some((c) => c.id === caseId)) {
-      setCaseId((cases.find((c) => c.isDemo) ?? cases[0]).id);
+      setCaseId((cases.find((c) => c.demoKey === 'DEMO-0042') ?? cases.find((c) => c.isDemo) ?? cases[0]).id);
     }
   }, [cases, caseId, resetDemo, setCaseId, storageError]);
 
   const currentCase = cases?.find((c) => c.id === caseId);
   const value = useMemo<AppState>(() => ({
     cases, caseId: currentCase ? caseId : null, currentCase, setCaseId, reviewer, setReviewer, toasts, toast, dismissToast,
-    seeding, seedStage, seedError, resetDemo, storageError,
-  }), [cases, caseId, currentCase, setCaseId, reviewer, setReviewer, toasts, toast, dismissToast, seeding, seedStage, seedError, resetDemo, storageError]);
+    seeding, seedStage, seedError, resetDemo, storageError, prefs, setPref,
+  }), [cases, caseId, currentCase, setCaseId, reviewer, setReviewer, toasts, toast, dismissToast, seeding, seedStage, seedError, resetDemo, storageError, prefs, setPref]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
@@ -132,4 +145,13 @@ export function useCaseData(caseId: string | null) {
   const statements = useLiveQuery<ClinicalStatement[]>(() => (caseId ? db.statements.where('caseId').equals(caseId).toArray() : []), [caseId]);
   const events = useLiveQuery<AuditEvent[]>(() => (caseId ? db.events.where('caseId').equals(caseId).sortBy('at') : []), [caseId]);
   return { documents, findings, statements, events, loading: !documents || !findings || !statements || !events };
+}
+
+/** Live data for the whole local workspace (all cases). Re-renders automatically on any write. */
+export function useWorkspaceData() {
+  const cases = useLiveQuery<CaseRecord[]>(() => db.cases.orderBy('createdAt').toArray(), []);
+  const documents = useLiveQuery<DocumentRecord[]>(() => db.documents.toArray(), []);
+  const findings = useLiveQuery<Finding[]>(() => db.findings.toArray(), []);
+  const events = useLiveQuery<AuditEvent[]>(() => db.events.orderBy('at').toArray(), []);
+  return { cases, documents, findings, events, loading: !cases || !documents || !findings || !events };
 }

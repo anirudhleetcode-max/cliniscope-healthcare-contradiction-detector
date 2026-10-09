@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { CliniscopeDB } from '../../src/lib/db';
+import { MedguardDB } from '../../src/lib/db';
 import {
   addReviewerNote, analyzeCase, createCase, deleteDocument, seedDemoCase, transitionFinding, uploadDocument,
   type Extractor,
@@ -13,10 +13,10 @@ import { demoPath, extractFile } from './helpers';
 const extractor: Extractor = (kind, bytes) => extractFile(`x.${kind}`, bytes);
 const enc = (s: string) => new TextEncoder().encode(s);
 let dbName = 0;
-let db: CliniscopeDB;
+let db: MedguardDB;
 
 beforeEach(() => {
-  db = new CliniscopeDB(`test-${++dbName}`);
+  db = new MedguardDB(`test-${++dbName}`);
 });
 
 async function demo() {
@@ -73,7 +73,7 @@ describe('review workflow and audit trail', () => {
   it('TEST 9/10/12: a finding can be inspected, transitioned, and each transition is audited', async () => {
     const c = await demo();
     const findings = await db.findings.where('caseId').equals(c.id).toArray();
-    expect(findings).toHaveLength(8);
+    expect(findings).toHaveLength(10);
     const pen = findings.find((f) => f.concept === 'allergy:penicillin')!;
     expect(pen.evidence.length).toBeGreaterThanOrEqual(2);
     await transitionFinding(db, pen.id, 'in_review');
@@ -103,7 +103,7 @@ describe('review workflow and audit trail', () => {
     await transitionFinding(db, f.id, 'resolved', { reason: 'Prescriber confirmed 1000 mg is current; reconciliation record outdated.' });
     const name = db.name;
     db.close();
-    const reopened = new CliniscopeDB(name);
+    const reopened = new MedguardDB(name);
     const again = (await reopened.findings.get(f.id))!;
     expect(again.reviewStatus).toBe('resolved');
     const evs = await reopened.events.where('findingId').equals(f.id).sortBy('at');
@@ -119,7 +119,7 @@ describe('review workflow and audit trail', () => {
     await transitionFinding(db, f.id, 'in_review');
     const again = await analyzeCase(db, c.id);
     expect(again.findingsCreated).toBe(0);
-    expect(again.findingsRetained).toBe(8);
+    expect(again.findingsRetained).toBe(10);
     expect((await db.findings.get(f.id))!.reviewStatus).toBe('in_review');
     const intake = (await db.documents.where('caseId').equals(c.id).toArray()).find((d) => d.documentType === 'intake_form')!;
     await deleteDocument(db, intake.id);
@@ -145,7 +145,7 @@ describe('review workflow and audit trail', () => {
     expect(filterFindings(all, { search: 'no known drug allergies' }).map((f) => f.concept).sort()).toEqual(['allergy:penicillin', 'allergy:sulfonamide']);
     expect(filterFindings(all, { type: 'context_dependent' })).toHaveLength(1);
     expect(filterFindings(all, { category: 'lab' })).toHaveLength(1);
-    expect(filterFindings(all, { status: 'unreviewed' })).toHaveLength(8);
+    expect(filterFindings(all, { status: 'unreviewed' })).toHaveLength(10);
     expect(filterFindings(all, { quality: 'limited' })).toHaveLength(2);
   });
 });

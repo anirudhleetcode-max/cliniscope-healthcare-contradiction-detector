@@ -1,10 +1,10 @@
 // Shared-workspace client: API calls, session handling and synchronization of
 // a server case into the local IndexedDB cache (the server is authoritative).
-import type { CliniscopeDB } from './db';
+import type { MedguardDB } from './db';
 import type { AuditEvent, CaseRecord, CaseRole, ClinicalStatement, DocumentRecord, Finding, ReviewStatus } from './types';
 
-const LS_SERVER = 'cliniscope.serverUrl';
-const SS_SESSION = 'cliniscope.session';
+const LS_SERVER = 'medguard.serverUrl';
+const SS_SESSION = 'medguard.session';
 
 export interface RemoteUser { id: string; email: string; displayName: string }
 export interface RemoteSession { serverUrl: string; token: string; expiresAt: string; user: RemoteUser }
@@ -75,7 +75,8 @@ export async function apiFetch<T>(serverUrl: string, path: string, opts: { metho
 }
 
 export const remoteApi = {
-  health: (url: string) => apiFetch<RemoteHealth>(url, '/api/health', { timeoutMs: 8000 }),
+  // Free hosting tiers stop an idle server; the first request wakes it, which can take about a minute.
+  health: (url: string) => apiFetch<RemoteHealth>(url, '/api/health', { timeoutMs: 90000 }),
   register: (url: string, email: string, password: string, displayName: string) => apiFetch<{ token: string; expiresAt: string; user: RemoteUser }>(url, '/api/auth/register', { body: { email, password, displayName } }),
   login: (url: string, email: string, password: string) => apiFetch<{ token: string; expiresAt: string; user: RemoteUser }>(url, '/api/auth/login', { body: { email, password } }),
   logout: (s: RemoteSession) => apiFetch(s.serverUrl, '/api/auth/logout', { method: 'POST', token: s.token }),
@@ -99,7 +100,7 @@ export const remoteApi = {
  * If the case has unsynced local changes (and this is not the result of a successful push),
  * local-only documents, statements, files and findings are KEPT and the unsynced flag survives.
  */
-export async function applySnapshot(db: CliniscopeDB, serverUrl: string, snap: RemoteSnapshot, opts: { afterPush?: boolean } = {}): Promise<CaseRecord> {
+export async function applySnapshot(db: MedguardDB, serverUrl: string, snap: RemoteSnapshot, opts: { afterPush?: boolean } = {}): Promise<CaseRecord> {
   const caseId = snap.case.id;
   const existing = await db.cases.get(caseId);
   const keepLocal = !opts.afterPush && !!existing?.remote?.unsynced;
@@ -139,7 +140,7 @@ export async function applySnapshot(db: CliniscopeDB, serverUrl: string, snap: R
 }
 
 /** Records that a shared case has local changes the server has not accepted yet (suspends background pulls). */
-export async function markUnsynced(db: CliniscopeDB, caseId: string, removedDocumentId?: string): Promise<void> {
+export async function markUnsynced(db: MedguardDB, caseId: string, removedDocumentId?: string): Promise<void> {
   const c = await db.cases.get(caseId);
   if (!c?.remote) return;
   const pending = new Set(c.remote.pendingRemovals ?? []);
@@ -152,7 +153,7 @@ export async function markUnsynced(db: CliniscopeDB, caseId: string, removedDocu
  * The server MERGES: nothing is deleted because it is missing from the snapshot; deletions are explicit.
  * The unsynced flag is cleared only when the whole push (including files) succeeded.
  */
-export async function pushCase(db: CliniscopeDB, s: RemoteSession, caseId: string, opts: { analyzed?: boolean; detail?: string } = {}): Promise<RemoteSnapshot> {
+export async function pushCase(db: MedguardDB, s: RemoteSession, caseId: string, opts: { analyzed?: boolean; detail?: string } = {}): Promise<RemoteSnapshot> {
   await markUnsynced(db, caseId);
   const c = await db.cases.get(caseId);
   const documents = await db.documents.where('caseId').equals(caseId).toArray();
@@ -177,7 +178,7 @@ export async function withLocalWork<T>(fn: () => Promise<T>): Promise<T> {
 }
 export function localWorkInProgress(): boolean { return localWork.n > 0; }
 
-export async function pullCase(db: CliniscopeDB, s: RemoteSession, caseId: string): Promise<RemoteSnapshot | null> {
+export async function pullCase(db: MedguardDB, s: RemoteSession, caseId: string): Promise<RemoteSnapshot | null> {
   const unsynced = async () => localWork.n > 0 || !!(await db.cases.get(caseId))?.remote?.unsynced;
   if (await unsynced()) return null;
   const snap = await remoteApi.getCase(s, caseId);
@@ -187,7 +188,7 @@ export async function pullCase(db: CliniscopeDB, s: RemoteSession, caseId: strin
 }
 
 /** Original file for a document: local copy first, then (for shared cases) the server, cached locally afterwards. */
-export async function getOriginalBlob(db: CliniscopeDB, docId: string, session: RemoteSession | null): Promise<Blob | null> {
+export async function getOriginalBlob(db: MedguardDB, docId: string, session: RemoteSession | null): Promise<Blob | null> {
   const local = await db.files.get(docId);
   if (local) return local.blob;
   const doc = await db.documents.get(docId);

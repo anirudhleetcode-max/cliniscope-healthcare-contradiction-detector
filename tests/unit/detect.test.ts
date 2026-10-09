@@ -117,6 +117,27 @@ describe('contradiction detection engine', () => {
   });
 });
 
+describe('demographic and medication-status rules', () => {
+  it('flags a conflicting date of birth but not matching ones; ignores unlabeled or partial dates', () => {
+    const a = makeDoc('c1', 'Date of birth: 14 February 1961');
+    const b = makeDoc('c1', 'DOB: 1961-02-14');
+    const c = makeDoc('c1', 'Date of birth: 4 February 1961');
+    const d = makeDoc('c1', 'Born in February 1961. Seen on 4 March 2026.');
+    expect(run('c1', [a, b, d]).findings).toHaveLength(0);
+    const r = run('c1', [a, b, c]);
+    expect(r.findings).toHaveLength(1);
+    expect(r.findings[0]).toMatchObject({ category: 'demographic', findingType: 'explicit_conflict' });
+    expect(r.findings[0].evidence.map((e) => e.quote).sort()).toEqual(['DOB: 1961-02-14', 'Date of birth: 14 February 1961', 'Date of birth: 4 February 1961'].sort());
+  });
+  it('a medication active BEFORE a later discontinuation is a legitimate change, not a finding', () => {
+    const a = makeDoc('c1', 'MEDICATIONS\nAspirin 81 mg once daily.', { documentDate: '2026-03-01' });
+    const b = makeDoc('c1', 'MEDICATIONS\nAspirin 81 mg once daily discontinued on admission.', { documentDate: '2026-03-12' });
+    const r = run('c1', [a, b]);
+    expect(r.findings).toHaveLength(0);
+    expect(r.temporallyExplainedComparisons).toBeGreaterThan(0);
+  });
+});
+
 describe('seeded demo case (real PDF/DOCX/TXT/scanned files through the real pipeline incl. OCR)', () => {
   it('TEST 19: demo evidence is internally consistent with the source documents', async () => {
     const { docs, statements } = await loadDemoDocs();
@@ -142,7 +163,9 @@ describe('seeded demo case (real PDF/DOCX/TXT/scanned files through the real pip
     expect(types['lab:hba1c']).toBeUndefined();
     expect(types['diagnosis:diabetes-mellitus']).toBeUndefined(); // consistent incl. OCR'd scan
     expect(types['lab:potassium']).toBe('potential_discrepancy'); // same-day values only; Nov 2025 value not flagged
-    expect(r.findings).toHaveLength(8);
+    expect(types['medication:aspirin']).toBe('temporal_inconsistency'); // active after documented discontinuation
+    expect(types['demographic:date-of-birth']).toBe('explicit_conflict');
+    expect(r.findings).toHaveLength(10);
   });
 
   it('TEST 8: page numbers are present only for PDF sources with verified page spans', async () => {

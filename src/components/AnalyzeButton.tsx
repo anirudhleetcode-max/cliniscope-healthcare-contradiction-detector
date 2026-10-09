@@ -6,8 +6,11 @@ import { withLocalWork } from '../lib/remote';
 import { useWorkspace } from '../app/workspace';
 import type { AnalysisSummary } from '../lib/types';
 
-export function AnalyzeButton({ variant = 'primary', onDone, disabled }: { variant?: 'primary' | 'secondary'; onDone?: (s: AnalysisSummary) => void; disabled?: boolean }) {
-  const { caseId, reviewer, toast, currentCase } = useApp();
+export function AnalyzeButton({ variant = 'primary', onDone, disabled, caseId: forCase }: { variant?: 'primary' | 'secondary'; onDone?: (s: AnalysisSummary) => void; disabled?: boolean; caseId?: string }) {
+  const app = useApp();
+  const { reviewer, toast } = app;
+  const caseId = forCase ?? app.caseId;
+  const currentCase = app.cases?.find((c) => c.id === caseId);
   const ws = useWorkspace();
   const [busy, setBusy] = useState(false);
   const run = async () => {

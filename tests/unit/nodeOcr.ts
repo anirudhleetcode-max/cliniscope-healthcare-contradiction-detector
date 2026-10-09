@@ -11,7 +11,7 @@ let workerP: Promise<Worker> | null = null;
 const cache = new Map<string, OcrPageResult>();
 
 function worker(): Promise<Worker> {
-  workerP ??= createWorker('eng', 1, { langPath: LANG, gzip: true, cachePath: '/tmp/cliniscope-tess-cache' });
+  workerP ??= createWorker('eng', 1, { langPath: LANG, gzip: true, cachePath: '/tmp/medguard-tess-cache' });
   return workerP;
 }
 

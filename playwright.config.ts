@@ -5,6 +5,9 @@ const BASE_URL = process.env.BASE_URL || 'http://localhost:4173/';
 export default defineConfig({
   testDir: 'tests/e2e',
   timeout: 60000,
+  // Against a deployed API (API_URL) every action crosses the internet to a free-tier server and its
+  // database, so UI updates after a server round trip get longer to appear than against localhost.
+  expect: { timeout: process.env.API_URL ? 30000 : 5000 },
   retries: 0,
   reporter: [['list']],
   use: {
@@ -24,14 +27,14 @@ export default defineConfig({
       timeout: 120000,
     },
     {
-      // Real CLINISCOPE API server with a throw-away database for the shared-workspace tests.
+      // Real MEDGUARD API server with a throw-away database for the shared-workspace tests.
       command: 'rm -rf tmp/e2e-api && npx tsx server/index.ts',
       url: 'http://localhost:8787/api/health',
       reuseExistingServer: false,
       timeout: 60000,
       env: {
-        PORT: '8787', HOST: '127.0.0.1', CLINISCOPE_DATA_DIR: 'tmp/e2e-api', CLINISCOPE_ALLOW_REGISTRATION: 'true',
-        CLINISCOPE_ALLOWED_ORIGINS: 'http://localhost:4173', ANTHROPIC_API_KEY: '',
+        PORT: '8787', HOST: '127.0.0.1', MEDGUARD_DATA_DIR: 'tmp/e2e-api', MEDGUARD_ALLOW_REGISTRATION: 'true',
+        MEDGUARD_ALLOWED_ORIGINS: 'http://localhost:4173', ANTHROPIC_API_KEY: '',
       },
     },
     // TEST FIXTURE: local fake of the Messages API + a second API server configured to use it (AI pipeline e2e).
@@ -42,9 +45,9 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60000,
       env: {
-        PORT: '8789', HOST: '127.0.0.1', CLINISCOPE_DATA_DIR: 'tmp/e2e-api-ai', CLINISCOPE_ALLOW_REGISTRATION: 'true',
-        CLINISCOPE_ALLOWED_ORIGINS: 'http://localhost:4173', ANTHROPIC_API_KEY: 'sk-fixture-not-real',
-        CLINISCOPE_ANTHROPIC_BASE_URL: 'http://127.0.0.1:8788', CLINISCOPE_AI_FALLBACKS: 'false',
+        PORT: '8789', HOST: '127.0.0.1', MEDGUARD_DATA_DIR: 'tmp/e2e-api-ai', MEDGUARD_ALLOW_REGISTRATION: 'true',
+        MEDGUARD_ALLOWED_ORIGINS: 'http://localhost:4173', ANTHROPIC_API_KEY: 'sk-fixture-not-real',
+        MEDGUARD_ANTHROPIC_BASE_URL: 'http://127.0.0.1:8788', MEDGUARD_AI_FALLBACKS: 'false',
       },
     },
   ],

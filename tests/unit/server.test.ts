@@ -1,10 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createApp } from '../../server/app';
+import { openDb } from '../../server/db';
+import { newDatabase } from './testDb';
 import { loadConfig } from '../../server/config';
 import { AnthropicProvider, AiProviderError, type AiProvider } from '../../server/aiProvider';
 import { detectContradictions } from '../../src/lib/detect';
@@ -14,7 +13,7 @@ import type { AiOutput } from '../../src/lib/ai';
 
 const ORIGIN = 'http://localhost:4173';
 let base = '';
-let app: ReturnType<typeof createApp>;
+let app: Awaited<ReturnType<typeof createApp>>;
 let aiBehaviour: 'ok' | 'malformed' | 'fail' = 'ok';
 let aiPayload: unknown = null;
 
@@ -50,13 +49,12 @@ async function register(email: string, name: string) {
 }
 
 beforeAll(async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'cliniscope-api-'));
-  const config = { ...loadConfig({}), dataDir: dir, allowRegistration: true, allowedOrigins: [ORIGIN], anthropicApiKey: null };
-  app = createApp({ config, ai: mockAi, log: () => {} });
+  const config = { ...loadConfig({}), allowRegistration: true, allowedOrigins: [ORIGIN], anthropicApiKey: null };
+  app = await createApp({ config, db: await openDb(await newDatabase()), ai: mockAi, log: () => {} });
   await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', () => r()));
   base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
 });
-afterAll(async () => { app.close(); await terminateOcr(); });
+afterAll(async () => { await app.close(); await terminateOcr(); });
 
 describe('shared workspace API: authentication', () => {
   it('reports health and AI configuration without secrets', async () => {
@@ -75,7 +73,7 @@ describe('shared workspace API: authentication', () => {
     expect((await api('/api/cases')).status).toBe(401);
     expect((await api('/api/cases', { token: 'forged-token' })).status).toBe(401);
     // Expire the session in the database → rejected with a clear message.
-    app.db.prepare("UPDATE sessions SET expires_at = '2000-01-01T00:00:00Z'").run();
+    await app.db.run("UPDATE sessions SET expires_at = '2000-01-01T00:00:00Z'");
     const expired = await api('/api/auth/me', { token });
     expect(expired.status).toBe(401);
     expect(expired.json.error).toMatch(/expired/);
@@ -83,7 +81,7 @@ describe('shared workspace API: authentication', () => {
     expect((await api('/api/auth/logout', { token: t2, method: 'POST' })).status).toBe(200);
     expect((await api('/api/auth/me', { token: t2 })).status).toBe(401);
     // Passwords are stored as scrypt hashes, never in plain text.
-    const row = app.db.prepare("SELECT password_hash FROM users WHERE email = 'dana@example.test'").get() as { password_hash: string };
+    const row = (await app.db.get<{ password_hash: string }>("SELECT password_hash FROM users WHERE email = 'dana@example.test'"))!;
     expect(row.password_hash).toMatch(/^scrypt\$/);
   });
 
@@ -92,6 +90,12 @@ describe('shared workspace API: authentication', () => {
     expect(bad.status).toBe(403);
     const ok = await api('/api/health', { origin: ORIGIN });
     expect(ok.headers.get('access-control-allow-origin')).toBe(ORIGIN);
+    // Exact origin match only: another scheme, port or a look-alike host is refused.
+    for (const o of ['https://localhost:4173', 'http://localhost:4174', 'http://localhost:4173.evil.example']) expect((await api('/api/health', { origin: o })).status).toBe(403);
+    // Preflight for every method the API uses, including PATCH (case rename/archive).
+    const pre = await fetch(base + '/api/cases/case_x', { method: 'OPTIONS', headers: { Origin: ORIGIN, 'Access-Control-Request-Method': 'PATCH' } });
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get('access-control-allow-methods')).toContain('PATCH');
     const big = await api('/api/auth/login', { raw: Buffer.alloc(26 * 1048576, 32) });
     expect(big.status).toBe(413);
     expect((await api('/api/auth/login', { raw: Buffer.from('{not json') })).status).toBe(400);
@@ -141,7 +145,7 @@ describe('shared workspace API: cases, permissions and two-user review', () => {
     const ok = await api(`/api/cases/${caseId}/snapshot`, { method: 'PUT', token: alice, body: { documents: sdocs, statements: sstmts, findings: sfind, analyzed: true } });
     expect(ok.status).toBe(200);
     findings = ok.json.findings;
-    expect(findings).toHaveLength(8);
+    expect(findings).toHaveLength(10);
     // Client-supplied review status is ignored: everything starts unreviewed.
     expect(findings.every((f) => f.reviewStatus === 'unreviewed')).toBe(true);
     // Re-syncing the same snapshot is idempotent.
@@ -155,6 +159,13 @@ describe('shared workspace API: cases, permissions and two-user review', () => {
     expect((await api(`/api/findings/${pen.id}/transition`, { token: alice, body: { to: 'in_review', expectedStatus: 'unreviewed' } })).status).toBe(200);
     expect((await api(`/api/findings/${pen.id}/notes`, { token: alice, body: { note: 'Called the patient: confirms hives with penicillin in 2019.' } })).status).toBe(200);
     expect((await api(`/api/findings/${pen.id}/transition`, { token: alice, body: { to: 'resolved', reason: '' } })).status).toBe(422);
+    // Unknown statuses are rejected; outcomes that close or leave a finding undetermined still need a reason.
+    for (const to of ['approved', 'deleted', '']) {
+      expect((await api(`/api/findings/${pen.id}/transition`, { token: alice, body: { to, reason: 'Not a real outcome.' } })).status).toBe(422);
+    }
+    for (const to of ['expected_change', 'undetermined']) {
+      expect((await api(`/api/findings/${pen.id}/transition`, { token: alice, body: { to } })).status).toBe(422);
+    }
     expect((await api(`/api/findings/${pen.id}/transition`, { token: alice, body: { to: 'confirmed', reason: 'Records genuinely disagree.' } })).status).toBe(200);
     // Bob acting on a stale view gets a conflict instead of silently overwriting.
     const stale = await api(`/api/findings/${pen.id}/transition`, { token: bob, body: { to: 'dismissed', reason: 'Looks fine to me', expectedStatus: 'in_review' } });
@@ -173,9 +184,9 @@ describe('shared workspace API: cases, permissions and two-user review', () => {
     expect((await api(`/api/findings/${pen.id}/transition`, { token: mallory, body: { to: 'in_review', reason: 'reopen please' } })).status).toBe(404);
   });
 
-  it('the audit log is append-only at the database level', () => {
-    expect(() => app.db.prepare("UPDATE audit_events SET reason = 'rewritten'").run()).toThrow(/append-only/);
-    expect(() => app.db.prepare('DELETE FROM audit_events').run()).toThrow(/append-only/);
+  it('the audit log is append-only at the database level', async () => {
+    await expect(app.db.run("UPDATE audit_events SET reason = 'rewritten'")).rejects.toThrow(/append-only/);
+    await expect(app.db.run('DELETE FROM audit_events')).rejects.toThrow(/append-only/);
   });
 
   it('stores original files privately: members only, no path traversal', async () => {
@@ -185,7 +196,7 @@ describe('shared workspace API: cases, permissions and two-user review', () => {
     expect(got.status).toBe(200);
     expect(Buffer.from(await got.arrayBuffer()).toString()).toBe('%PDF-1.4 synthetic');
     expect((await api(`/api/cases/${caseId}/documents/${docId}/file`, { token: mallory })).status).toBe(404);
-    expect((await api(`/api/cases/${caseId}/documents/..%2F..%2Fcliniscope.db/file`, { token: alice })).status).toBe(404);
+    expect((await api(`/api/cases/${caseId}/documents/..%2F..%2Fmedguard.db/file`, { token: alice })).status).toBe(404);
   });
 });
 

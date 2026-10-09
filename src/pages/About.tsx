@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { AlertTriangle, Cpu, Database, FileCheck2, Lock, ScanSearch, UserRound } from 'lucide-react';
 import { useApp } from '../app/state';
-import { Callout, PageHeader } from '../components/ui';
+import { Callout, PageHeader, MetricCard, SectionCard, Toggle } from '../components/ui';
+import { useWorkspaceData } from '../app/state';
+import { workspaceMetrics } from '../lib/metrics';
 import { WorkspacePanel } from '../components/WorkspacePanel';
+import { StatusPanel } from '../components/StatusPanel';
+import { DemoControls } from '../components/DemoControls';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { DETECTION_METHOD } from '../lib/detect';
@@ -16,9 +20,19 @@ export function About() {
   useEffect(() => { if (location.hash === '#workspace') document.getElementById('workspace')?.scrollIntoView({ block: 'start' }); }, [location.hash]);
   return (
     <div className="animate-fade-up">
-      <PageHeader eyebrow="About & settings" title="CLINISCOPE" description="Evidence-first healthcare record contradiction detection and clinical review support — PS-11R3 hackathon prototype." />
-      <div className="mb-6"><Callout tone="warn" title="Review-support tool — not a diagnostic system">CLINISCOPE identifies possible inconsistencies between records and shows the evidence for each. It does not diagnose, does not decide which statement is medically correct, and does not replace professional judgment. It holds no regulatory certification or compliance attestation (e.g. HIPAA) and must not be used with real patient data.</Callout></div>
+      <PageHeader title="Settings" description="Demo Workspace · local frontend mode. No backend, database server, login or API key is required; data stays in this browser." />
+      <div className="mb-6"><WorkspaceStats /></div>
+      <div className="mb-6"><Appearance /></div>
+      <div className="mb-6"><Callout tone="warn" title="Review-support tool — not a diagnostic system">MedGuard identifies possible inconsistencies between records and shows the evidence for each. It does not diagnose, does not decide which statement is medically correct, and does not replace professional judgment. It holds no regulatory certification or compliance attestation (e.g. HIPAA) and must not be used with real patient data.</Callout></div>
 
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2"><StatusPanel /></div>
+        <section className="card p-5" aria-label="Demonstration controls">
+          <h2 className="mb-1 text-base font-semibold">Demonstration</h2>
+          <p className="mb-3 text-sm text-muted">Load the bundled synthetic case, or reset it to its original state. Only the demo case is affected.</p>
+          <DemoControls />
+        </section>
+      </div>
       <div className="mb-6"><WorkspacePanel /></div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -37,7 +51,7 @@ export function About() {
           <ul className="space-y-1.5">
             <li><strong>Statement extraction:</strong> deterministic vocabulary and pattern rules. No machine-learning or LLM model is used.</li>
             <li><strong>Detection:</strong> {DETECTION_METHOD}.</li>
-            <li><strong>AI-assisted reasoning (optional):</strong> only when a CLINISCOPE server with a provider API key is configured and you are signed in. The model's structured output is schema-validated, every quotation is re-located verbatim in the source text (unsupported ones are discarded), one-sided conflicts are downgraded to insufficient evidence, model-invented dates are dropped, and page numbers come only from verified PDF page spans. AI findings are labelled “AI-assisted” and start unreviewed.</li>
+            <li><strong>AI-assisted reasoning (optional):</strong> only when a MedGuard server with a provider API key is configured and you are signed in. The model's structured output is schema-validated, every quotation is re-located verbatim in the source text (unsupported ones are discarded), one-sided conflicts are downgraded to insufficient evidence, model-invented dates are dropped, and page numbers come only from verified PDF page spans. AI findings are labelled “AI-assisted” and start unreviewed.</li>
             <li><strong>Explanations:</strong> rule-specific templates filled from the extracted data. They are interpretation and are labelled separately from quoted evidence.</li>
             <li><strong>OCR:</strong> Tesseract.js (LSTM, English) running on this device. PDF pages without a usable text layer, and PNG/JPEG scans, are rendered and read one page at a time. Engine-reported word confidences are kept; words below 70% are marked “OCR text requires review”, and findings that depend on them are downgraded to insufficient evidence. OCR-derived evidence is never rated above “moderate” availability. Values the OCR could not read are reported as unreadable, never guessed.</li>
             <li><strong>Evidence quality</strong> describes source availability and extraction reliability, not clinical correctness. <strong>Review priority</strong> is a workflow suggestion, not a risk score.</li>
@@ -58,7 +72,7 @@ export function About() {
             <li>All processing happens <strong>in your browser</strong>. Documents are never sent to a server.</li>
             <li>Cases, original files, extracted text, statements, findings and audit events are stored in this browser's <strong>IndexedDB</strong>. They persist across reloads on this device.</li>
             <li>In <strong>local demo mode</strong>, data is not shared between devices or users, and clearing site data deletes it.</li>
-            <li>In <strong>shared workspace mode</strong> (optional CLINISCOPE server), shared cases — extracted text, statements, findings, review decisions, notes, audit events and original files — are stored on that server (SQLite + private file storage) and are visible only to authenticated members of the case. Permissions are enforced by the server; the audit table is append-only at the database level.</li>
+            <li>In <strong>shared workspace mode</strong> (optional MedGuard server), shared cases — extracted text, statements, findings, review decisions, notes, audit events and original files — are stored on that server (SQLite + private file storage) and are visible only to authenticated members of the case. Permissions are enforced by the server; the audit table is append-only at the database level.</li>
             <li>The public demo uses fictional, synthetic records only.</li>
           </ul>
         </Section>
@@ -92,5 +106,32 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
       <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-ink"><span className="text-brand">{icon}</span>{title}</h2>
       {children}
     </section>
+  );
+}
+
+function WorkspaceStats() {
+  const { cases, documents, findings, events, loading } = useWorkspaceData();
+  if (loading) return null;
+  const m = workspaceMetrics(cases!, documents!, findings!);
+  const last = events!.length ? new Date(events![events!.length - 1].at).toLocaleString() : '—';
+  return (
+    <section id="data" aria-label="Data and storage" className="grid grid-cols-2 gap-3 md:grid-cols-4" data-testid="storage-stats">
+      <MetricCard label="Local cases" value={m.caseCount} hint="Stored in IndexedDB" />
+      <MetricCard label="Documents" value={m.documentCount} hint={`${m.documentsProcessed} processed`} />
+      <MetricCard label="Findings" value={[...m.byCategory.values()].reduce((a, b) => a + b, 0)} hint={`${m.pendingReviews} pending review`} />
+      <MetricCard label="Last local save" value={<span className="text-[15px]">{last}</span>} hint="Not synchronized to any server" />
+    </section>
+  );
+}
+
+function Appearance() {
+  const { prefs, setPref } = useApp();
+  return (
+    <SectionCard title="Appearance" description="Stored in this browser only">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Toggle label="Compact sidebar" description="Show icons only in the left navigation." checked={prefs.sidebarCompact} onChange={(v) => setPref('sidebarCompact', v)} testId="pref-compact" />
+        <Toggle label="Reduce motion" description="Turn off transitions and animations (the system setting is also honoured)." checked={prefs.reduceMotion} onChange={(v) => setPref('reduceMotion', v)} testId="pref-motion" />
+      </div>
+    </SectionCard>
   );
 }

@@ -1,7 +1,7 @@
 // Application service layer: ingestion, analysis, review and audit.
 // All writes go through here so that every state change is paired with an
 // append-only audit event.
-import type { CliniscopeDB } from './db';
+import type { MedguardDB } from './db';
 import { isValidIsoDate } from './dates';
 import { detectContradictions } from './detect';
 import {
@@ -9,6 +9,7 @@ import {
   type ExtractionResult,
 } from './extract';
 import { ReviewError, validateTransition } from './review';
+import { EXTRA_DEMO_CASES, SEEDED_REVIEWER } from './demoWorkspace';
 import { extractStatements } from './statements';
 import type {
   AnalysisSummary, AuditEvent, CaseRecord, DocumentRecord, DocumentType, EventKind, FileKind, Finding,
@@ -38,14 +39,14 @@ function eventTime(): string {
   return new Date(t).toISOString();
 }
 
-async function logEvent(db: CliniscopeDB, e: Omit<AuditEvent, 'id' | 'at'> & { kind: EventKind }): Promise<AuditEvent> {
+async function logEvent(db: MedguardDB, e: Omit<AuditEvent, 'id' | 'at'> & { kind: EventKind }): Promise<AuditEvent> {
   const ev: AuditEvent = { id: uid('ev'), at: eventTime(), ...e };
   await db.events.add(ev); // add(): never overwrites an existing event
   return ev;
 }
 
 // -------------------------------------------------------------------- cases
-export async function createCase(db: CliniscopeDB, label: string, opts: { isDemo?: boolean; actor?: string } = {}): Promise<CaseRecord> {
+export async function createCase(db: MedguardDB, label: string, opts: { isDemo?: boolean; actor?: string } = {}): Promise<CaseRecord> {
   const clean = label.trim().slice(0, 80);
   if (!clean) throw new ServiceError('Enter a case label (use a pseudonymous label, not a real patient name).');
   const c: CaseRecord = { id: uid('case'), label: clean, isDemo: !!opts.isDemo, createdAt: now(), updatedAt: now(), lastAnalyzedAt: null };
@@ -54,11 +55,11 @@ export async function createCase(db: CliniscopeDB, label: string, opts: { isDemo
   return c;
 }
 
-async function touchCase(db: CliniscopeDB, caseId: string, patch: Partial<CaseRecord> = {}): Promise<void> {
+async function touchCase(db: MedguardDB, caseId: string, patch: Partial<CaseRecord> = {}): Promise<void> {
   await db.cases.update(caseId, { updatedAt: now(), ...patch });
 }
 
-async function requireCase(db: CliniscopeDB, caseId: string): Promise<CaseRecord> {
+async function requireCase(db: MedguardDB, caseId: string): Promise<CaseRecord> {
   const c = await db.cases.get(caseId);
   if (!c) throw new ServiceError('Case not found. It may have been deleted.');
   return c;
@@ -79,7 +80,7 @@ export interface DocumentMeta {
 }
 
 export async function uploadDocument(
-  db: CliniscopeDB,
+  db: MedguardDB,
   extractor: Extractor,
   caseId: string,
   file: UploadInput,
@@ -173,7 +174,7 @@ export async function uploadDocument(
 }
 
 export async function updateDocumentMeta(
-  db: CliniscopeDB,
+  db: MedguardDB,
   documentId: string,
   patch: { title?: string; documentType?: DocumentType; documentDate?: string | null },
 ): Promise<DocumentRecord> {
@@ -191,7 +192,7 @@ export async function updateDocumentMeta(
   return next;
 }
 
-export async function deleteDocument(db: CliniscopeDB, documentId: string, actor = DEMO_REVIEWER): Promise<void> {
+export async function deleteDocument(db: MedguardDB, documentId: string, actor = DEMO_REVIEWER): Promise<void> {
   const doc = await db.documents.get(documentId);
   if (!doc) throw new ServiceError('Document not found.');
   await db.transaction('rw', [db.documents, db.files, db.statements, db.events, db.cases], async () => {
@@ -212,7 +213,7 @@ let analysisInFlight = new Map<string, Promise<AnalysisSummary>>();
  * status and history) are kept, new ones are added, and findings that are no
  * longer produced are marked stale — never deleted.
  */
-export function analyzeCase(db: CliniscopeDB, caseId: string, actor = DEMO_REVIEWER): Promise<AnalysisSummary> {
+export function analyzeCase(db: MedguardDB, caseId: string, actor = DEMO_REVIEWER): Promise<AnalysisSummary> {
   // Guard against duplicate concurrent analysis requests for the same case.
   const existing = analysisInFlight.get(caseId);
   if (existing) return existing;
@@ -225,7 +226,7 @@ export function _resetAnalysisGuard(): void {
   analysisInFlight = new Map();
 }
 
-async function runAnalysis(db: CliniscopeDB, caseId: string, actor: string): Promise<AnalysisSummary> {
+async function runAnalysis(db: MedguardDB, caseId: string, actor: string): Promise<AnalysisSummary> {
   const c = await requireCase(db, caseId);
   const docs = (await db.documents.where('caseId').equals(caseId).toArray()).filter((d) => d.extractedText && d.status !== 'failed');
   if (!docs.length) throw new ServiceError('There are no documents with extracted text to analyze in this case.');
@@ -298,7 +299,7 @@ async function runAnalysis(db: CliniscopeDB, caseId: string, actor: string): Pro
 
 // ------------------------------------------------------------------- review
 export async function transitionFinding(
-  db: CliniscopeDB,
+  db: MedguardDB,
   findingId: string,
   to: ReviewStatus,
   opts: { reason?: string; reviewer?: string } = {},
@@ -306,7 +307,9 @@ export async function transitionFinding(
   return db.transaction('rw', db.findings, db.events, db.cases, async () => {
     const f = await db.findings.get(findingId);
     if (!f) throw new ReviewError('Finding not found.');
-    validateTransition(f.reviewStatus, to, opts.reason);
+    // Shared (server-backed) cases are limited to the statuses the server accepts.
+    const c = await db.cases.get(f.caseId);
+    validateTransition(f.reviewStatus, to, opts.reason, c?.remote ? 'shared' : 'local');
     const updated: Finding = { ...f, reviewStatus: to, updatedAt: now() };
     await db.findings.put(updated);
     await logEvent(db, {
@@ -318,7 +321,7 @@ export async function transitionFinding(
   });
 }
 
-export async function addReviewerNote(db: CliniscopeDB, findingId: string, note: string, reviewer?: string): Promise<AuditEvent> {
+export async function addReviewerNote(db: MedguardDB, findingId: string, note: string, reviewer?: string): Promise<AuditEvent> {
   const text = note.trim();
   if (!text) throw new ReviewError('A note cannot be empty.');
   if (text.length > 4000) throw new ReviewError('Notes are limited to 4000 characters.');
@@ -341,7 +344,7 @@ export interface DemoFile {
 }
 
 /** Deletes a case and everything that belongs to it (only that case). */
-export async function deleteCase(db: CliniscopeDB, caseId: string): Promise<void> {
+export async function deleteCase(db: MedguardDB, caseId: string): Promise<void> {
   await db.transaction('rw', [db.cases, db.documents, db.files, db.statements, db.findings, db.events], async () => {
     await db.documents.where('caseId').equals(caseId).delete();
     await db.files.where('caseId').equals(caseId).delete();
@@ -358,21 +361,89 @@ export async function deleteCase(db: CliniscopeDB, caseId: string): Promise<void
  * Only demo cases are removed on reset; user-created cases are untouched.
  */
 export async function seedDemoCase(
-  db: CliniscopeDB,
+  db: MedguardDB,
   extractor: Extractor,
   files: { meta: DemoFile; bytes: Uint8Array }[],
   onProgress?: (message: string) => void,
 ): Promise<CaseRecord> {
   const demos = await db.cases.filter((c) => c.isDemo).toArray();
   for (const d of demos) await deleteCase(db, d.id);
-  const c = await createCase(db, DEMO_CASE_LABEL, { isDemo: true, actor: 'System' });
+  const created = await createCase(db, DEMO_CASE_LABEL, { isDemo: true, actor: 'System' });
+  const c: CaseRecord = { ...created, demoKey: 'DEMO-0042', demoScenario: PRIMARY_DEMO_SCENARIO };
+  await db.cases.update(c.id, { demoKey: c.demoKey, demoScenario: c.demoScenario });
   for (const [i, f] of files.entries()) {
     onProgress?.(`Document ${i + 1} of ${files.length}: ${f.meta.title}`);
     await uploadDocument(db, extractor, c.id, { name: f.meta.file, mime: f.meta.mime, bytes: f.bytes }, {
       title: f.meta.title, documentDate: f.meta.documentDate, documentType: f.meta.documentType, isSeededDemo: true,
     }, { actor: 'System (demo seed)', onProgress: (stage) => onProgress?.(`Document ${i + 1} of ${files.length}: ${f.meta.title} — ${stage}${/OCR/.test(stage) ? ' (first run downloads the OCR engine, ~7 MB)' : ''}`) });
   }
-  return c;
+  const seededAt = seedMark();
+  await db.cases.update(c.id, { seededAt });
+  return { ...c, seededAt };
+}
+
+export const PRIMARY_DEMO_SCENARIO = 'Five records in five formats (including an OCR-read scan): allergy, medication-status, dose and date-of-birth inconsistencies. Not analysed until you run the analysis.';
+
+/** A timestamp at or after every event logged so far (events use strictly increasing times). */
+function seedMark(): string {
+  return new Date(Math.max(Date.now(), lastEventTs)).toISOString();
+}
+
+/**
+ * Records a review decision. From "unreviewed" the finding first moves to "in review"
+ * (a separate, audited transition), so the state machine is never bypassed.
+ */
+export async function decideFinding(
+  db: MedguardDB,
+  findingId: string,
+  to: ReviewStatus,
+  opts: { reason?: string; reviewer?: string } = {},
+): Promise<Finding> {
+  const f = await db.findings.get(findingId);
+  if (!f) throw new ReviewError('Finding not found.');
+  if (f.reviewStatus === 'unreviewed' && to !== 'in_review') await transitionFinding(db, findingId, 'in_review', { reviewer: opts.reviewer });
+  return transitionFinding(db, findingId, to, opts);
+}
+
+/**
+ * Seeds the complete synthetic demonstration workspace: the primary demo case (ingested,
+ * not analysed) plus additional synthetic cases that are ingested, analysed by the rules
+ * engine, and given a few clearly labelled seeded review decisions.
+ * Only demo cases are removed and recreated; user-created cases are untouched.
+ */
+export async function seedDemoWorkspace(
+  db: MedguardDB,
+  extractor: Extractor,
+  primaryFiles: { meta: DemoFile; bytes: Uint8Array }[],
+  onProgress?: (message: string) => void,
+): Promise<CaseRecord> {
+  const replaced = await db.cases.filter((c) => c.isDemo).count();
+  const primary = await seedDemoCase(db, extractor, primaryFiles, onProgress);
+  const enc = new TextEncoder();
+  for (const spec of EXTRA_DEMO_CASES) {
+    onProgress?.(`Preparing synthetic case ${spec.key}`);
+    const c = await createCase(db, spec.label, { isDemo: true, actor: 'System' });
+    await db.cases.update(c.id, { demoKey: spec.key, demoScenario: spec.scenario });
+    for (const d of spec.documents) {
+      await uploadDocument(db, extractor, c.id, { name: d.file, mime: 'text/plain', bytes: enc.encode(d.text) }, {
+        title: d.title, documentType: d.documentType, documentDate: d.documentDate, isSeededDemo: true,
+      }, { actor: 'System (demo seed)' });
+    }
+    await analyzeCase(db, c.id, 'System (demo seed)');
+    for (const dec of spec.decisions) {
+      const f = (await db.findings.where('caseId').equals(c.id).toArray()).find((x) => x.concept === dec.concept && !x.stale);
+      if (!f) continue; // the rules did not produce it; never fabricate a finding
+      for (const [i, step] of dec.path.entries()) {
+        await transitionFinding(db, f.id, step, { reviewer: SEEDED_REVIEWER, reason: i === dec.path.length - 1 ? dec.reason : undefined });
+      }
+      if (dec.note) await addReviewerNote(db, f.id, dec.note, SEEDED_REVIEWER);
+    }
+    await db.cases.update(c.id, { seededAt: seedMark() });
+  }
+  if (replaced) {
+    await logEvent(db, { caseId: primary.id, kind: 'demo_reset', actor: DEMO_REVIEWER, detail: `Demonstration data reset: ${replaced} synthetic case(s) removed and recreated. User-created cases were not changed.` });
+  }
+  return primary;
 }
 
 // ---------------------------------------------------------------- AI findings
@@ -381,7 +452,7 @@ export async function seedDemoCase(
  * Reconciled by fingerprint; existing findings keep their review state.
  */
 export async function addAiFindings(
-  db: CliniscopeDB,
+  db: MedguardDB,
   caseId: string,
   drafts: import('./detect').DraftFinding[],
   info: { model: string; actor: string; rejected: number; corroborated: string[]; consistent: number; downgraded: number },
@@ -413,6 +484,6 @@ export async function addAiFindings(
   return { created, retained };
 }
 
-export async function logAiFailure(db: CliniscopeDB, caseId: string, actor: string, message: string): Promise<void> {
+export async function logAiFailure(db: MedguardDB, caseId: string, actor: string, message: string): Promise<void> {
   await logEvent(db, { caseId, kind: 'ai_analysis_failed', actor, detail: message });
 }

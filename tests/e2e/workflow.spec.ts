@@ -24,14 +24,14 @@ test('TEST 20: app loads, demo case is seeded and analysis produces evidence-bac
   await analyze(page);
   await expect(page.getByTestId('analysis-summary')).toContainText('Findings produced');
   await page.getByTestId('open-queue').click();
-  await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(8);
+  await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(10);
   expect(errors).toEqual([]);
 });
 
 test('TEST 9/7/8: open a finding, inspect evidence, view the highlighted source passage', async ({ page }) => {
   await freshDemo(page);
   await analyze(page);
-  await page.goto('#/queue');
+  await page.goto('#/contradictions?case=current');
   await page.getByRole('link', { name: /Penicillin allergy documented in one record/ }).click();
   await expect(page.getByTestId('finding-title')).toContainText('Penicillin allergy');
   const a = page.getByTestId('evidence-side-A');
@@ -55,7 +55,7 @@ test('TEST 9/7/8: open a finding, inspect evidence, view the highlighted source 
 test('TEST 10-13: review decision requires a reason, is audited and survives a refresh', async ({ page }) => {
   await freshDemo(page);
   await analyze(page);
-  await page.goto('#/queue?q=metformin');
+  await page.goto('#/contradictions?case=current&q=metformin');
   await page.getByTestId('finding-link').first().click();
   await page.getByRole('button', { name: 'Begin review' }).click();
   await expect(page.getByTestId('finding-detail').getByTestId('status-badge').first()).toHaveText(/In review/);
@@ -81,7 +81,7 @@ test('TEST 10-13: review decision requires a reason, is audited and survives a r
 test('TEST 18: search and filters operate on real data', async ({ page }) => {
   await freshDemo(page);
   await analyze(page);
-  await page.goto('#/queue');
+  await page.goto('#/contradictions?case=current');
   const rows = page.getByTestId('queue-table').getByTestId('finding-link');
   await page.getByTestId('queue-search').fill('no known drug allergies');
   await expect(rows).toHaveCount(2);
@@ -116,13 +116,14 @@ test('TEST 14/16/17: upload TXT (new findings), reject unsupported and empty fil
   await expect(staged).toContainText('even after OCR');
   await expect(page.getByTestId('upload-summary')).toContainText('new');
   // never vs current, never vs former (existing), former vs current
-  await page.goto('#/queue?q=smoking');
+  await page.goto('#/contradictions?case=current&q=smoking');
   await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(3);
 });
 
 test('TEST 15: a readable PDF can be uploaded into a new case and analyzed', async ({ page }) => {
   await freshDemo(page);
   await page.goto('#/cases');
+  await page.getByTestId('new-case').click();
   await page.getByTestId('new-case-label').fill('CASE-E2E · PDF test');
   await page.getByTestId('create-case').click();
   await expect(page).toHaveURL(/#\/documents/);
@@ -132,7 +133,7 @@ test('TEST 15: a readable PDF can be uploaded into a new case and analyzed', asy
   ]);
   await page.getByTestId('upload-submit').click();
   await expect(page.getByTestId('upload-summary')).toContainText('2 documents', { timeout: 30000 });
-  await page.goto('#/queue');
+  await page.goto('#/contradictions?case=current');
   const rows = page.getByTestId('queue-table').getByTestId('finding-link');
   await expect(rows).toHaveCount(2);
   // Case separation: the demo case's intake form is not compared with this case.

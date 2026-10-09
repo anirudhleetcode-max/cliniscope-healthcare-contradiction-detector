@@ -7,6 +7,7 @@ test('OCR: scanned and mixed PDFs plus a PNG scan are OCR-read in the browser an
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('#/cases');
+  await page.getByTestId('new-case').click();
   await page.getByTestId('new-case-label').fill('CASE-OCR · scanned records');
   await page.getByTestId('create-case').click();
   await expect(page).toHaveURL(/#\/documents/);
@@ -20,7 +21,7 @@ test('OCR: scanned and mixed PDFs plus a PNG scan are OCR-read in the browser an
   await expect(staged).toContainText('OCR on page 2');
   await expect(staged).toContainText('read with OCR');
   // Allergy: scan says penicillin allergy; mixed PDF page 2 (OCR) says NKDA → conflict with OCR evidence on both sides.
-  await page.goto('#/queue?q=penicillin');
+  await page.goto('#/contradictions?case=current&q=penicillin');
   await page.getByTestId('finding-link').first().click();
   await expect(page.getByTestId('ocr-badge')).toHaveCount(2);
   await expect(page.getByTestId('evidence-side-B').getByTestId('evidence-location')).toContainText('Page 2 (verified PDF page, OCR)');

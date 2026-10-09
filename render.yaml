@@ -1,19 +1,27 @@
-# Render Blueprint for the CLINISCOPE shared-workspace API (optional).
-# The static frontend stays on GitHub Pages; point it at this service's URL in About & settings.
+# Render Blueprint for the MEDGUARD shared-workspace API, on Render's FREE instance type.
+# Free instances have no persistent disk and stop after 15 minutes without traffic, so all data
+# lives in an external PostgreSQL database (e.g. a free Neon project) given as DATABASE_URL.
+# The static frontend stays on GitHub Pages; enter this service's URL in Settings → Shared workspace.
+# Step-by-step guide: docs/backend/DEPLOYMENT.md
 services:
   - type: web
-    name: cliniscope-api
+    name: medguard-api
     runtime: docker
-    plan: starter
-    healthCheckPath: /api/health
-    disk:
-      name: cliniscope-data
-      mountPath: /data
-      sizeGB: 1
+    plan: free
+    healthCheckPath: /api/ready
     envVars:
-      - key: CLINISCOPE_ALLOWED_ORIGINS
-        value: https://anirudhleetcode-max.github.io
-      - key: CLINISCOPE_ALLOW_REGISTRATION
+      # Secret: the PostgreSQL connection string. Entered in the Render dashboard, never committed.
+      - key: DATABASE_URL
+        sync: false
+      # Refuse to start without DATABASE_URL instead of silently writing to the ephemeral disk.
+      - key: MEDGUARD_REQUIRE_DATABASE_URL
         value: "true"
+      # The exact frontend origin(s), comma-separated, e.g. https://<user>.github.io (scheme + host, no path).
+      - key: MEDGUARD_ALLOWED_ORIGINS
+        sync: false
+      # true lets anyone create an account (needed for the public demo and the production e2e tests).
+      - key: MEDGUARD_ALLOW_REGISTRATION
+        value: "true"
+      # Optional. Leave empty: AI-assisted analysis stays off and costs nothing.
       - key: ANTHROPIC_API_KEY
         sync: false
