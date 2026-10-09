@@ -17,18 +17,18 @@ Source: `server/app.ts`. The machine-readable OpenAPI 3.1 document is served at 
 | 401 | `unauthenticated`, `invalid_credentials` | Missing, expired or invalid session |
 | 403 | `forbidden`, `cors` | Role too low, or origin not allowed |
 | 404 | `not_found` | Missing, or not visible to you |
-| 409 | `conflict`, `archived` | Concurrent change, or archived case |
+| 409 | `conflict`, `archived` | Concurrent change (including identifier clashes with another case), or archived case |
 | 413 | | Body or file too large |
 | 422 | `invalid_transition` / `error` | Review rule violated, or evidence does not match the source text |
 | 429 | | Rate limited (login, AI) |
-| 503 | `not_ready` | Database unreachable or not migrated |
+| 503 | `not_ready`, `database_unavailable` | Readiness: database unreachable or not migrated. Any other route: the database is temporarily unreachable (retry) |
 
 ## Endpoints
 
 | Method | Path | Purpose | Auth / role |
 |---|---|---|---|
 | GET | `/health`, `/api/health` | Liveness; version; AI/registration flags (no secrets) | none |
-| GET | `/ready`, `/api/ready` | Readiness: DB answers and schema = expected version, else 503 | none |
+| GET | `/ready`, `/api/ready` | Readiness: DB answers and schema = expected version, else 503. Reports `engine` and `storage` (`external` = `DATABASE_URL`, `embedded` = local PGlite) | none |
 | GET | `/api/openapi.json` | OpenAPI document | none |
 | POST | `/api/auth/register` | Create account (only if `MEDGUARD_ALLOW_REGISTRATION=true`) | none |
 | POST | `/api/auth/login` · `/api/auth/logout` | Session start / revoke | none / bearer |

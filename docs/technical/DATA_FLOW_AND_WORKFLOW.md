@@ -1,5 +1,7 @@
 # MEDGUARD — Data Flow and Workflow
 
+> **Database update (after this audit):** the optional server now uses **PostgreSQL** instead of SQLite: an external server via `DATABASE_URL` (a free Neon project in the prepared deployment), or embedded PGlite for local use. Original files are stored in the database (`document_files`, schema v3). Where this page says SQLite, `node:sqlite`, `medguard.db` or a files directory, read PostgreSQL / `document_files`; the tables, constraints, roles and append-only triggers are otherwise unchanged. Current sources: [`docs/backend/DATABASE_ARCHITECTURE.md`](../backend/DATABASE_ARCHITECTURE.md) and [`docs/backend/DEPLOYMENT.md`](../backend/DEPLOYMENT.md).
+
 > Diagram sources: [`diagrams/data_flow.mmd`](diagrams/data_flow.mmd), [`diagrams/detection_pipeline.mmd`](diagrams/detection_pipeline.mmd).
 
 ## 1. Execution modes

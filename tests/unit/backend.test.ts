@@ -1,24 +1,23 @@
-// Backend API and database tests. Every test runs against an isolated, throw-away
-// SQLite database in a temporary directory — never against production data.
+// Backend API and database tests. Every test runs against an isolated, throw-away PostgreSQL
+// database (embedded PGlite, or a fresh database on TEST_DATABASE_URL) — never against production data.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { createApp } from '../../server/app';
+import { createApp, openConfiguredDb } from '../../server/app';
 import { loadConfig } from '../../server/config';
-import { openDb, schemaVersion, SCHEMA_VERSION } from '../../server/db';
+import { openDb, schemaVersion, SCHEMA_VERSION, DbConflictError, DbUnavailableError, pgConfigFromUrl, toPgPlaceholders, type Db, type OpenDbOptions } from '../../server/db';
 import { OPENAPI } from '../../server/openapi';
 import { extractStatements } from '../../src/lib/statements';
 import { detectContradictions } from '../../src/lib/detect';
 import { makeDoc } from './helpers';
+import { newDatabase, REAL_PG } from './testDb';
 
 const ORIGIN = 'http://localhost:4173';
-const tmp = (p: string) => mkdtempSync(join(tmpdir(), p));
 
-async function start(dataDir: string, db?: ReturnType<typeof openDb>) {
-  const config = { ...loadConfig({}), dataDir, allowRegistration: true, allowedOrigins: [ORIGIN], anthropicApiKey: null };
-  const app = createApp({ config, db, ai: null, log: () => {} });
+/** Starts an API server on the given database (opened and migrated here unless an open Db is passed). */
+async function start(target: OpenDbOptions | Db) {
+  const config = { ...loadConfig({}), allowRegistration: true, allowedOrigins: [ORIGIN], anthropicApiKey: null };
+  const db = 'tx' in target ? target : await openDb(target);
+  const app = await createApp({ config, db, ai: null, log: () => {} });
   await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', () => r()));
   const base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
   const api = async (path: string, opts: { method?: string; token?: string; body?: unknown; rawBody?: string } = {}) => {
@@ -50,88 +49,137 @@ function buildSnapshot(caseId: string) {
 }
 
 describe('database: migrations, constraints and integrity', () => {
-  it('migrates a clean database to the current schema version', () => {
-    const db = openDb(join(tmp('mg-clean-'), 'medguard.db'));
-    expect(schemaVersion(db)).toBe(SCHEMA_VERSION);
-    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(2);
-    const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((t) => t.name);
-    for (const t of ['users', 'sessions', 'cases', 'case_members', 'documents', 'statements', 'findings', 'audit_events', 'schema_version']) expect(tables).toContain(t);
-    db.close();
+  it('migrates a clean database to the current schema version', async () => {
+    const db = await openDb(await newDatabase());
+    expect(await schemaVersion(db)).toBe(SCHEMA_VERSION);
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(3);
+    const tables = (await db.all<{ name: string }>("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'public'")).map((t) => t.name);
+    for (const t of ['users', 'sessions', 'cases', 'case_members', 'documents', 'document_files', 'statements', 'findings', 'audit_events', 'schema_version']) expect(tables).toContain(t);
+    await db.close();
   });
 
-  it('upgrades an existing v1 database without losing rows, and re-opening is a no-op', () => {
-    const file = join(tmp('mg-upgrade-'), 'medguard.db');
-    const v1 = openDb(file, { upTo: 1 });
-    expect(schemaVersion(v1)).toBe(1);
-    v1.prepare("INSERT INTO users (id, email, display_name, password_hash) VALUES ('usr_upgrade01', 'u@example.test', 'U', 'x')").run();
-    v1.prepare("INSERT INTO cases (id, label, owner_id) VALUES ('case_upgrade01', 'Synthetic', 'usr_upgrade01')").run();
-    v1.prepare("INSERT INTO findings (id, case_id, fingerprint, review_status, data_json) VALUES ('fd_upgrade01', 'case_upgrade01', 'fp1', 'resolved', '{\"title\":\"t\"}')").run();
-    v1.prepare("INSERT INTO audit_events (id, case_id, actor_name, kind) VALUES ('ev_upgrade01', 'case_upgrade01', 'System', 'finding_created')").run();
+  it('upgrades an existing v1 database without losing rows, and re-opening is a no-op', async () => {
+    const target = await newDatabase({ onDisk: true });
+    const v1 = await openDb({ ...target, upTo: 1 });
+    expect(await schemaVersion(v1)).toBe(1);
+    await v1.run("INSERT INTO users (id, email, display_name, password_hash) VALUES ('usr_upgrade01', 'u@example.test', 'U', 'x')");
+    await v1.run("INSERT INTO cases (id, label, owner_id) VALUES ('case_upgrade01', 'Synthetic', 'usr_upgrade01')");
+    await v1.run("INSERT INTO documents (id, case_id, data_json) VALUES ('doc_upgrade01', 'case_upgrade01', '{\"title\":\"d\"}')");
+    await v1.run("INSERT INTO findings (id, case_id, fingerprint, review_status, data_json) VALUES ('fd_upgrade01', 'case_upgrade01', 'fp1', 'resolved', '{\"title\":\"t\"}')");
+    await v1.run("INSERT INTO audit_events (id, case_id, actor_name, kind) VALUES ('ev_upgrade01', 'case_upgrade01', 'System', 'finding_created')");
     // v1 rejects the newer outcomes.
-    expect(() => v1.prepare("UPDATE findings SET review_status = 'needs_info'").run()).toThrow();
-    v1.close();
+    await expect(v1.run("UPDATE findings SET review_status = 'needs_info'")).rejects.toThrow(/check constraint/);
+    await v1.close();
 
-    const v2 = openDb(file);
-    expect(schemaVersion(v2)).toBe(SCHEMA_VERSION);
-    expect(v2.prepare("SELECT review_status, data_json FROM findings WHERE id = 'fd_upgrade01'").get()).toEqual({ review_status: 'resolved', data_json: '{"title":"t"}' });
-    expect((v2.prepare('SELECT COUNT(*) AS n FROM audit_events').get() as { n: number }).n).toBe(1);
-    expect((v2.prepare("SELECT archived_at FROM cases WHERE id = 'case_upgrade01'").get() as { archived_at: null }).archived_at).toBeNull();
-    v2.prepare("UPDATE findings SET review_status = 'needs_info' WHERE id = 'fd_upgrade01'").run();
-    v2.close();
-    const again = openDb(file);
-    expect((again.prepare('SELECT COUNT(*) AS n FROM schema_version').get() as { n: number }).n).toBe(SCHEMA_VERSION);
-    again.close();
+    const v3 = await openDb(target);
+    expect(await schemaVersion(v3)).toBe(SCHEMA_VERSION);
+    expect(await v3.get("SELECT review_status, data_json FROM findings WHERE id = 'fd_upgrade01'")).toEqual({ review_status: 'resolved', data_json: '{"title":"t"}' });
+    expect((await v3.get<{ n: number }>('SELECT COUNT(*)::int AS n FROM audit_events'))!.n).toBe(1);
+    expect((await v3.get<{ archived_at: null }>("SELECT archived_at FROM cases WHERE id = 'case_upgrade01'"))!.archived_at).toBeNull();
+    expect((await v3.get<{ data_json: string }>("SELECT data_json FROM documents WHERE id = 'doc_upgrade01'"))!.data_json).toBe('{"title":"d"}');
+    await v3.run("UPDATE findings SET review_status = 'needs_info' WHERE id = 'fd_upgrade01'");
+    await v3.close();
+    const again = await openDb(target);
+    expect((await again.get<{ n: number }>('SELECT COUNT(*)::int AS n FROM schema_version'))!.n).toBe(SCHEMA_VERSION);
+    await again.close();
   });
 
-  it('enforces foreign keys, the status check and the append-only activity log', () => {
-    const db = openDb(join(tmp('mg-constraints-'), 'medguard.db'));
-    expect(() => db.prepare("INSERT INTO findings (id, case_id, fingerprint, review_status, data_json) VALUES ('fd_orphan001', 'case_missing01', 'fp', 'unreviewed', '{}')").run()).toThrow(/FOREIGN KEY/);
-    db.prepare("INSERT INTO users (id, email, display_name, password_hash) VALUES ('usr_c0000001', 'c@example.test', 'C', 'x')").run();
-    db.prepare("INSERT INTO cases (id, label, owner_id) VALUES ('case_c0000001', 'Synthetic', 'usr_c0000001')").run();
-    expect(() => db.prepare("INSERT INTO findings (id, case_id, fingerprint, review_status, data_json) VALUES ('fd_c0000001', 'case_c0000001', 'fp', 'approved', '{}')").run()).toThrow(/CHECK/);
-    db.prepare("INSERT INTO findings (id, case_id, fingerprint, review_status, data_json) VALUES ('fd_c0000001', 'case_c0000001', 'fp', 'unreviewed', '{}')").run();
-    expect(() => db.prepare("INSERT INTO findings (id, case_id, fingerprint, review_status, data_json) VALUES ('fd_c0000002', 'case_c0000001', 'fp', 'unreviewed', '{}')").run()).toThrow(/UNIQUE/);
-    db.prepare("INSERT INTO audit_events (id, case_id, actor_name, kind) VALUES ('ev_c0000001', 'case_c0000001', 'System', 'case_shared')").run();
-    expect(() => db.prepare("UPDATE audit_events SET kind = 'x'").run()).toThrow(/append-only/);
-    expect(() => db.prepare('DELETE FROM audit_events').run()).toThrow(/append-only/);
-    db.close();
+  it('enforces foreign keys, the status check, uniqueness and the append-only activity log', async () => {
+    const db = await openDb(await newDatabase());
+    await expect(db.run("INSERT INTO findings (id, case_id, fingerprint, review_status, data_json) VALUES ('fd_orphan001', 'case_missing01', 'fp', 'unreviewed', '{}')")).rejects.toBeInstanceOf(DbConflictError);
+    await db.run("INSERT INTO users (id, email, display_name, password_hash) VALUES ('usr_c0000001', 'c@example.test', 'C', 'x')");
+    await expect(db.run("INSERT INTO users (id, email, display_name, password_hash) VALUES ('usr_c0000002', 'Upper@example.test', 'C', 'x')")).rejects.toThrow(/check constraint/);
+    await db.run("INSERT INTO cases (id, label, owner_id) VALUES ('case_c0000001', 'Synthetic', 'usr_c0000001')");
+    await expect(db.run("INSERT INTO findings (id, case_id, fingerprint, review_status, data_json) VALUES ('fd_c0000001', 'case_c0000001', 'fp', 'approved', '{}')")).rejects.toThrow(/check constraint/);
+    await db.run("INSERT INTO findings (id, case_id, fingerprint, review_status, data_json) VALUES ('fd_c0000001', 'case_c0000001', 'fp', 'unreviewed', '{}')");
+    await expect(db.run("INSERT INTO findings (id, case_id, fingerprint, review_status, data_json) VALUES ('fd_c0000002', 'case_c0000001', 'fp', 'unreviewed', '{}')")).rejects.toBeInstanceOf(DbConflictError);
+    await db.run("INSERT INTO audit_events (id, case_id, actor_name, kind) VALUES ('ev_c0000001', 'case_c0000001', 'System', 'case_shared')");
+    await expect(db.run("UPDATE audit_events SET kind = 'x'")).rejects.toThrow(/append-only/);
+    await expect(db.run('DELETE FROM audit_events')).rejects.toThrow(/append-only/);
+    await expect(db.run('TRUNCATE audit_events')).rejects.toThrow(/append-only/);
+    // A failed transaction leaves nothing behind.
+    await expect(db.tx(async (q) => { await q.run("INSERT INTO cases (id, label, owner_id) VALUES ('case_c0000002', 'Rolled back', 'usr_c0000001')"); throw new Error('abort'); })).rejects.toThrow('abort');
+    expect(await db.get("SELECT 1 FROM cases WHERE id = 'case_c0000002'")).toBeUndefined();
+    await db.close();
+  });
+
+  it('translates placeholders and connection strings safely', () => {
+    expect(toPgPlaceholders("SELECT ? , '?' , ? WHERE a ILIKE ? ESCAPE '\\'")).toBe("SELECT $1 , '?' , $2 WHERE a ILIKE $3 ESCAPE '\\'");
+    // libpq-style provider URLs (e.g. Neon) → verified TLS; channel_binding becomes a driver option, not a server parameter.
+    const c = pgConfigFromUrl('postgresql://u:p@ep-x.example.tech/db?sslmode=require&channel_binding=require');
+    expect(c.connectionString).toBe('postgresql://u:p@ep-x.example.tech/db?sslmode=verify-full');
+    expect(c.enableChannelBinding).toBe(true);
+    expect(() => pgConfigFromUrl('mysql://u@h/db')).toThrow(/postgres/);
+    expect(() => pgConfigFromUrl('not a url')).toThrow(/valid/);
+  });
+});
+
+describe('database errors and configuration guards', () => {
+  it('reports an unreachable database as DbUnavailableError without leaking the URL', async () => {
+    const err = await openDb({ url: 'postgres://medguard:not-a-secret@127.0.0.1:1/none' }).catch((e) => e);
+    expect(err).toBeInstanceOf(DbUnavailableError);
+    expect(String(err.message)).not.toContain('not-a-secret');
+  });
+
+  it('refuses to start on an ephemeral disk when an external database is required', async () => {
+    const cfg = { ...loadConfig({ MEDGUARD_REQUIRE_DATABASE_URL: 'true' }) };
+    expect(cfg.databaseUrl).toBeNull();
+    await expect(openConfiguredDb(cfg)).rejects.toThrow(/DATABASE_URL is not set/);
+  });
+
+  it('answers 503 (not 500) while the database is down, and readiness reports not ready', async () => {
+    const real = await openDb(await newDatabase());
+    let down = false;
+    const guard = <T extends (...a: any[]) => Promise<any>>(fn: T) => ((...a: any[]) => (down ? Promise.reject(new DbUnavailableError()) : fn(...a))) as T;
+    const flaky: Db = { ...real, all: guard(real.all), get: guard(real.get), run: guard(real.run), exec: guard(real.exec), tx: guard(real.tx), storage: real.storage, close: real.close };
+    const { app, api } = await start(flaky);
+    const token = (await api('/api/auth/register', { body: { email: 'down@example.test', password: 'correct-horse-battery', displayName: 'D' } })).json.token;
+    expect((await api('/api/ready')).status).toBe(200);
+    down = true;
+    const r = await api('/api/cases', { token });
+    expect(r.status).toBe(503);
+    expect(r.json.code).toBe('database_unavailable');
+    expect((await api('/api/ready')).json.code).toBe('not_ready');
+    expect((await api('/api/health')).status).toBe(200); // liveness does not depend on the database
+    down = false;
+    expect((await api('/api/cases', { token })).status).toBe(200);
+    await app.close();
   });
 });
 
 describe('API: health, readiness and documentation', () => {
   it('reports liveness and readiness; readiness fails with 503 on an unmigrated database', async () => {
-    const { app, api } = await start(tmp('mg-health-'));
+    const { app, api } = await start(await newDatabase());
     expect((await api('/health')).json).toMatchObject({ ok: true, service: 'medguard-api' });
     expect((await api('/api/health')).status).toBe(200);
     const ready = await api('/api/ready');
     expect(ready.status).toBe(200);
-    expect(ready.json.database).toEqual({ reachable: true, schemaVersion: SCHEMA_VERSION, expectedSchemaVersion: SCHEMA_VERSION });
+    expect(ready.json.database).toEqual({ reachable: true, engine: 'postgresql', storage: REAL_PG ? 'external' : 'embedded', schemaVersion: SCHEMA_VERSION, expectedSchemaVersion: SCHEMA_VERSION });
     expect((await api('/ready')).status).toBe(200);
-    expect(JSON.stringify(ready.json)).not.toMatch(/\.db|password|token/i);
-    app.close();
+    expect(JSON.stringify(ready.json)).not.toMatch(/postgres:|password|token/i);
+    await app.close();
 
-    const dir = tmp('mg-notready-');
-    const old = await start(dir, openDb(join(dir, 'medguard.db'), { upTo: 1 }));
+    const old = await start(await openDb({ ...(await newDatabase()), upTo: 1 }));
     const nr = await old.api('/api/ready');
     expect(nr.status).toBe(503);
     expect(nr.json.code).toBe('not_ready');
-    old.app.close();
+    await old.app.close();
   });
 
   it('documents exactly the routes the server registers', async () => {
-    const { app, api } = await start(tmp('mg-openapi-'));
+    const { app, api } = await start(await newDatabase());
     const doc = (await api('/api/openapi.json')).json;
     expect(doc.openapi).toBe('3.1.0');
     const norm = (p: string) => p.replace(/\\\//g, '/').replace(/\{[^}]+\}/g, '*').replace(/\(\[\^\/\]\+\)/g, '*');
     const documented = Object.entries(OPENAPI.paths).flatMap(([p, ops]) => Object.keys(ops).map((m) => `${m.toUpperCase()} ${norm(p)}`)).sort();
     const registered = app.routes.map((r) => { const [m, p] = r.split(' '); return `${m} ${norm(p)}`; }).sort();
     expect(documented).toEqual(registered);
-    app.close();
+    await app.close();
   });
 });
 
 describe('API: cases, documents, findings, evidence, reviews and activity', () => {
-  const dir = tmp('mg-api-');
+  let target: OpenDbOptions;
   let s: Awaited<ReturnType<typeof start>>;
   let owner = '', reviewer = '', viewer = '', outsider = '';
   let caseId = '';
@@ -144,7 +192,8 @@ describe('API: cases, documents, findings, evidence, reviews and activity', () =
   };
 
   beforeAll(async () => {
-    s = await start(dir);
+    target = await newDatabase({ onDisk: true });
+    s = await start(target);
     owner = await register('owner@example.test', 'Olivia Owner');
     reviewer = await register('rev@example.test', 'Ravi Reviewer');
     viewer = await register('view@example.test', 'Vera Viewer');
@@ -276,10 +325,33 @@ describe('API: cases, documents, findings, evidence, reviews and activity', () =
     expect(JSON.stringify(mine.json)).not.toMatch(/password|token_hash/i);
   });
 
+  it('isolates cases: identifiers of another case can be neither overwritten nor read', async () => {
+    const other = (await s.api('/api/cases', { token: outsider, body: { label: 'OUT-0001 · synthetic' } })).json.case.id;
+    const mine = buildSnapshot(caseId);
+    // The outsider re-uses this case's document id: rejected, and the original document is untouched.
+    const forged = { ...buildSnapshot(other), documents: [{ ...mine.documents[0], caseId: other }], statements: [], findings: [] };
+    expect((await s.api(`/api/cases/${other}/snapshot`, { method: 'PUT', token: outsider, body: forged })).status).toBe(409);
+    // ... and this case's statement ids, attached to a document of their own: rejected as well.
+    const ownDoc = { ...mine.documents[0], id: 'doc_outsider001', caseId: other };
+    const stolen = mine.statements.filter((x: any) => x.documentId === mine.documents[0].id).map((x: any) => ({ ...x, caseId: other, documentId: ownDoc.id }));
+    expect((await s.api(`/api/cases/${other}/snapshot`, { method: 'PUT', token: outsider, body: { documents: [ownDoc], statements: stolen, findings: [] } })).status).toBe(409);
+    const still = (await s.api(`/api/cases/${caseId}`, { token: owner })).json;
+    expect(still.documents.find((d: any) => d.id === mine.documents[0].id).extractedText).toBe(TEXT_A);
+    expect(still.statements.length).toBe(mine.statements.length);
+    expect((await s.api(`/api/cases/${caseId}/documents/${mine.documents[0].id}/file`, { token: outsider })).status).toBe(404);
+  });
+
+  it('stores original files in the database, members only', async () => {
+    const put = await s.api(`/api/cases/${caseId}/documents/doc_backendA01/file`, { method: 'PUT', token: owner, rawBody: '%PDF-1.4 synthetic original' });
+    expect(put.json).toEqual({ ok: true, size: 27 });
+    expect((await s.api(`/api/cases/${caseId}/documents/doc_backendA01`, { token: viewer })).json.document).toMatchObject({ hasServerFile: true, serverFileSize: 27 });
+    expect((await s.api(`/api/cases/${caseId}/documents/doc_backendA01/file`, { method: 'PUT', token: viewer, rawBody: 'x' })).status).toBe(403);
+  });
+
   it('keeps all data after the server restarts on the same database', async () => {
     const before = (await s.api(`/api/cases/${caseId}`, { token: owner })).json;
-    s.app.close();
-    s = await start(dir); // new process-equivalent: new server and a fresh database connection
+    await s.app.close(); // closes the HTTP server and every database connection
+    s = await start(target); // a new server with a fresh connection to the same database
     const login = await s.api('/api/auth/login', { body: { email: 'owner@example.test', password: 'correct-horse-battery' } });
     expect(login.status).toBe(200);
     owner = login.json.token;
@@ -288,5 +360,9 @@ describe('API: cases, documents, findings, evidence, reviews and activity', () =
     expect(after.findings.map((f: any) => [f.id, f.reviewStatus]).sort()).toEqual(before.findings.map((f: any) => [f.id, f.reviewStatus]).sort());
     expect(after.events.length).toBe(before.events.length);
     expect(after.documents.map((d: any) => d.id).sort()).toEqual(['doc_backendA01', 'doc_backendB01']);
+    expect(after.documents.find((d: any) => d.id === 'doc_backendA01').hasServerFile).toBe(true);
+    expect(after.statements.length).toBe(before.statements.length);
+    const file = (await s.api(`/api/cases/${caseId}/documents/doc_backendA01/file`, { token: owner })).json;
+    expect(file).toBe('%PDF-1.4 synthetic original'); // the original file survived the restart too
   });
 });

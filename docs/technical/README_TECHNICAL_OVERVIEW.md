@@ -1,5 +1,7 @@
 # MEDGUARD — Technical Overview
 
+> **Database update (after this audit):** the optional server now uses **PostgreSQL** instead of SQLite: an external server via `DATABASE_URL` (a free Neon project in the prepared deployment), or embedded PGlite for local use. Original files are stored in the database (`document_files`, schema v3). Where this page says SQLite, `node:sqlite`, `medguard.db` or a files directory, read PostgreSQL / `document_files`; the tables, constraints, roles and append-only triggers are otherwise unchanged. Current sources: [`docs/backend/DATABASE_ARCHITECTURE.md`](../backend/DATABASE_ARCHITECTURE.md) and [`docs/backend/DEPLOYMENT.md`](../backend/DEPLOYMENT.md).
+
 **Healthcare Record Contradiction Detector** · *Find contradictions. Preserve clinical context. Support better decisions.*
 
 > **Audit basis:** branch `claude/optimistic-tesla-466st5`; code audited at commit `a77a427` on 2026-10-09. The identifier renames from base commit `16ebafa` were merged in afterwards and are reflected below; checks were re-run on the merged tree (see §5). Every claim below cites repository files. Anything not verifiable from the repository is labelled **UNKNOWN** or **INFERENCE**.
@@ -144,4 +146,18 @@ PR #3 (`claude/medguard-backend`), merged into the default branch as `38e3a54`, 
 | Docs | Operator docs in `docs/backend/` |
 
 The backend is still **not hosted** anywhere: no hosting-provider credentials are available to this project's automation. See `DEPLOYMENT_AND_CI_CD.md`.
+
+## 8. Free deployment architecture (database moved to PostgreSQL)
+
+Free hosting tiers have no persistent disk, so the server's SQLite file and files directory could not survive there. The server was therefore moved to PostgreSQL:
+
+| Item | Now |
+|---|---|
+| Database driver | node-postgres when `DATABASE_URL` is set; embedded PGlite otherwise (`server/db.ts`) |
+| Schema | v1–v3 in PostgreSQL dialect. v3 adds `document_files` (original files in the database) |
+| Start-up guard | `MEDGUARD_REQUIRE_DATABASE_URL=true` refuses to start without an external database |
+| API version | 1.3.0. `/api/ready` reports `engine` and `storage` (`external` / `embedded`). 503 `database_unavailable` when the database is down |
+| Prepared hosting | Render **free** web service (`render.yaml`) + Neon **free** PostgreSQL: ₹0, no disk needed |
+| Status | **Not deployed**: needs the owner's two free accounts ([guide](../backend/DEPLOYMENT.md)) |
+| Tests | 106 unit and integration tests on PGlite. The 44 API and database tests also run against a real PostgreSQL 16 (locally and in CI). The CI Docker job proves data survives replacing the container when no volume is used |
 

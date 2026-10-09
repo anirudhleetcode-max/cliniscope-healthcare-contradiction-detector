@@ -4,6 +4,10 @@ export interface ServerConfig {
   port: number;
   host: string;
   dataDir: string;
+  /** postgres:// URL of an external PostgreSQL database (secret). Null = embedded database in dataDir. */
+  databaseUrl: string | null;
+  /** Refuse to start without databaseUrl (set on hosts whose local disk is wiped on restart). */
+  requireDatabaseUrl: boolean;
   allowedOrigins: string[];
   allowRegistration: boolean;
   sessionTtlHours: number;
@@ -21,6 +25,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     port: Number(env.PORT ?? 8787),
     host: env.HOST ?? '0.0.0.0',
     dataDir: env.MEDGUARD_DATA_DIR ?? './data',
+    databaseUrl: env.DATABASE_URL?.trim() || null,
+    requireDatabaseUrl: (env.MEDGUARD_REQUIRE_DATABASE_URL ?? 'false') === 'true',
     allowedOrigins: (env.MEDGUARD_ALLOWED_ORIGINS ?? 'http://localhost:5173,http://localhost:4173')
       .split(',').map((s) => s.trim().replace(/\/$/, '')).filter(Boolean),
     allowRegistration: (env.MEDGUARD_ALLOW_REGISTRATION ?? 'false') === 'true',

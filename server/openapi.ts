@@ -14,7 +14,7 @@ export const OPENAPI = {
   openapi: '3.1.0',
   info: {
     title: 'MEDGUARD API',
-    version: '1.2.0',
+    version: '1.3.0',
     description: 'Shared-workspace API for the MEDGUARD healthcare record contradiction detector. Synthetic data only; not for clinical use. Errors are JSON: {"error": string, "code": string}.',
   },
   components: {
@@ -27,7 +27,7 @@ export const OPENAPI = {
     '/health': { get: { summary: 'Liveness (alias without the /api prefix)', responses: { 200: ok('Service is running') } } },
     '/ready': { get: { summary: 'Readiness (alias)', responses: { 200: ok('Database reachable and migrated'), 503: err } } },
     '/api/health': { get: { summary: 'Liveness, version, AI and registration configuration (no secrets)', responses: { 200: ok('Service is running') } } },
-    '/api/ready': { get: { summary: 'Readiness: database reachable and at the expected schema version', responses: { 200: ok('Ready'), 503: err } } },
+    '/api/ready': { get: { summary: 'Readiness: database reachable and at the expected schema version; reports engine and storage (external or embedded)', responses: { 200: ok('Ready'), 503: err } } },
     '/api/openapi.json': { get: { summary: 'This document', responses: { 200: ok('OpenAPI document') } } },
 
     '/api/auth/register': { post: { summary: 'Create an account (only when MEDGUARD_ALLOW_REGISTRATION=true)', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['email', 'password', 'displayName'], properties: { email: { type: 'string', format: 'email' }, password: { type: 'string', minLength: 10 }, displayName: { type: 'string', maxLength: 80 } } } } } }, responses: { 200: ok('Session and user'), 400: err, 403: err, 409: err } } },

@@ -75,7 +75,8 @@ export async function apiFetch<T>(serverUrl: string, path: string, opts: { metho
 }
 
 export const remoteApi = {
-  health: (url: string) => apiFetch<RemoteHealth>(url, '/api/health', { timeoutMs: 8000 }),
+  // Free hosting tiers stop an idle server; the first request wakes it, which can take about a minute.
+  health: (url: string) => apiFetch<RemoteHealth>(url, '/api/health', { timeoutMs: 90000 }),
   register: (url: string, email: string, password: string, displayName: string) => apiFetch<{ token: string; expiresAt: string; user: RemoteUser }>(url, '/api/auth/register', { body: { email, password, displayName } }),
   login: (url: string, email: string, password: string) => apiFetch<{ token: string; expiresAt: string; user: RemoteUser }>(url, '/api/auth/login', { body: { email, password } }),
   logout: (s: RemoteSession) => apiFetch(s.serverUrl, '/api/auth/logout', { method: 'POST', token: s.token }),

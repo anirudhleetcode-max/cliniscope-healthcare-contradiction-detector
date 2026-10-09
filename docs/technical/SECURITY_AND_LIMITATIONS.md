@@ -1,5 +1,7 @@
 # MEDGUARD — Security, Privacy and Limitations
 
+> **Database update (after this audit):** the optional server now uses **PostgreSQL** instead of SQLite: an external server via `DATABASE_URL` (a free Neon project in the prepared deployment), or embedded PGlite for local use. Original files are stored in the database (`document_files`, schema v3). Where this page says SQLite, `node:sqlite`, `medguard.db` or a files directory, read PostgreSQL / `document_files`; the tables, constraints, roles and append-only triggers are otherwise unchanged. Current sources: [`docs/backend/DATABASE_ARCHITECTURE.md`](../backend/DATABASE_ARCHITECTURE.md) and [`docs/backend/DEPLOYMENT.md`](../backend/DEPLOYMENT.md).
+
 > MEDGUARD is a **hackathon prototype** (`BUILD_LABEL = 'Hackathon prototype (PS-11R3)'`, `src/lib/version.ts`). It holds **no** HIPAA, GDPR, ISO 27001, SOC 2, medical-device or other compliance attestation, and it has not had an independent security review. It must not be used with real patient records. The Settings page says the same (`src/pages/About.tsx:26`).
 
 ## 1. Synthetic data vs real clinical data
