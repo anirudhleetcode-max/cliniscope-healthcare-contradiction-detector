@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+# Build output
+dist/
+*.tsbuildinfo
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Test artifacts (may contain screenshots of data)
+test-results/
+playwright-report/
+blob-report/
+coverage/
+# Local data / uploads / logs
+uploads/
+*.db
+*.sqlite
+*.log
+npm-debug.log*
+.DS_Store
+.vite/
+tmp/
