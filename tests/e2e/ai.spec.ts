@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test';
+import { e2eWriteApi } from '../support/targets';
 
 // Exercises the AI-assisted pipeline end to end against a LOCAL FAKE provider
 // (tests/e2e/fake-anthropic.mjs). This verifies plumbing and evidence
 // validation, not the quality of a real model.
-const API = process.env.AI_API_URL ?? (process.env.BASE_URL ? '' : 'http://localhost:8789');
+// Creates an account and a case: only against an isolated test server (see tests/support/targets.ts).
+const API = e2eWriteApi(process.env.AI_API_URL, process.env.BASE_URL ? '' : 'http://localhost:8789');
 test.skip(!API, 'No AI-configured API server for this run');
 
 test('AI-assisted findings require consent, keep only verified quotes, and are labelled', async ({ page }) => {

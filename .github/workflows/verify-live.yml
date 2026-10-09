@@ -1,40 +1,52 @@
 name: Verify live deployment
 
-# Checks the deployed API and the live frontend (Vercel by default) together, with synthetic data only.
-# Runs on demand (Actions → Verify live deployment → Run workflow) and on pull requests that change it.
-# It writes synthetic @example.test accounts and cases to the deployed database.
+# Two separate jobs; neither can write test data to production.
+#
+# isolated (every pull request): the write-capable checks (registration, sign-in, cases, documents,
+#   reviews, notes, memberships, two-user browser tests, persistence across a restart) against a
+#   throw-away API on 127.0.0.1 backed by a PostgreSQL service container that exists only for this
+#   job. It uses no repository secrets or variables, and tests/support/targets.ts refuses any
+#   non-loopback target before a request is sent.
+#
+# production-smoke (on demand): READ-ONLY checks of the deployed frontend and API (GET/HEAD/OPTIONS
+#   only, enforced in code). It creates no accounts, sessions or records.
 on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: Public URL of the deployed API (defaults to the MEDGUARD_API_URL repository variable)
+        description: Public URL of the deployed API (read-only checks)
         required: false
       site_url:
-        description: Public URL of the frontend to test (defaults to the Vercel production site)
+        description: Public URL of the frontend (read-only checks)
         required: false
-      idle_minutes:
-        description: Minutes without traffic before re-reading (a free instance stops after 15)
-        required: false
-        default: '17'
   pull_request:
-    paths: ['.github/workflows/verify-live.yml', 'tests/live/**', 'tests/e2e/shared.spec.ts', 'playwright.config.ts']
 
 permissions:
   contents: read
 
 concurrency:
-  group: verify-live
-  cancel-in-progress: false
+  group: verify-live-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  live:
+  isolated:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:16
+        env:
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: medguard_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
     env:
-      API_URL: ${{ inputs.api_url || vars.MEDGUARD_API_URL || 'https://medguard-api-duti.onrender.com' }}
-      SITE_URL: ${{ inputs.site_url || vars.MEDGUARD_SITE_URL || 'https://medguard-sigma.vercel.app/' }}
+      # Loopback only. The write-capable scripts and specs refuse anything else.
+      API_URL: http://127.0.0.1:8790
+      SITE_ORIGIN: http://localhost:4173
       PAGES_ORIGIN: https://${{ github.repository_owner }}.github.io
-      IDLE_MINUTES: ${{ inputs.idle_minutes || '17' }}
+      MEDGUARD_REQUIRE_API: '1'
       MEDGUARD_LIVE_STATE: live-state.json
     steps:
       - uses: actions/checkout@v4
@@ -43,27 +55,60 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Derive the frontend origin
-        run: echo "SITE_ORIGIN=$(echo "$SITE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')" >> "$GITHUB_ENV"
+      - name: Start the isolated test API (PostgreSQL service container, loopback only)
+        run: |
+          cat > start-api.sh <<'SH'
+          DATABASE_URL="postgres://postgres:ci-only-not-a-secret@127.0.0.1:5432/medguard_test" \
+          MEDGUARD_REQUIRE_DATABASE_URL=true PORT=8790 HOST=127.0.0.1 MEDGUARD_ALLOW_REGISTRATION=true \
+          MEDGUARD_ALLOWED_ORIGINS="$SITE_ORIGIN,$PAGES_ORIGIN" ANTHROPIC_API_KEY= GOOGLE_CLIENT_ID= \
+          nohup npx tsx server/index.ts >> api.log 2>&1 &
+          echo $! > api.pid
+          for i in $(seq 1 60); do curl -sf "$API_URL/api/ready" >/dev/null && exit 0; sleep 1; done
+          echo "::error::the isolated test API did not become ready"; tail -20 api.log; exit 1
+          SH
+          bash start-api.sh
+      - name: API checks (auth, records, detection, review, notes, files, isolation) against the isolated API
+        run: node --import tsx tests/live/verify-api.mts write "$API_URL" "$SITE_ORIGIN"
+      - name: The GitHub Pages origin is allowed by CORS
+        run: |
+          curl -s -o /dev/null -D h.txt -X OPTIONS "$API_URL/api/auth/login" -H "Origin: $PAGES_ORIGIN" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type"
+          grep -i "^access-control-allow-origin: $PAGES_ORIGIN" h.txt || { cat h.txt; exit 1; }
+      - run: npx playwright install --with-deps chromium
+      - name: Two-user shared-workspace browser tests against the isolated API
+        run: npx playwright test tests/e2e/shared.spec.ts --project=desktop
+      - name: Restart the API on the same database
+        run: |
+          kill "$(cat api.pid)"; sleep 2
+          bash start-api.sh
+      - name: Persistence after the restart
+        run: node --import tsx tests/live/verify-api.mts read "$API_URL"
+      - name: Read-only smoke script against the isolated API (exercises it on every PR)
+        run: node --import tsx tests/live/smoke-readonly.mts "$API_URL" "$SITE_ORIGIN" "$PAGES_ORIGIN"
+
+  production-smoke:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      API_URL: ${{ inputs.api_url || 'https://medguard-api-duti.onrender.com' }}
+      SITE_URL: ${{ inputs.site_url || 'https://medguard-sigma.vercel.app/' }}
+      PAGES_ORIGIN: https://${{ github.repository_owner }}.github.io
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - name: Frontend is public (no login redirect) and serves MedGuard
         run: |
           out=$(curl -s -o page.html -w '%{http_code} %{url_effective}' -L --max-time 30 "$SITE_URL"); echo "$out"
           [ "$out" = "200 $SITE_URL" ] || { echo "::error::$SITE_URL did not answer 200 without a redirect"; exit 1; }
           grep -q '<title>MedGuard' page.html || { echo "::error::MedGuard title missing"; exit 1; }
+          echo "SITE_ORIGIN=$(echo "$SITE_URL" | sed -E 's#^(https?://[^/]+).*#\1#')" >> "$GITHUB_ENV"
       - name: Wake the API (a free instance may take about a minute)
         run: |
           for i in $(seq 1 18); do curl -sf --max-time 30 "$API_URL/api/health" >/dev/null && echo "awake" && exit 0; echo "attempt $i"; sleep 10; done
           echo "::error::$API_URL did not answer"; exit 1
-      - name: API checks (health, readiness, PostgreSQL, CORS, auth, records, detection, review, notes, files, isolation)
-        run: node --import tsx tests/live/verify-api.mts write "$API_URL" "$SITE_ORIGIN"
-      - name: The GitHub Pages origin is still allowed by CORS
-        run: |
-          curl -s -o /dev/null -D h.txt -X OPTIONS "$API_URL/api/auth/login" -H "Origin: $PAGES_ORIGIN" -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: content-type"
-          grep -i "^access-control-allow-origin: $PAGES_ORIGIN" h.txt || { cat h.txt; exit 1; }
-      - run: npx playwright install --with-deps chromium
-      - name: Live frontend against the live API (two-user shared-workspace browser tests)
-        run: BASE_URL="$SITE_URL" API_URL="$API_URL" npx playwright test tests/e2e/shared.spec.ts --project=desktop
-      - name: Stay idle so the free instance stops
-        run: sleep $(( IDLE_MINUTES * 60 ))
-      - name: Persistence after the idle period (instance restart)
-        run: node --import tsx tests/live/verify-api.mts read "$API_URL"
+      - name: Read-only API checks (GET/HEAD/OPTIONS only)
+        run: node --import tsx tests/live/smoke-readonly.mts "$API_URL" "$SITE_ORIGIN" "$PAGES_ORIGIN"

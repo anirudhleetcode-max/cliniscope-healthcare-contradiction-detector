@@ -1,9 +1,12 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { e2eWriteApi } from '../support/targets';
 
 // Two genuinely separate browser contexts (separate storage, separate sessions)
-// talk to a real MEDGUARD API server. Skipped when no API server is available
-// (e.g. production smoke tests against static GitHub Pages).
-const API = process.env.API_URL ?? (process.env.BASE_URL ? '' : 'http://localhost:8787');
+// talk to a real MEDGUARD API server. These tests create accounts, cases, documents and
+// memberships, so the target must be an isolated test server: e2eWriteApi refuses production
+// and any unapproved remote API (the whole file fails). Skipped when no API server is available
+// (e.g. production smoke tests against static GitHub Pages), unless MEDGUARD_REQUIRE_API=1.
+const API = e2eWriteApi(process.env.API_URL, process.env.BASE_URL ? '' : 'http://localhost:8787');
 test.skip(!API, 'No shared-workspace API server configured for this run');
 
 const run = Date.now().toString(36);

@@ -215,12 +215,12 @@ See [`docs/backend/DATABASE_ARCHITECTURE.md`](docs/backend/DATABASE_ARCHITECTURE
   - `render.yaml` runs the `Dockerfile` on a **Render free** web service. Free instances have no disk, so the server refuses to start without `DATABASE_URL`.
   - The data lives in a **Neon free** PostgreSQL database.
   - It needs the owner's two free accounts. The step-by-step guide, cost check and limits are in [`docs/backend/DEPLOYMENT.md`](docs/backend/DEPLOYMENT.md).
-  - Live checks: the **Verify live deployment** workflow.
+  - Live checks: the **Verify live deployment** workflow. Write-capable checks run only against an isolated test API with its own PostgreSQL container on pull requests; production gets read-only checks only (see [`docs/backend/DEPLOYMENT.md`](docs/backend/DEPLOYMENT.md#live-verification)).
 - **What CI checks on every push:**
   - the API and database tests run on embedded PostgreSQL and on a real `postgres:16`;
   - the `docker-api` job builds the image, writes data through it to an external `postgres:16` **without a volume**, replaces the container, and reads the data back.
 - **Self-hosting:** `docker run -p 8787:8787 -v medguard-data:/data -e MEDGUARD_ALLOWED_ORIGINS=https://<your-frontend-host> medguard-api` (embedded database on the volume).
-- **Connecting the frontend:** once an API is deployed, enter its HTTPS URL in the live app (**Settings → Shared workspace**). To also run the shared-workspace e2e tests against it after each deployment, set the repository variable `MEDGUARD_API_URL`.
+- **Connecting the frontend:** once an API is deployed, enter its HTTPS URL in the live app (**Settings → Shared workspace**). To also run read-only checks of it after each deployment, set the repository variable `MEDGUARD_API_URL`. Tests that create accounts or records never run against a deployed API.
 
 ## Synthetic demonstration workspace
 Six fictional cases (16 records). **DEMO-0042** is ingested but not analysed, so the analysis can be shown live. The other five are ingested and analysed on first load by the same rules engine, and a few carry clearly labelled *seeded* review decisions:

@@ -109,7 +109,10 @@ jobs:
           force_orphan: true
           commit_message: 'deploy: ${{ github.sha }}'
 
-  # Production verification: runs the end-to-end suite against the live GitHub Pages URL.
+  # Production verification, READ-ONLY: the end-to-end suite against the live GitHub Pages build (local
+  # browser storage only; the build has no API configured), plus GET/HEAD/OPTIONS-only API checks.
+  # No deployed API URL reaches the browser tests, so the write-capable specs (shared, ai) skip, and
+  # tests/support/targets.ts would refuse production even if one did.
   # GitHub Pages must be enabled once in Settings > Pages (Deploy from branch: gh-pages, / root);
   # the workflow token is not permitted to change that setting.
   verify-production:
@@ -118,9 +121,6 @@ jobs:
     env:
       SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Optional repository variable (Settings > Secrets and variables > Actions > Variables): the public URL of the
-      # deployed API. When set, the shared-workspace e2e tests also run against it with synthetic accounts; when empty they skip.
-      API_URL: ${{ vars.MEDGUARD_API_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -143,11 +143,13 @@ jobs:
         run: npm ci
       - if: steps.live.outputs.available == 'true'
         run: npx playwright install --with-deps chromium
-      - name: Wake the deployed API (free hosting stops it when idle)
-        if: steps.live.outputs.available == 'true' && env.API_URL != ''
+      - name: Read-only checks of the deployed API (optional MEDGUARD_API_URL variable; GET/HEAD/OPTIONS only)
+        if: steps.live.outputs.available == 'true' && vars.MEDGUARD_API_URL != ''
+        env:
+          SMOKE_API_URL: ${{ vars.MEDGUARD_API_URL }}
         run: |
-          for i in $(seq 1 18); do curl -sf --max-time 30 "$API_URL/api/ready" && echo && exit 0; echo "attempt $i: API not ready yet"; sleep 10; done
-          echo "::error title=API not ready::$API_URL/api/ready did not answer"; exit 1
+          for i in $(seq 1 18); do curl -sf --max-time 30 "$SMOKE_API_URL/api/ready" >/dev/null && break; echo "attempt $i: API not ready yet"; sleep 10; done
+          node --import tsx tests/live/smoke-readonly.mts "$SMOKE_API_URL"
       - name: Production smoke tests (full e2e suite against the live URL)
         if: steps.live.outputs.available == 'true'
-        run: BASE_URL="$SITE_URL" npx playwright test --project=desktop --project=mobile
+        run: BASE_URL="$SITE_URL" API_URL= AI_API_URL= npx playwright test --project=desktop --project=mobile
