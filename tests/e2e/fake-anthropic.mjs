@@ -35,10 +35,12 @@ createServer((req, res) => {
   req.on('end', () => {
     const json = JSON.parse(body || '{}');
     if (!req.headers['x-api-key'] || !json.output_config?.format) { res.writeHead(400); res.end('{}'); return; }
-    // Map placeholder ids to the document ids present in the prompt (in order).
-    const prompt = JSON.stringify(json.messages);
-    const ids = [...prompt.matchAll(/document_id=\\"(doc_[A-Za-z0-9]+)\\"/g)].map((m) => m[1]);
-    const text = JSON.stringify(output).replaceAll('__DOC_A__', ids[0] ?? 'doc_x').replaceAll('__DOC_B__', ids[1] ?? 'doc_y');
+    // Attribute each quote to the prompt document whose text contains it (the fabricated quote stays unmatched).
+    const prompt = typeof json.messages?.[0]?.content === 'string' ? json.messages[0].content : JSON.stringify(json.messages);
+    const docs = [...prompt.matchAll(/<document document_id="(doc_[A-Za-z0-9]+)"[^>]*>\n([\s\S]*?)\n<\/document>/g)].map((m) => ({ id: m[1], text: m[2] }));
+    const resolved = structuredClone(output);
+    for (const f of resolved.findings) for (const e of f.evidence) e.document_id = (docs.find((d) => d.text.includes(e.quote)) ?? docs[0] ?? { id: 'doc_x' }).id;
+    const text = JSON.stringify(resolved);
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ id: 'msg_fixture', type: 'message', role: 'assistant', model: json.model, content: [{ type: 'text', text }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }));
   });
