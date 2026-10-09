@@ -1,0 +1,25 @@
+name: Verify production UI (temporary)
+on:
+  push:
+    branches: ['verify/prod-member-removal']
+permissions:
+  contents: read
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BASE_URL: https://medguard-sigma.vercel.app/
+      API_URL: https://medguard-api-duti.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Wake the API
+        run: for i in $(seq 1 18); do curl -sf --max-time 30 "$API_URL/api/health" >/dev/null && exit 0; sleep 10; done; exit 1
+      - name: Member removal, sharing and isolation against the live site and API (synthetic users)
+        run: npx playwright test tests/e2e/shared.spec.ts --project=desktop
+      - name: Welcome card, navigation and mobile layout on the live site
+        run: npx playwright test tests/e2e/workspace.spec.ts tests/e2e/mobile.spec.ts --project=desktop --project=mobile
