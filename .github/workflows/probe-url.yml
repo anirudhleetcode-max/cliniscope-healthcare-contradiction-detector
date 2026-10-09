@@ -12,7 +12,7 @@ jobs:
         run: |
           API=https://medguard-api-duti.onrender.com
           for i in $(seq 1 12); do curl -sf --max-time 30 "$API/api/health" >/dev/null && break; sleep 10; done
-          for u in https://medguard.vercel.app/ https://medguard-anirudh-ed2c.vercel.app/ https://medguard-git-claude-fervent-euler-bsgy2t-anirudh-ed2c.vercel.app/; do
+          for u in https://anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector/ https://medguard.vercel.app/ https://medguard-anirudh-ed2c.vercel.app/ https://medguard-git-claude-fervent-euler-bsgy2t-anirudh-ed2c.vercel.app/; do
             echo "=== $u"
             curl -s -o page.html -w 'status=%{http_code} final=%{url_effective}\n' -L --max-time 30 "$u" || true
             grep -o '<title>[^<]*</title>' page.html || echo "(no title)"
