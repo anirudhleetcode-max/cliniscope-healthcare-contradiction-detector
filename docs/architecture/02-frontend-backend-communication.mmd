@@ -1,0 +1,22 @@
+%% MEDGUARD — Diagram 2: Frontend ↔ backend communication (src/lib/remote.ts, src/app/workspace.tsx, server/app.ts)
+sequenceDiagram
+    autonumber
+    participant B as Browser SPA<br/>(remote.ts, fetch)
+    participant A as MEDGUARD API<br/>(server/app.ts)
+    participant D as PostgreSQL<br/>(Neon)
+    Note over B,A: Only after the user connects a server in Settings → Shared workspace
+    B->>A: OPTIONS preflight (Origin)
+    A-->>B: 204 + Access-Control-Allow-Origin (allow-list) / 403 for other origins
+    B->>A: POST /api/auth/login {email, password}
+    A->>D: SELECT user · scrypt verify · INSERT session (SHA-256 of token)
+    A-->>B: 200 {token} (kept in sessionStorage)
+    B->>A: PUT /api/cases/:id/snapshot (Bearer) documents, statements, findings
+    A->>D: BEGIN · lock case row · re-verify every quote vs stored text · upsert · audit · COMMIT
+    A-->>B: 200 snapshot | 422 tampered evidence | 409 conflict | 503 database unavailable
+    B->>A: POST /api/findings/:id/transition {to, reason, expectedStatus}
+    A->>D: role check (case_members) · state-machine check · UPDATE + audit event
+    A-->>B: 200 | 401 | 403 | 404 (non-member) | 409 stale view | 422 missing reason
+    loop every 15 s and on window focus
+        B->>A: GET /api/cases/:id (poll, paused while local changes are unsynced)
+        A-->>B: case snapshot (server is source of truth)
+    end

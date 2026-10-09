@@ -1,0 +1,20 @@
+%% MEDGUARD — Diagram 3: Data storage and persistence (src/lib/db.ts, server/db.ts migrations v1–v3)
+flowchart TB
+    subgraph LOCAL["Local mode (default) · browser profile"]
+        direction LR
+        DX[("IndexedDB 'medguard' (Dexie)<br/>cases · documents · files<br/>statements · findings · events")]
+        BK["Exports<br/>JSON report · findings CSV<br/>full backup"]
+        RS["Restore<br/>schema + hash + quote re-check<br/>→ always a NEW case"]
+        DX --> BK --> RS
+    end
+    subgraph SHARED["Shared mode · PostgreSQL (Neon via DATABASE_URL, or embedded PGlite)"]
+        direction LR
+        ID["Identity<br/>users (scrypt hashes)<br/>sessions (SHA-256, expiry)"]
+        CA["Cases<br/>cases (archived_at)<br/>case_members (roles)"]
+        CO["Content<br/>documents · document_files (BYTEA)<br/>statements"]
+        FI["findings<br/>status CHECK<br/>UNIQUE fingerprint"]
+        AU["audit_events<br/>append-only triggers<br/>(no UPDATE/DELETE/TRUNCATE)"]
+        ID --> CA --> CO --> FI --> AU
+    end
+    DX -. "snapshot sync: merge, quotes re-verified" .-> FI
+    FI -. "poll every 15 s (browser keeps a cache)" .-> DX

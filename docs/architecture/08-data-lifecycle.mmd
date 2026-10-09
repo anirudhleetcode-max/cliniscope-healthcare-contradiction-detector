@@ -1,0 +1,14 @@
+%% MEDGUARD — Diagram 8: Data lifecycle
+flowchart TB
+    subgraph ROW1[" "]
+        direction LR
+        I["1 Ingest<br/>original file + metadata"] --> X["2 Extract<br/>text, page spans,<br/>OCR provenance"] --> S["3 Structure<br/>statements + offsets"] --> F["4 Detect<br/>findings + verified evidence"]
+    end
+    subgraph ROW2[" "]
+        direction LR
+        R["5 Review<br/>status, reason, notes"] --> A["6 Audit<br/>append-only events"] --> O["7 Output<br/>dashboard · report · CSV · backup"] --> RS["8 Restore<br/>re-checked → NEW case"]
+    end
+    F --> R
+    F -. "source document deleted → finding superseded / stale, quotes kept" .-> H["History preserved"]
+    RET["Retention · local: until site data is cleared or the case is deleted<br/>shared: cases archived (no delete route) · audit rows never deleted"]
+    O ~~~ RET

@@ -1,0 +1,11 @@
+/* Overrides for the short cram sheet: compact banner instead of a cover, no forced page breaks. */
+#title-block-header { height: auto; padding: 7mm 8mm 6mm; break-after: auto; margin-bottom: 5mm; }
+#title-block-header::before { margin-bottom: 3mm; content: "PS-11R3 · 30-MINUTE CRAM SHEET"; }
+#title-block-header::after { display: none; }
+#title-block-header .title { font-size: 22pt; margin-bottom: 2mm; }
+#title-block-header .subtitle { font-size: 11pt; margin-bottom: 2mm; }
+h1 { break-before: auto; font-size: 15pt; margin-top: 6mm; }
+h2 { font-size: 11.5pt; margin-top: 4mm; color: #0E8F80; }
+#questions p { margin-bottom: 1.8mm; }
+h1, h2 { break-after: avoid; page-break-after: avoid; }
+h1 + blockquote, h1 + ol, h1 + table, h1 + .callout { break-before: avoid; }

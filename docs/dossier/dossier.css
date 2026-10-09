@@ -1,0 +1,115 @@
+/* Print stylesheet for the MEDGUARD judge-preparation dossier (A4, rendered with headless Chromium). */
+:root {
+  --navy: #0B1220; --ink: #172033; --ink2: #526176; --line: #DCE3EC; --paper: #F7FAFC;
+  --teal: #0E8F80; --blue: #2F6FE0; --amber: #B86A14; --red: #B42318;
+  --tint-blue: #EAF2FF; --tint-teal: #E3F6F3; --tint-amber: #FDF1E4; --tint-red: #FDECEA;
+}
+@page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+html { font-size: 10.2pt; }
+body { font-family: "Liberation Sans", Arial, Helvetica, sans-serif; color: var(--ink); line-height: 1.45; margin: 0; }
+code, pre { font-family: "Liberation Mono", "Courier New", monospace; font-size: 0.88em; }
+code { background: #EEF2F7; padding: 0 3px; border-radius: 3px; overflow-wrap: anywhere; }
+a { color: var(--blue); text-decoration: none; overflow-wrap: anywhere; }
+
+/* ---------- cover ---------- */
+#title-block-header {
+  height: 252mm; box-sizing: border-box; margin: 0; padding: 70mm 14mm 0 14mm;
+  background: var(--navy); color: #F8FAFC; break-after: page; position: relative;
+  border-radius: 6px;
+}
+#title-block-header::before {
+  content: "PS-11R3 · HACKATHON JUDGE PREPARATION"; display: block; letter-spacing: 0.18em;
+  font-size: 9pt; font-weight: 700; color: #19B6A4; margin-bottom: 10mm;
+}
+#title-block-header .title { font-size: 34pt; line-height: 1.1; margin: 0 0 6mm; color: #fff; font-weight: 800; }
+#title-block-header .subtitle { font-size: 15pt; color: #B8C4D6; margin: 0 0 14mm; font-weight: 400; }
+#title-block-header .date { font-size: 10.5pt; color: #82B7FF; }
+#title-block-header::after {
+  content: "Prepared from the repository, CI runs and live deployment checks. Synthetic data only · not for clinical use.";
+  position: absolute; left: 14mm; right: 14mm; bottom: 16mm; font-size: 9pt; color: #B8C4D6;
+  border-top: 1px solid #27364A; padding-top: 4mm;
+}
+
+/* ---------- TOC ---------- */
+nav#TOC { break-after: page; }
+nav#TOC::before { content: "Contents"; display: block; font-size: 20pt; font-weight: 800; margin-bottom: 6mm; color: var(--ink); }
+nav#TOC ul { list-style: none; padding-left: 0; margin: 0; }
+nav#TOC > ul > li { margin: 2.2mm 0 0; font-weight: 700; }
+nav#TOC ul ul { padding-left: 6mm; font-weight: 400; }
+nav#TOC ul ul li { margin: 0.6mm 0; font-size: 9.4pt; }
+nav#TOC a { color: var(--ink); display: flex; }
+nav#TOC a .pg { margin-left: auto; padding-left: 4mm; color: var(--ink2); font-variant-numeric: tabular-nums; }
+nav#TOC a .lbl { flex: 1 1 auto; border-bottom: 1px dotted #C5CFDB; }
+
+/* ---------- headings ---------- */
+h1 { font-size: 19pt; color: var(--ink); margin: 0 0 4mm; padding: 0 0 2.5mm; border-bottom: 2px solid var(--ink); break-before: page; font-weight: 800; }
+h2 { font-size: 13.2pt; color: var(--ink); margin: 6mm 0 2.5mm; font-weight: 700; break-after: avoid; }
+h3 { font-size: 11pt; margin: 4.5mm 0 1.5mm; break-after: avoid; }
+h1 + h2 { margin-top: 2mm; }
+p { margin: 0 0 2.6mm; orphans: 3; widows: 3; }
+ul, ol { margin: 0 0 2.6mm; padding-left: 6mm; }
+li { margin: 0.6mm 0; }
+blockquote { margin: 3mm 0; padding: 3mm 5mm; background: var(--tint-blue); border-radius: 4px; color: var(--ink); font-size: 10.6pt; break-inside: avoid; }
+blockquote p:last-child { margin-bottom: 0; }
+
+/* ---------- tables ---------- */
+table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 8.6pt; line-height: 1.35; }
+thead { display: table-header-group; }
+th { background: var(--ink); color: #fff; text-align: left; padding: 1.6mm 2mm; font-weight: 700; vertical-align: bottom; }
+td { padding: 1.4mm 2mm; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+tr { break-inside: avoid; }
+tbody tr:nth-child(even) td { background: #F9FBFD; }
+.factbox table, .revision-sheet table { font-size: 9.3pt; }
+.factbox table td:first-child, .revision-sheet table td:first-child { width: 33%; font-weight: 700; color: var(--ink); background: var(--paper); }
+.factbox thead, .revision-sheet thead { display: none; }
+
+/* ---------- tags, callouts ---------- */
+.tag { display: inline-block; font-size: 8pt; font-weight: 700; letter-spacing: 0.03em; padding: 0.4mm 1.8mm; border-radius: 3px; white-space: nowrap; }
+.ta { background: var(--tint-teal); color: #0E6E63; } .tb { background: var(--tint-blue); color: #1F4E9C; }
+.tc { background: var(--tint-amber); color: #8A4A0A; } .td { background: #EEF1F5; color: #3B4658; } .te { background: var(--tint-red); color: var(--red); }
+.callout, .factbox, .cover-meta, .qindex { border-radius: 5px; padding: 3mm 4.5mm; margin: 3mm 0 4mm; break-inside: avoid; }
+.callout p:last-child, .cover-meta p:last-child { margin-bottom: 0; }
+.callout.warn { background: var(--tint-amber); border-left: 4px solid var(--amber); }
+.callout.note { background: var(--tint-blue); border-left: 4px solid var(--blue); }
+.callout.key { background: var(--tint-teal); border-left: 4px solid var(--teal); }
+.cover-meta { background: var(--paper); border: 1px solid var(--line); }
+.factbox { padding: 0; }
+.qindex { background: var(--paper); border: 1px solid var(--line); }
+
+/* ---------- figures ---------- */
+figure { margin: 3mm 0 5mm; text-align: center; break-inside: avoid; }
+figure img { max-width: 100%; max-height: 205mm; }
+figure img.narrow { max-width: 78%; }
+figure img.shot { max-width: 100%; border: 1px solid var(--line); border-radius: 4px; }
+figcaption { font-size: 8.8pt; color: var(--ink2); margin-top: 1.5mm; font-style: italic; }
+
+/* ---------- questions ---------- */
+h3.q { font-size: 10.8pt; background: var(--tint-blue); padding: 1.6mm 3mm; border-radius: 4px; margin: 4mm 0 1.6mm; }
+h3.q.hard { background: var(--tint-amber); }
+h3.q + p, h3.q ~ p { margin-bottom: 1.6mm; }
+#questions h2 { break-before: auto; }
+#cat2, #cat3, #cat4, #cat5, #cat6, #cat7, #cat8, #cat9, #cat10 { break-before: page; }
+
+/* question index (generated) */
+#qindex-list { columns: 2; column-gap: 8mm; font-size: 8.4pt; line-height: 1.35; }
+#qindex-list a { display: flex; color: var(--ink); break-inside: avoid; margin-bottom: 0.7mm; }
+#qindex-list a .lbl { flex: 1 1 auto; }
+#qindex-list a .pg { padding-left: 2mm; color: var(--ink2); }
+#qindex-list .cat { font-weight: 700; margin: 2mm 0 0.8mm; break-after: avoid; font-size: 8.8pt; color: var(--teal); }
+
+/* revision sheet on one page */
+#revision-sheet { font-size: 9.6pt; }
+.revision-sheet table { font-size: 8.6pt; }
+
+/* ---------- fixes ---------- */
+#title-block-header h1.title { break-before: avoid; border: none; padding: 0; }
+h1#how-to-read { break-before: auto; margin-top: 6mm; }
+table { table-layout: auto; }
+col { width: auto !important; }
+td code { overflow-wrap: anywhere; }
+figure img.diagram { width: 100%; height: auto; }
+figure img.diagram.narrow { width: 64%; }
+td:first-child, th:first-child { min-width: 14mm; }
+@page wide { size: A4 landscape; margin: 16mm 16mm 16mm 16mm; }
+.landscape { page: wide; }
+.landscape figure img.diagram { width: auto; max-width: 100%; max-height: 150mm; }

@@ -1,0 +1,27 @@
+%% MEDGUARD — Diagram 1: High-level system architecture (verified against src/, server/, render.yaml, ci-deploy.yml; 9 Oct 2026)
+%% Solid = always used. Dashed = only when a shared-workspace server is connected / an AI key is configured.
+flowchart TB
+    U["Reviewer (web browser)"]
+    subgraph FE["Frontend · GitHub Pages (static)"]
+        direction LR
+        UI["React 18 + TypeScript UI<br/>HashRouter pages"]
+        PIPE["In-browser pipeline<br/>pdf.js · Tesseract.js OCR · mammoth<br/>rules engine (statements.ts, detect.ts)"]
+        IDB[("IndexedDB (Dexie)<br/>local cases + cache")]
+        UI --> PIPE --> IDB
+    end
+    subgraph BE["Optional backend · Render (free web service)"]
+        direction LR
+        API["MEDGUARD API v1.3.1<br/>Node 22 · node:http · zod"]
+        AIA["AI adapter<br/>@anthropic-ai/sdk"]
+        API -. "only if ANTHROPIC_API_KEY set" .-> AIA
+    end
+    PG[("Neon PostgreSQL<br/>free plan · DATABASE_URL")]
+    ANT["Anthropic Messages API<br/>external · not configured live"]
+    U --> UI
+    UI -. "HTTPS JSON + Bearer token" .-> API
+    API -- "verified TLS · node-postgres pool" --> PG
+    AIA -.-> ANT
+    classDef ext fill:#FDF1E4,stroke:#C9873A,color:#172033;
+    classDef store fill:#E3F6F3,stroke:#19B6A4,color:#172033;
+    class ANT ext;
+    class IDB,PG store;
