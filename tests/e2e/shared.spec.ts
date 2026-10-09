@@ -131,8 +131,12 @@ test('an outsider cannot open a case they were not invited to; signed-out users 
   expect(r.status()).toBe(404);
   const anon = await eve.request.get(`${API}/api/cases`);
   expect(anon.status()).toBe(401);
+  // The header menu shows the authenticated profile (from the API) and signs out through the API.
+  await eve.getByRole('button', { name: 'User menu' }).click();
+  await expect(eve.getByTestId('profile-name')).toHaveText('Eve Outsider');
+  await expect(eve.getByTestId('profile-email')).toHaveText(`eve-${run}@example.test`);
+  await eve.getByTestId('menu-sign-out').click();
   await eve.goto('#/settings#workspace');
-  await eve.getByTestId('sign-out').click();
   await expect(eve.getByTestId('ws-submit')).toBeVisible();
   // The revoked token no longer works.
   expect((await eve.request.get(`${API}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(401);
