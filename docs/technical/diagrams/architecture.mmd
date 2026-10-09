@@ -11,14 +11,14 @@ flowchart TD
         OCR["OCR engine<br/>src/lib/browserOcr.ts<br/>Tesseract.js (self-hosted assets)"]
         RULES["Rules engine<br/>statements.ts + lexicon.ts + detect.ts"]
         AIV["AI output verifier<br/>src/lib/ai.ts verifyAiOutput()"]
-        IDB[("IndexedDB 'cliniscope'<br/>Dexie: cases, documents, files,<br/>statements, findings, events")]
+        IDB[("IndexedDB 'medguard'<br/>Dexie: cases, documents, files,<br/>statements, findings, events")]
         LS[("localStorage / sessionStorage<br/>preferences, server URL, session token")]
         SW["Service worker<br/>public/sw.js (offline cache)"]
     end
 
     subgraph Server["Optional API server: server/ (Node 22, node:http)"]
         API["HTTP router + auth + CORS<br/>server/app.ts"]
-        SQL[("SQLite via node:sqlite<br/>DATA_DIR/cliniscope.db")]
+        SQL[("SQLite via node:sqlite<br/>DATA_DIR/medguard.db")]
         FS[("Private file store<br/>DATA_DIR/files/caseId/docId")]
         PROV["AI provider adapter<br/>server/aiProvider.ts"]
     end

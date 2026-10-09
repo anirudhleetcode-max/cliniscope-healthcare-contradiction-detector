@@ -21,7 +21,7 @@ flowchart TD
     PAGES --> BROWSER["User browser<br/>static SPA, HashRouter,<br/>relative asset paths"]
 
     DOCKER["Dockerfile<br/>node:22-slim, single bundled server.mjs,<br/>VOLUME /data, HEALTHCHECK"]
-    RENDER["render.yaml<br/>Render web service 'cliniscope-api',<br/>1 GB disk at /data"]
+    RENDER["render.yaml<br/>Render web service 'medguard-api',<br/>1 GB disk at /data"]
     DK -.->|"image built and health-checked in CI only,<br/>not pushed to a registry"| DOCKER
     RENDER -.->|"blueprint present, never run"| DOCKER
     BROWSER -.->|"only if a server URL is entered in Settings"| DOCKER

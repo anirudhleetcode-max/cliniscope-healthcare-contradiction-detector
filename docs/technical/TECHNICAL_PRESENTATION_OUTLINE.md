@@ -26,7 +26,7 @@
 - Status: implemented and tested locally (integration + two-browser e2e). **Not deployed publicly.**
 
 ## Slide 5 — Database and persistence
-- Browser: IndexedDB `cliniscope` with 6 tables (cases, documents, files, statements, findings, events). Survives reload; per device; no encryption.
+- Browser: IndexedDB `medguard` with 6 tables (cases, documents, files, statements, findings, events). Survives reload; per device; no encryption.
 - Optional server: SQLite (`node:sqlite`, WAL), versioned migrations, **append-only `audit_events` enforced by DB triggers**.
 - Backup: manual JSON export including originals; restore re-checks every quote and SHA-256.
 - Not a production database. No external or managed DB.

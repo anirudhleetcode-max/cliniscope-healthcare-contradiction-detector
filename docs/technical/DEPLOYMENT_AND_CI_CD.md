@@ -7,10 +7,10 @@
 | Component | Hosting / runtime | Build command | Start command | Configuration | Status |
 |---|---|---|---|---|---|
 | Frontend (static SPA) | **GitHub Pages**, served from the `gh-pages` branch | `npm ci && npm run build` (= `copy-pdf-worker` → `tsc --noEmit` → `vite build`) → `dist/` | none (static files) | `vite.config.ts` `base: process.env.VITE_BASE_PATH \|\| './'`; `HashRouter`; `dist/.nojekyll` | **VERIFIED via CI:** run #30 (`a77a427`) deployed `gh-pages` commit `d89580f`; "pages build and deployment" #16 succeeded; `verify-production` passed. Direct access from the audit sandbox was blocked by its egress proxy, so the live site was **not opened by the auditor** |
-| API server (optional) | Docker container (`node:22-slim`) | `docker build -t cliniscope-api .` (inside: `npm ci --ignore-scripts` → `npm run server:build`, esbuild bundle) | `node server.mjs` (container CMD). Locally: `npm run server` or `npm run server:start` | `Dockerfile` (non-root `node` user, `VOLUME /data`, `EXPOSE 8787`, `HEALTHCHECK` on `/api/health`) | **Built and health-checked in CI** (`docker-api` job succeeded on `a77a427`). **Not published to any registry. Not deployed** |
-| API on Render | Render web service `cliniscope-api` (Docker runtime, `starter` plan, 1 GB disk at `/data`, `healthCheckPath: /api/health`) | Render builds the Dockerfile | Container CMD | `render.yaml` | **CONFIGURED BUT NOT VERIFIED.** The README states the blueprint has never been run. No Render URL appears anywhere in the repo |
-| Database (optional) | SQLite file inside the API container volume (`/data/cliniscope.db`) | n/a | Created and migrated on server start | `CLINISCOPE_DATA_DIR` | Exists only where the API runs. **No managed or external database** |
-| External AI (optional) | Anthropic Messages API | n/a | n/a | `ANTHROPIC_API_KEY`, `CLINISCOPE_AI_MODEL` (default `claude-opus-5-5`) | **Not configured in any deployment. Live calls never verified.** CI tests use a local fake (`tests/e2e/fake-anthropic.mjs`) and a dummy key `sk-fixture-not-real` |
+| API server (optional) | Docker container (`node:22-slim`) | `docker build -t medguard-api .` (inside: `npm ci --ignore-scripts` → `npm run server:build`, esbuild bundle) | `node server.mjs` (container CMD). Locally: `npm run server` or `npm run server:start` | `Dockerfile` (non-root `node` user, `VOLUME /data`, `EXPOSE 8787`, `HEALTHCHECK` on `/api/health`) | **Built and health-checked in CI** (`docker-api` job succeeded on `a77a427`). **Not published to any registry. Not deployed** |
+| API on Render | Render web service `medguard-api` (Docker runtime, `starter` plan, 1 GB disk at `/data`, `healthCheckPath: /api/health`) | Render builds the Dockerfile | Container CMD | `render.yaml` | **CONFIGURED BUT NOT VERIFIED.** The README states the blueprint has never been run. No Render URL appears anywhere in the repo |
+| Database (optional) | SQLite file inside the API container volume (`/data/medguard.db`) | n/a | Created and migrated on server start | `MEDGUARD_DATA_DIR` | Exists only where the API runs. **No managed or external database** |
+| External AI (optional) | Anthropic Messages API | n/a | n/a | `ANTHROPIC_API_KEY`, `MEDGUARD_AI_MODEL` (default `claude-opus-5-5`) | **Not configured in any deployment. Live calls never verified.** CI tests use a local fake (`tests/e2e/fake-anthropic.mjs`) and a dummy key `sk-fixture-not-real` |
 
 **Live URL:** `https://anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector/`.
 
@@ -34,7 +34,7 @@ The URL is built in the workflow as `https://<owner>.github.io/<repo>/`. It keep
 | Order | Job | Steps actually implemented | Runs when |
 |---|---|---|---|
 | 1 | `test` | checkout → Node 22 (npm cache) → `npm ci` → `npm run typecheck` → `npm test` (Vitest) → `npm run build` → `npx playwright install --with-deps chromium` → `npx playwright test` (desktop + mobile projects; also starts a real API server on 8787, a fake Anthropic API on 8788 and an AI-configured API server on 8789) → upload `dist` artifact (7 days) | Every trigger |
-| 1 (parallel) | `docker-api` | `docker build -t cliniscope-api .` → run the container with `CLINISCOPE_ALLOWED_ORIGINS` → poll `curl -sf /api/health` up to 30 × 2 s | Every trigger |
+| 1 (parallel) | `docker-api` | `docker build -t medguard-api .` → run the container with `MEDGUARD_ALLOWED_ORIGINS` → poll `curl -sf /api/health` up to 30 × 2 s | Every trigger |
 | 2 | `deploy` (needs `test`) | download `dist` → `touch dist/.nojekyll` → `peaceiris/actions-gh-pages@v4` (`publish_branch: gh-pages`, `force_orphan: true`) | Not on pull requests, and only for the **default branch** or `main` |
 | 3 | `verify-production` (needs `deploy`) | Query or enable the Pages API (`gh api …/pages`) → poll the live URL until the HTML contains `MEDGUARD` (30 × 10 s), otherwise emit a warning → `npm ci` → install Chromium → `BASE_URL=<live URL> npx playwright test --project=desktop --project=mobile` | After `deploy` |
 
@@ -62,7 +62,7 @@ There is no staging environment, no release tagging, no manual approval gate, no
 | CI and deploy #29 | `fd824f0` | n/a | success |
 | CI and deploy #27 | `4d5a0b1` (a WIP redesign commit) | n/a | failure (e2e specs not yet updated, per its commit message) |
 
-The default branch of the repository is `claude/fervent-euler-bsgy2t`. **This is an inference:** the `deploy` job, which is restricted to the default branch or `main`, ran for that branch, and no `main` branch exists. Pushes to other branches (including the documentation branch for this audit) run `test` and `docker-api` but do not deploy.
+The default branch of the repository is `claude/fervent-euler-bsgy2t` (VERIFIED via the GitHub repository metadata). Pushes to other branches (including the documentation branch for this audit) run `test` and `docker-api` but do not deploy.
 
 ## 4. Environment variables (names only; never commit values)
 
@@ -74,21 +74,21 @@ From `.env.example`, `server/config.ts`, `vite.config.ts`, `playwright.config.ts
 | `VITE_MAX_UPLOAD_MB` | Frontend build (public) | `10` | Upload limit shown and enforced in the browser |
 | `VITE_API_BASE_URL` | Frontend build (public) | empty | Pre-filled shared-workspace URL |
 | `PORT`, `HOST` | Server | `8787`, `0.0.0.0` | Listen address |
-| `CLINISCOPE_DATA_DIR` | Server | `./data` (`/data` in Docker) | SQLite file and private files |
-| `CLINISCOPE_ALLOWED_ORIGINS` | Server | `http://localhost:5173,http://localhost:4173` | CORS allow-list (exact match) |
-| `CLINISCOPE_ALLOW_REGISTRATION` | Server | `false` | Self-service sign-up |
-| `CLINISCOPE_SESSION_TTL_HOURS` | Server | `8` | Session lifetime |
-| `CLINISCOPE_MAX_UPLOAD_MB` | Server | `10` | File upload limit |
-| `CLINISCOPE_NEW_USER_PASSWORD` | Server CLI | none | Password for `create-user` |
+| `MEDGUARD_DATA_DIR` | Server | `./data` (`/data` in Docker) | SQLite file and private files |
+| `MEDGUARD_ALLOWED_ORIGINS` | Server | `http://localhost:5173,http://localhost:4173` | CORS allow-list (exact match) |
+| `MEDGUARD_ALLOW_REGISTRATION` | Server | `false` | Self-service sign-up |
+| `MEDGUARD_SESSION_TTL_HOURS` | Server | `8` | Session lifetime |
+| `MEDGUARD_MAX_UPLOAD_MB` | Server | `10` | File upload limit |
+| `MEDGUARD_NEW_USER_PASSWORD` | Server CLI | none | Password for `create-user` |
 | `ANTHROPIC_API_KEY` | Server, **secret** | empty → AI disabled | Provider key, read only in `server/config.ts` |
-| `CLINISCOPE_AI_MODEL` | Server | `claude-opus-5-5` | Model id |
-| `CLINISCOPE_AI_TIMEOUT_MS` | Server | `120000` | SDK timeout |
-| `CLINISCOPE_AI_FALLBACKS` | Server | `true` | Server-side fallback beta flag |
-| `CLINISCOPE_ANTHROPIC_BASE_URL` | Server (testing) | `https://api.anthropic.com` | Point the SDK at a local fake |
+| `MEDGUARD_AI_MODEL` | Server | `claude-opus-5-5` | Model id |
+| `MEDGUARD_AI_TIMEOUT_MS` | Server | `120000` | SDK timeout |
+| `MEDGUARD_AI_FALLBACKS` | Server | `true` | Server-side fallback beta flag |
+| `MEDGUARD_ANTHROPIC_BASE_URL` | Server (testing) | `https://api.anthropic.com` | Point the SDK at a local fake |
 | `BASE_URL`, `API_URL`, `CHROMIUM_PATH` | Tests | none | Run e2e against a deployed URL or API; custom Chromium |
 | `SITE_URL`, `GH_TOKEN` | CI only | from GitHub context / `secrets.GITHUB_TOKEN` | Production verification |
 
-The `CLINISCOPE_*` prefix and identifiers such as `cliniscope-api`, `cliniscope.db`, the IndexedDB name `cliniscope` and the `cliniscope.*` storage keys were **intentionally kept** in the rebrand to stay compatible with existing data and configuration (see commit `fd824f0`). They are not user-facing.
+Since commit `16ebafa` (on the base branch, merged into this branch), all internal identifiers use the MEDGUARD name: the `MEDGUARD_*` server variables, `medguard-api`, `medguard-data`, `medguard.db`, the IndexedDB name `medguard`, the `medguard.*` storage keys, the `medguard-v1` offline cache and the `medguard-backup` / `medguard-case-report` formats. **Compatibility consequences (per that commit; not separately tested here):** browser data stored under the old IndexedDB name `cliniscope` is not migrated (the demo workspace reseeds), servers configured with the old `CLINISCOPE_*` variables must be reconfigured, and backups exported in the old `cliniscope-backup` format no longer pass the restore schema (`z.literal('medguard-backup')` in `src/lib/exportCase.ts`). Only the repository name, and therefore the Pages URL, still contains `cliniscope`.
 
 No secrets are stored in the repository. `.env`, `.env.*`, `*.pem` and `*.key` are git-ignored. `render.yaml` marks `ANTHROPIC_API_KEY` as `sync: false`, so it must be entered in the Render dashboard.
 
@@ -101,7 +101,7 @@ npm run build && npm run preview    # http://localhost:4173 (production build, s
 npm test                            # Vitest unit/integration
 npx playwright test                 # builds, starts preview + API servers + fake AI, runs 24 tests
 # optional API
-CLINISCOPE_ALLOW_REGISTRATION=true CLINISCOPE_ALLOWED_ORIGINS=http://localhost:5173 npm run server
+MEDGUARD_ALLOW_REGISTRATION=true MEDGUARD_ALLOWED_ORIGINS=http://localhost:5173 npm run server
 ```
 
 ## 6. Verification status in this audit

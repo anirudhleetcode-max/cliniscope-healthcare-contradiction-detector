@@ -25,7 +25,7 @@
 | Styling | Tailwind CSS + PostCSS + Autoprefixer | 3.4.17 / 8.4.49 / 10.4.20 | Utility classes. Colours map to CSS variables in `src/index.css` | Direct (dev) | `tailwind.config.js`, `postcss.config.js`, `src/index.css` |
 | Font | `@fontsource-variable/inter` (Inter Variable) | 5.3.0 | Bundled web font, served from the app origin (no Google Fonts) | Direct | `src/index.css:1`, `tailwind.config.js` |
 | Icons | lucide-react | 0.460.0 | All UI icons | Direct | e.g. `src/components/shell/AppShell.tsx` |
-| Client persistence | Dexie (IndexedDB wrapper) | 4.0.10 | Browser database `cliniscope` with 6 tables | Direct | `src/lib/db.ts` |
+| Client persistence | Dexie (IndexedDB wrapper) | 4.0.10 | Browser database `medguard` with 6 tables | Direct | `src/lib/db.ts` |
 | Reactive queries | dexie-react-hooks (`useLiveQuery`) | 1.1.7 | UI re-renders automatically on every IndexedDB write | Direct | `src/app/state.tsx` |
 | PDF text extraction / page rendering | pdfjs-dist (pdf.js) | 4.10.38 | Text layer per page, and page rendering for OCR and original-page preview. Worker self-hosted as `pdf.worker.min.js` | Direct | `src/lib/browserExtract.ts`, `src/pages/DocumentViewer.tsx`, `scripts/copy-pdf-worker.mjs` |
 | DOCX text extraction | mammoth | 1.8.0 | `extractRawText` for `.docx` uploads | Direct | `src/lib/extract.ts:361`, `src/lib/browserExtract.ts` |

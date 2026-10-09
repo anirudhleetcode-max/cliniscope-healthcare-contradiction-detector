@@ -13,20 +13,20 @@ The default application **does not use any API**. In *local demo mode*, everythi
 
 None of these make a network request, except loading the app's own static files (including `./demo/*`).
 
-The API below exists only in the **optional shared-workspace server** (`server/`). The browser calls it only after a user enters a server URL under **Settings → Shared workspace** (stored in `localStorage` key `cliniscope.serverUrl`), or when the frontend was built with `VITE_API_BASE_URL`. The server is **not deployed publicly** (see `DEPLOYMENT_AND_CI_CD.md`).
+The API below exists only in the **optional shared-workspace server** (`server/`). The browser calls it only after a user enters a server URL under **Settings → Shared workspace** (stored in `localStorage` key `medguard.serverUrl`), or when the frontend was built with `VITE_API_BASE_URL`. The server is **not deployed publicly** (see `DEPLOYMENT_AND_CI_CD.md`).
 
 ## 1. Conventions
 
 | Aspect | Behaviour | Evidence |
 |---|---|---|
 | Style | REST-like JSON over HTTP(S) | `server/app.ts` |
-| Request body | `application/json`, max 25 MB (`maxJsonBytes`). File upload: raw `application/octet-stream`, max `CLINISCOPE_MAX_UPLOAD_MB` (default 10 MB) | `server/config.ts`, `server/app.ts:385-399` |
+| Request body | `application/json`, max 25 MB (`maxJsonBytes`). File upload: raw `application/octet-stream`, max `MEDGUARD_MAX_UPLOAD_MB` (default 10 MB) | `server/config.ts`, `server/app.ts:385-399` |
 | Authentication | `Authorization: Bearer <opaque token>` from `/api/auth/login` or `/api/auth/register` | `server/app.ts:419-422` |
 | Error format | `{ "error": "<human message>", "code": "<machine code>" }` with an HTTP status | `server/app.ts:433-436` |
 | Validation errors | HTTP 400, `code: "validation"`, first three Zod issues | `server/app.ts:435` |
 | Unknown errors | HTTP 500, `code: "internal"`. Only the error *name* is logged | `server/app.ts:436` |
 | Security headers | `X-Content-Type-Options: nosniff`, `Cache-Control: no-store`, `Referrer-Policy: no-referrer` | `server/app.ts:403-405` |
-| CORS | Exact-match allow-list (`CLINISCOPE_ALLOWED_ORIGINS`). Disallowed browser origins get 403 `cors`. Requests without an `Origin` header (non-browser) are allowed | `server/app.ts:371-383` |
+| CORS | Exact-match allow-list (`MEDGUARD_ALLOWED_ORIGINS`). Disallowed browser origins get 403 `cors`. Requests without an `Origin` header (non-browser) are allowed | `server/app.ts:371-383` |
 | Request log | `METHOD path status ms`, with no bodies | `server/app.ts:438` |
 | Client timeout | 30 s default. 8 s for health. 60 s for snapshot/file. 180 s for AI | `src/lib/remote.ts:48-95` |
 | Client retries | **None** (no automatic retry in `apiFetch`) | `src/lib/remote.ts:48-75` |
@@ -37,8 +37,8 @@ The API below exists only in the **optional shared-workspace server** (`server/`
 
 | Method | Endpoint | Auth / min role | Purpose | Input | Output | Evidence |
 |---|---|---|---|---|---|---|
-| GET | `/api/health` | none | Liveness and capabilities | none | `{ ok, service: "cliniscope-api", version, time, ai: { configured, provider, model }, registration }`. Never includes secrets | `app.ts:119` |
-| POST | `/api/auth/register` | none. Only if `CLINISCOPE_ALLOW_REGISTRATION=true`, otherwise 403 | Create an account and sign in | `{ email, password (10-200), displayName (1-80) }` | `{ token, expiresAt, user }`. 409 if the email exists | `app.ts:125` |
+| GET | `/api/health` | none | Liveness and capabilities | none | `{ ok, service: "medguard-api", version, time, ai: { configured, provider, model }, registration }`. Never includes secrets | `app.ts:119` |
+| POST | `/api/auth/register` | none. Only if `MEDGUARD_ALLOW_REGISTRATION=true`, otherwise 403 | Create an account and sign in | `{ email, password (10-200), displayName (1-80) }` | `{ token, expiresAt, user }`. 409 if the email exists | `app.ts:125` |
 | POST | `/api/auth/login` | none. Rate-limited to 10 attempts per 15 min per email+IP | Sign in | `{ email, password }` | `{ token, expiresAt, user }`. 401 `invalid_credentials`. 429 | `app.ts:135` |
 | POST | `/api/auth/logout` | bearer | Revoke the current session | none | `{ ok: true }` | `app.ts:146` |
 | GET | `/api/auth/me` | bearer | Current user | none | `{ user }` | `app.ts:147` |
@@ -88,8 +88,8 @@ Domain types are defined once in `src/lib/types.ts` and shared by the browser an
 Defined in `server/aiProvider.ts`. Exercised only against a local fake in tests.
 
 - Call: `client.beta.messages.parse({ model, max_tokens: 16000, output_config: { format: betaZodOutputFormat(AiOutputSchema), effort: 'medium' }, system: AI_SYSTEM_PROMPT, messages: [...] })`.
-- Optional beta flag `server-side-fallback-2026-07-01` with `fallbacks: 'default'` when `CLINISCOPE_AI_FALLBACKS=true` (the default).
-- Client options: `timeout = CLINISCOPE_AI_TIMEOUT_MS` (default 120 000 ms), `maxRetries: 1`, `baseURL = CLINISCOPE_ANTHROPIC_BASE_URL` or `https://api.anthropic.com`.
+- Optional beta flag `server-side-fallback-2026-07-01` with `fallbacks: 'default'` when `MEDGUARD_AI_FALLBACKS=true` (the default).
+- Client options: `timeout = MEDGUARD_AI_TIMEOUT_MS` (default 120 000 ms), `maxRetries: 1`, `baseURL = MEDGUARD_ANTHROPIC_BASE_URL` or `https://api.anthropic.com`.
 - Error mapping (`mapError`):
 
 | Provider failure | Code | HTTP status |
@@ -103,7 +103,7 @@ Defined in `server/aiProvider.ts`. Exercised only against a local fake in tests.
 
 ## 6. CLI command
 
-`node dist-server/server.mjs create-user <email> <display name>`, with the password taken from `CLINISCOPE_NEW_USER_PASSWORD` (minimum 10 characters). It creates an account directly in SQLite (`server/index.ts:11-23`).
+`node dist-server/server.mjs create-user <email> <display name>`, with the password taken from `MEDGUARD_NEW_USER_PASSWORD` (minimum 10 characters). It creates an account directly in SQLite (`server/index.ts:11-23`).
 
 ## 7. What does not exist
 

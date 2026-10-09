@@ -37,7 +37,7 @@ Two **optional** extensions exist and are off by default:
 | Remote client | `fetch` wrapper, session storage, snapshot apply/push/pull | `src/lib/remote.ts` |
 | Exports | JSON report, CSV, backup, validated restore | `src/lib/exportCase.ts` |
 | Metrics / queries | Dashboard numbers, filters, sorting | `src/lib/metrics.ts`, `query.ts` |
-| Browser DB | Dexie schema (`cliniscope`, version 1) | `src/lib/db.ts` |
+| Browser DB | Dexie schema (`medguard`, version 1) | `src/lib/db.ts` |
 | API server | Routing, auth, CORS, validation, authorization, audit | `server/app.ts`, `auth.ts`, `config.ts`, `index.ts` |
 | Server DB | SQLite schema + migrations + transactions | `server/db.ts` |
 | AI provider | Anthropic SDK adapter + error mapping | `server/aiProvider.ts` |
@@ -58,14 +58,14 @@ flowchart TD
         OCR["OCR engine<br/>src/lib/browserOcr.ts<br/>Tesseract.js (self-hosted assets)"]
         RULES["Rules engine<br/>statements.ts + lexicon.ts + detect.ts"]
         AIV["AI output verifier<br/>src/lib/ai.ts verifyAiOutput()"]
-        IDB[("IndexedDB 'cliniscope'<br/>Dexie: cases, documents, files,<br/>statements, findings, events")]
+        IDB[("IndexedDB 'medguard'<br/>Dexie: cases, documents, files,<br/>statements, findings, events")]
         LS[("localStorage / sessionStorage<br/>preferences, server URL, session token")]
         SW["Service worker<br/>public/sw.js (offline cache)"]
     end
 
     subgraph Server["Optional API server: server/ (Node 22, node:http)"]
         API["HTTP router + auth + CORS<br/>server/app.ts"]
-        SQL[("SQLite via node:sqlite<br/>DATA_DIR/cliniscope.db")]
+        SQL[("SQLite via node:sqlite<br/>DATA_DIR/medguard.db")]
         FS[("Private file store<br/>DATA_DIR/files/caseId/docId")]
         PROV["AI provider adapter<br/>server/aiProvider.ts"]
     end
@@ -144,14 +144,14 @@ sequenceDiagram
 ```mermaid
 flowchart LR
     subgraph BrowserStorage["Browser (per device, per browser profile)"]
-        IDB[("IndexedDB database 'cliniscope'<br/>cases | documents | files (Blob)<br/>statements | findings | events")]
-        LSt[("localStorage<br/>cliniscope.currentCase<br/>cliniscope.reviewer<br/>cliniscope.prefs<br/>cliniscope.serverUrl")]
-        SSt[("sessionStorage<br/>cliniscope.session (bearer token)")]
-        CS[("Cache Storage 'cliniscope-v1'<br/>app shell, assets, OCR, demo files")]
+        IDB[("IndexedDB database 'medguard'<br/>cases | documents | files (Blob)<br/>statements | findings | events")]
+        LSt[("localStorage<br/>medguard.currentCase<br/>medguard.reviewer<br/>medguard.prefs<br/>medguard.serverUrl<br/>medguard.demoGuide")]
+        SSt[("sessionStorage<br/>medguard.session (bearer token)")]
+        CS[("Cache Storage 'medguard-v1'<br/>app shell, assets, OCR, demo files")]
         MEM["React state (memory only)<br/>toasts, dialogs, filters, drafts"]
     end
     subgraph ServerStorage["Optional server (DATA_DIR volume)"]
-        SQ[("cliniscope.db (SQLite, WAL)<br/>users, sessions, cases, case_members,<br/>documents, statements, findings,<br/>audit_events, schema_version")]
+        SQ[("medguard.db (SQLite, WAL)<br/>users, sessions, cases, case_members,<br/>documents, statements, findings,<br/>audit_events, schema_version")]
         FL[("files/caseId/docId<br/>original uploads, mode 0600")]
     end
     IDB -->|"PUT snapshot (shared cases only)"| SQ
@@ -212,7 +212,7 @@ flowchart TD
     PAGES --> BROWSER["User browser<br/>static SPA, HashRouter,<br/>relative asset paths"]
 
     DOCKER["Dockerfile<br/>node:22-slim, single bundled server.mjs,<br/>VOLUME /data, HEALTHCHECK"]
-    RENDER["render.yaml<br/>Render web service 'cliniscope-api',<br/>1 GB disk at /data"]
+    RENDER["render.yaml<br/>Render web service 'medguard-api',<br/>1 GB disk at /data"]
     DK -.->|"image built and health-checked in CI only,<br/>not pushed to a registry"| DOCKER
     RENDER -.->|"blueprint present, never run"| DOCKER
     BROWSER -.->|"only if a server URL is entered in Settings"| DOCKER

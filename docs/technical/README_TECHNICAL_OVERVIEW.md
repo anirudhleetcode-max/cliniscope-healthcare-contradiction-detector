@@ -2,8 +2,8 @@
 
 **Healthcare Record Contradiction Detector** · *Find contradictions. Preserve clinical context. Support better decisions.*
 
-> **Audit basis:** branch `claude/optimistic-tesla-466st5`, commit `a77a427`, audited 2026-10-09. Every claim below cites repository files. Anything not verifiable from the repository is labelled **UNKNOWN** or **INFERENCE**.
-> **Naming:** the product name rendered by the application is **MEDGUARD** (`index.html`, `AppShell.tsx`, `BrandMark.tsx`). The GitHub repository and Pages URL keep the original name `cliniscope-healthcare-contradiction-detector`, and internal identifiers keep the `cliniscope` / `CLINISCOPE_*` prefix for compatibility.
+> **Audit basis:** branch `claude/optimistic-tesla-466st5`; code audited at commit `a77a427` on 2026-10-09. The identifier renames from base commit `16ebafa` were merged in afterwards and are reflected below; checks were re-run on the merged tree (see §5). Every claim below cites repository files. Anything not verifiable from the repository is labelled **UNKNOWN** or **INFERENCE**.
+> **Naming:** the product name rendered by the application is **MEDGUARD** (`index.html`, `AppShell.tsx`, `BrandMark.tsx`). Internal identifiers also use `medguard` / `MEDGUARD_*` since commit `16ebafa`. Only the GitHub repository name, and therefore the Pages URL, keeps the original `cliniscope-healthcare-contradiction-detector`.
 
 ## Documentation map
 
@@ -65,7 +65,7 @@ The system does not diagnose and does not decide which record is correct.
 
 - **Frontend.** About 11 pages and 14 routes under `src/pages`. Shell, review and UI primitives under `src/components`. Domain logic under `src/lib`, as pure TypeScript shared with tests and the server. Entry point: `src/main.tsx`.
 - **Backend.** `server/index.ts` (entry and `create-user` CLI), `server/app.ts` (16 routes, auth, CORS, validation, authorization, audit), `server/db.ts` (SQLite schema and migrations), `server/auth.ts`, `server/aiProvider.ts`. **Optional.** The default demo never contacts it.
-- **Database.** IndexedDB database `cliniscope` with six tables: cases, documents, files, statements, findings, events. The optional server adds a SQLite `cliniscope.db` with eight tables plus append-only triggers on `audit_events`.
+- **Database.** IndexedDB database `medguard` with six tables: cases, documents, files, statements, findings, events. The optional server adds a SQLite `medguard.db` with eight tables plus append-only triggers on `audit_events`.
 - **Deployment.** The static `dist/` is published to GitHub Pages from the default branch by GitHub Actions, then smoke-tested in production with Playwright. The API container is only built and health-checked in CI.
 
 ## 4. Implementation status
@@ -120,7 +120,7 @@ The system does not diagnose and does not decide which record is correct.
 
 1. **Product-name spelling.** The code says **MEDGUARD** (commit `a77a427` changed MEDGAURD → MEDGUARD). The request for this audit uses both "MEDGuard" and "MEDGAURD". The documentation follows the code.
 2. **Live site.** The GitHub Pages URL could not be opened from the audit sandbox (egress proxy 403). Its status relies on CI's `verify-production` result.
-3. **Default branch** is inferred to be `claude/fervent-euler-bsgy2t`, from deploy-job behaviour.
+3. **Default branch** is `claude/fervent-euler-bsgy2t` (confirmed from repository metadata).
 4. **Provider data retention** for the AI path is UNKNOWN.
 5. **Render** blueprint behaviour, cost and plan are unverified.
 6. **Clinical accuracy** on real data is unknown.
