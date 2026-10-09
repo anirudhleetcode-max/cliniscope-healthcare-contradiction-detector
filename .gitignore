@@ -25,3 +25,5 @@ npm-debug.log*
 tmp/
 public/pdf.worker.min.js
 public/ocr/
+dist-server/
+data/

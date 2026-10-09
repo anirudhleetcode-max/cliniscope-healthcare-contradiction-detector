@@ -82,10 +82,14 @@ export interface OcrSpan {
   text: string;
 }
 
+export type CaseRole = 'owner' | 'reviewer' | 'viewer';
+
 export interface CaseRecord {
   id: string;
   label: string;
   isDemo: boolean;
+  /** Present when this case is stored in a shared workspace server; the local copy is a cache. */
+  remote?: { serverUrl: string; role: CaseRole; owner: string; syncedAt: string | null };
   createdAt: string;
   updatedAt: string;
   lastAnalyzedAt: string | null;
@@ -251,6 +255,10 @@ export interface Finding {
   reviewStatus: ReviewStatus;
   /** True when the latest analysis no longer produced this finding (e.g. a source was removed). */
   stale: boolean;
+  /** Which engine proposed the finding. Absent = deterministic rules. */
+  origin?: 'rules' | 'ai';
+  /** Model identifier for AI-assisted findings. */
+  aiModel?: string;
   isSeededDemo: boolean;
   relevantDates: string[];
   createdAt: string;
@@ -269,7 +277,13 @@ export type EventKind =
   | 'finding_created'
   | 'finding_superseded'
   | 'status_changed'
-  | 'note_added';
+  | 'note_added'
+  | 'ai_analysis_completed'
+  | 'ai_analysis_failed'
+  | 'case_shared'
+  | 'member_added'
+  | 'member_removed'
+  | 'case_synced';
 
 /** Append-only audit / timeline event. Never updated after insert. */
 export interface AuditEvent {
