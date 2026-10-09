@@ -26,7 +26,5 @@ jobs:
           done; echo "::error::new build not live"; exit 1
       - name: Wake the API
         run: for i in $(seq 1 18); do curl -sf --max-time 30 "$API_URL/api/health" >/dev/null && exit 0; sleep 10; done; exit 1
-      - name: Member removal, sharing and isolation against the live site and API (synthetic users)
-        run: npx playwright test tests/e2e/shared.spec.ts --project=desktop
-      - name: Welcome card, navigation and mobile layout on the live site
-        run: npx playwright test tests/e2e/workspace.spec.ts tests/e2e/mobile.spec.ts --project=desktop --project=mobile
+      - name: Failed removal, revoked access and activity log against the live site and API (synthetic users)
+        run: npx playwright test tests/e2e/verify-removal.spec.ts --project=desktop --reporter=list
