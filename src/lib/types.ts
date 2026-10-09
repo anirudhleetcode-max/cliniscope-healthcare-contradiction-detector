@@ -307,7 +307,7 @@ export type EventKind =
   | 'ai_analysis_failed'
   | 'case_shared'
   | 'member_added'
-  | 'member_removed'
+  | 'member_removed' | 'owner_transferred'
   | 'case_synced'
   | 'case_updated'
   | 'demo_reset';

@@ -402,6 +402,26 @@ export async function createApp(deps: AppDeps): Promise<{ server: Server; db: Db
     return snapshot(caseId, c.user!);
   });
 
+  // Ownership transfer: the owner hands the case to an existing member and stays on as a reviewer.
+  // One transaction: the case's owner_id and both memberships change together, and it is audited.
+  const Transfer = z.object({ userId: z.string().min(1).max(64) }).strict();
+  route('POST', '/api/cases/([^/]+)/transfer-ownership', true, async (c) => {
+    const caseId = c.params[0];
+    await requireRole(c.user!, caseId, 'owner');
+    const b = Transfer.parse(await c.body());
+    if (b.userId === c.user!.id) throw new HttpError(400, 'You already own this case.');
+    const m = await db.get<{ role: string; email: string; display_name: string }>('SELECT m.role, u.email, u.display_name FROM case_members m JOIN users u ON u.id = m.user_id WHERE m.case_id = ? AND m.user_id = ?', [caseId, b.userId]);
+    if (!m) throw new HttpError(404, 'Ownership can only be given to an existing member of this case.');
+    await db.tx(async (q) => {
+      await q.run("UPDATE case_members SET role = 'owner' WHERE case_id = ? AND user_id = ?", [caseId, b.userId]);
+      await q.run("UPDATE case_members SET role = 'reviewer' WHERE case_id = ? AND user_id = ?", [caseId, c.user!.id]);
+      await q.run('UPDATE cases SET owner_id = ? WHERE id = ?', [b.userId, caseId]);
+      await audit(q, { caseId, actor: c.user, kind: 'owner_transferred', entityType: 'user', entityId: b.userId, detail: `Ownership transferred to ${m.display_name} <${m.email}>; previous owner is now a reviewer` });
+      await touch(q, caseId);
+    });
+    return snapshot(caseId, c.user!);
+  });
+
   // Full-state synchronization of extracted documents, statements and analysis results.
   // Review status is NEVER taken from the client here; it changes only through /transition.
   route('PUT', '/api/cases/([^/]+)/snapshot', true, async (c) => {

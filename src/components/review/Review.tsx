@@ -12,7 +12,7 @@ import { useReviewActions, useWorkspace } from '../../app/workspace';
 import { Badge, cx, Modal, StatusBadge } from '../ui';
 import { formatDate, formatDateTime } from '../../lib/dates';
 import { MIN_REASON_LENGTH, reasonRequired, transitionsFor } from '../../lib/review';
-import type { AuditEvent, CaseRecord, DocumentRecord, EvidenceRef, Finding, ReviewStatus } from '../../lib/types';
+import type { AuditEvent, CaseRecord, CaseRole, DocumentRecord, EvidenceRef, Finding, ReviewStatus } from '../../lib/types';
 import { DOCUMENT_TYPE_LABEL, EXTRACTION_METHOD_LABEL, REVIEW_STATUS_LABEL } from '../../lib/types';
 
 // ------------------------------------------------------------ evidence
@@ -153,6 +153,7 @@ export function ReviewPanel({ finding, caseRec, onSaved, testId }: { finding: Fi
         ) : (
           <p className="mb-3 text-xs text-muted">Local demonstration · reviewing as <span className="font-medium text-ink">{reviewer}</span>. Decisions are stored in this browser only and are not shared with anyone.</p>
         )}
+        {caseRec?.remote ? <RoleBanner role={caseRec.remote.role} /> : null}
         {viewer ? <p className="mb-2 rounded-md bg-subtle px-3 py-2 text-xs text-muted" data-testid="viewer-readonly">You have read-only (viewer) access to this case.</p> : null}
         <div className={cx('flex flex-col gap-2', viewer && 'hidden')} data-testid="review-actions">
           {allowed.map((to) => {
@@ -265,4 +266,21 @@ export function useFindingEvents(id: string | undefined) {
 
 export function EvidenceHeading() {
   return <h2 className="mb-3 flex items-center gap-2 text-[15px] font-semibold"><GitCompareArrows size={17} className="text-brand" aria-hidden />Evidence comparison <span className="text-xs font-normal text-muted">— exact quotations from extracted document text</span></h2>;
+}
+
+const ROLE_INFO: Record<CaseRole, { label: string; can: string; tone: string }> = {
+  owner: { label: 'Owner', can: 'You manage who can access this case, and you can review findings and add notes.', tone: 'border-brand/30 bg-brand-50 text-brand-700' },
+  reviewer: { label: 'Reviewer', can: 'You can review findings and add notes. Only the owner can share this case.', tone: 'border-ok/30 bg-ok-50 text-ok' },
+  viewer: { label: 'Viewer', can: 'Read only: you can see the evidence and history but cannot change anything.', tone: 'border-warn/30 bg-warn-50 text-warn' },
+};
+
+/** Your role on this shared case, shown prominently where decisions are made. */
+function RoleBanner({ role }: { role: CaseRole }) {
+  const r = ROLE_INFO[role];
+  return (
+    <div className={cx('mb-3 rounded-lg border px-3 py-2', r.tone)} data-testid="role-banner">
+      <div className="text-[13px] font-semibold">Your role: {r.label}</div>
+      <div className="text-xs opacity-90">{r.can}</div>
+    </div>
+  );
 }

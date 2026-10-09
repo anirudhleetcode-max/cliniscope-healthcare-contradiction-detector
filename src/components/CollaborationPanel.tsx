@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Trash2, UserPlus, Users } from 'lucide-react';
+import { Crown, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react';
 import { db, useApp } from '../app/state';
 import { useWorkspace } from '../app/workspace';
 import { applySnapshot, remoteApi, type RemoteMember } from '../lib/remote';
@@ -16,6 +16,7 @@ export function CollaborationPanel({ c }: { c: CaseRecord }) {
   const [role, setRole] = useState<'reviewer' | 'viewer'>('reviewer');
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<RemoteMember | null>(null);
+  const [transferTo, setTransferTo] = useState<RemoteMember | null>(null);
   const signedIn = !!ws.session && ws.session.serverUrl === c.remote?.serverUrl;
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export function CollaborationPanel({ c }: { c: CaseRecord }) {
             <li key={m.userId} className="flex items-center justify-between gap-2 py-2">
               <span className="min-w-0 truncate">{m.displayName} <span className="text-xs text-muted">&lt;{m.email}&gt;</span></span>
               <span className="flex items-center gap-2"><span className="chip bg-soft text-ink">{m.role}</span>
+                {c.remote?.role === 'owner' && m.role !== 'owner' ? <button className="btn-ghost px-2 py-0.5 text-xs" data-testid="make-owner" disabled={busy} onClick={() => setTransferTo(m)}><Crown size={13} aria-hidden />Make owner</button> : null}
                 {c.remote?.role === 'owner' && m.role !== 'owner' ? <button className="text-crit" aria-label={`Remove ${m.email}`} data-testid="remove-member" disabled={busy} onClick={() => setRemoving(m)}><Trash2 size={14} /></button> : null}
               </span>
             </li>
@@ -60,6 +62,16 @@ export function CollaborationPanel({ c }: { c: CaseRecord }) {
           <button className="btn-primary" disabled={busy || !email} data-testid="add-member" onClick={() => act(async () => { const s = await remoteApi.addMember(ws.requireSession(), c.id, email, role); await applySnapshot(db, ws.session!, s); setMembers(s.members); setEmail(''); toast('success', `${email} can now access this case as ${role}.`); })}><UserPlus size={15} />Share</button>
         </div>
       ) : null}
+      <ConfirmDialog open={!!transferTo} onClose={() => setTransferTo(null)} title="Transfer ownership?" confirmLabel="Transfer ownership" busy={busy} testId="confirm-transfer-owner"
+        onConfirm={() => { const m = transferTo!; void act(async () => {
+          const s = await remoteApi.transferOwnership(ws.requireSession(), c.id, m.userId);
+          await applySnapshot(db, ws.session!, s);
+          setMembers(s.members);
+          setTransferTo(null);
+          toast('success', `${m.displayName} is now the owner of this case. You remain a reviewer.`);
+        }); }}>
+        {transferTo ? <p className="text-sm">{transferTo.displayName} ({transferTo.email}) becomes the <strong>owner</strong>: they will manage access to this case. You will stay on the case as a <strong>reviewer</strong>. Only the new owner can undo this.</p> : null}
+      </ConfirmDialog>
       <ConfirmDialog open={!!removing} onClose={() => setRemoving(null)} title="Remove access?" confirmLabel="Remove" danger busy={busy} testId="confirm-remove-member"
         onConfirm={() => { const m = removing!; void act(async () => {
           const s = await remoteApi.removeMember(ws.requireSession(), c.id, m.userId);

@@ -35,6 +35,7 @@ export function describeEvent(e: AuditEvent, findings: Finding[], docs: Document
     case 'case_shared': return { title: 'Case published to the shared workspace', body: e.detail };
     case 'member_added': return { title: 'Collaborator added', body: e.detail };
     case 'member_removed': return { title: 'Collaborator removed', body: e.detail };
+    case 'owner_transferred': return { title: 'Ownership transferred', body: e.detail };
     case 'case_synced': return { title: 'Case data synchronized to the shared workspace', body: e.detail };
     case 'demo_reset': return { title: 'Demo data reset', body: e.detail };
     case 'case_updated': return { title: 'Case details updated', body: e.detail };
@@ -44,7 +45,7 @@ export function describeEvent(e: AuditEvent, findings: Finding[], docs: Document
 
 type Group = 'case' | 'document' | 'analysis' | 'review' | 'note';
 const GROUP_OF: Record<EventKind, Group> = {
-  case_created: 'case', case_shared: 'case', member_added: 'case', member_removed: 'case', case_synced: 'case', case_updated: 'case', demo_reset: 'case',
+  case_created: 'case', case_shared: 'case', member_added: 'case', member_removed: 'case', owner_transferred: 'case', case_synced: 'case', case_updated: 'case', demo_reset: 'case',
   document_uploaded: 'document', document_extracted: 'document', document_failed: 'document', document_deleted: 'document',
   analysis_started: 'analysis', analysis_completed: 'analysis', analysis_failed: 'analysis', ai_analysis_completed: 'analysis', ai_analysis_failed: 'analysis',
   finding_created: 'analysis', finding_superseded: 'analysis',
