@@ -17,6 +17,13 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Wait until the live site serves the PR #13 build
+        run: |
+          for i in $(seq 1 40); do
+            js=$(curl -s "$BASE_URL" | grep -o 'assets/index-[A-Za-z0-9_-]*\.js' | head -1)
+            [ -n "$js" ] && curl -s "$BASE_URL$js" | grep -q 'confirm-remove-member' && { echo "live bundle $js has the new dialog"; exit 0; }
+            sleep 15
+          done; echo "::error::new build not live"; exit 1
       - name: Wake the API
         run: for i in $(seq 1 18); do curl -sf --max-time 30 "$API_URL/api/health" >/dev/null && exit 0; sleep 10; done; exit 1
       - name: Member removal, sharing and isolation against the live site and API (synthetic users)
