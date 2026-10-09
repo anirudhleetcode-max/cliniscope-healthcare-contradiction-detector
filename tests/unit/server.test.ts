@@ -155,6 +155,10 @@ describe('shared workspace API: cases, permissions and two-user review', () => {
     expect((await api(`/api/findings/${pen.id}/transition`, { token: alice, body: { to: 'in_review', expectedStatus: 'unreviewed' } })).status).toBe(200);
     expect((await api(`/api/findings/${pen.id}/notes`, { token: alice, body: { note: 'Called the patient: confirms hives with penicillin in 2019.' } })).status).toBe(200);
     expect((await api(`/api/findings/${pen.id}/transition`, { token: alice, body: { to: 'resolved', reason: '' } })).status).toBe(422);
+    // Local-only review outcomes are not part of the shared workspace's state machine.
+    for (const to of ['needs_info', 'expected_change', 'undetermined']) {
+      expect((await api(`/api/findings/${pen.id}/transition`, { token: alice, body: { to, reason: 'Local-only outcome attempt.' } })).status).toBe(422);
+    }
     expect((await api(`/api/findings/${pen.id}/transition`, { token: alice, body: { to: 'confirmed', reason: 'Records genuinely disagree.' } })).status).toBe(200);
     // Bob acting on a stale view gets a conflict instead of silently overwriting.
     const stale = await api(`/api/findings/${pen.id}/transition`, { token: bob, body: { to: 'dismissed', reason: 'Looks fine to me', expectedStatus: 'in_review' } });

@@ -15,7 +15,7 @@ export interface FindingFilter {
 
 export type FindingSort = 'newest' | 'oldest' | 'category' | 'status' | 'priority';
 
-const STATUS_ORDER: ReviewStatus[] = ['unreviewed', 'in_review', 'confirmed', 'resolved', 'dismissed'];
+const STATUS_ORDER: ReviewStatus[] = ['unreviewed', 'in_review', 'needs_info', 'confirmed', 'undetermined', 'expected_change', 'resolved', 'dismissed'];
 const PRIORITY_ORDER = ['prompt', 'routine', 'low'];
 
 export function filterFindings(list: Finding[], f: FindingFilter): Finding[] {

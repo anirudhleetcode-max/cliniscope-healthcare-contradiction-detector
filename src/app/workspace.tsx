@@ -157,6 +157,15 @@ export function useReviewActions() {
     }
     await transitionFinding(db, f.id, to, { reason, reviewer });
   }, [requireSession, reviewer]);
+  /** Records a decision; from "unreviewed" the finding first moves to "in review" (both audited). */
+  const decide = useCallback(async (f: Finding, c: CaseRecord | undefined, to: ReviewStatus, reason?: string) => {
+    if (f.reviewStatus === 'unreviewed' && to !== 'in_review') {
+      await transition(f, c, 'in_review');
+      await transition({ ...f, reviewStatus: 'in_review' }, c, to, reason);
+      return;
+    }
+    await transition(f, c, to, reason);
+  }, [transition]);
   const note = useCallback(async (f: Finding, c: CaseRecord | undefined, text: string) => {
     if (c?.remote) {
       const s = requireSession();
@@ -165,5 +174,5 @@ export function useReviewActions() {
     }
     await addReviewerNote(db, f.id, text, reviewer);
   }, [requireSession, reviewer]);
-  return { transition, note };
+  return { transition, decide, note };
 }

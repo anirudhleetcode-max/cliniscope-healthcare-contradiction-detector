@@ -22,7 +22,7 @@ test('judge journey: demo → evidence → review → export → reload (local m
   await demoReady(page);
   await expect(page.getByTestId('mode-chip')).toContainText('Local demo mode');
   // 3-4. Load the demonstration case explicitly; the synthetic-data warning is visible.
-  await page.goto('#/about');
+  await page.goto('#/settings');
   await expect(page.getByTestId('status-mode')).toHaveText('Local demo mode');
   await expect(page.getByTestId('status-persistence')).toContainText('IndexedDB working');
   await expect(page.getByTestId('status-ai')).toContainText('Unavailable');
@@ -38,7 +38,7 @@ test('judge journey: demo → evidence → review → export → reload (local m
   await page.getByTestId('analyze-button').first().click();
   await expect(page.getByText(/Analysis complete/).first()).toBeVisible({ timeout: 30000 });
   // 8-10. Open a potential contradiction; both statements and both source documents are identifiable.
-  await page.goto('#/queue?q=date%20of%20birth');
+  await page.goto('#/contradictions?case=current&q=date%20of%20birth');
   await page.getByTestId('finding-link').first().click();
   await expect(page.getByTestId('finding-title')).toContainText('Date of birth differs between records');
   const a = page.getByTestId('evidence-side-A');
@@ -65,7 +65,7 @@ test('judge journey: demo → evidence → review → export → reload (local m
   await expect(page.getByTestId('finding-audit')).toContainText('reconciliation record has a typo');
   await expect(page.getByTestId('finding-audit')).toContainText('In review → Confirmed discrepancy');
   // Filters reflect the decision.
-  await page.goto('#/queue?status=confirmed');
+  await page.goto('#/contradictions?case=current&status=confirmed');
   await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(1);
   // 17-18. Export the case report; it contains the finding, decision, note and history.
   await page.goto('#/');
@@ -101,7 +101,7 @@ test('works offline after the app has loaded, including a reload while disconnec
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByTestId('metrics')).toBeVisible({ timeout: 30000 });
-  await page.goto('#/queue?q=penicillin');
+  await page.goto('#/contradictions?case=current&q=penicillin');
   await page.getByTestId('finding-link').first().click();
   await page.getByRole('button', { name: 'Begin review' }).click();
   await expect(page.getByTestId('finding-detail').getByTestId('status-badge').first()).toHaveText(/In review/);
@@ -114,19 +114,20 @@ test('works offline after the app has loaded, including a reload while disconnec
 test('empty states and "no potential contradictions" wording', async ({ page }) => {
   await demoReady(page);
   await page.goto('#/cases');
+  await page.getByTestId('new-case').click();
   await page.getByTestId('new-case-label').fill('EMPTY-CASE');
   await page.getByTestId('create-case').click();
   // Creating a case navigates to its document library; wait for that before navigating on.
-  await expect(page.getByRole('heading', { name: 'Case records' })).toBeVisible();
-  await expect(page.locator('#case-switch option:checked')).toHaveText('EMPTY-CASE');
-  await page.goto('#/queue');
+  
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('EMPTY-CASE');
+  await page.goto('#/contradictions?case=current');
   await expect(page.getByText('No findings yet')).toBeVisible();
   await page.goto('#/documents');
   await expect(page.getByText('No documents in this case')).toBeVisible();
   await page.getByTestId('file-input').setInputFiles([{ name: 'note.txt', mimeType: 'text/plain', buffer: Buffer.from('DIAGNOSES\nHypertension.') }]);
   await page.getByTestId('upload-submit').click();
   await expect(page.getByTestId('upload-summary')).toBeVisible({ timeout: 30000 });
-  await page.goto('#/queue');
+  await page.goto('#/contradictions?case=current');
   await expect(page.getByText('No potential contradictions were detected by the available rules.')).toBeVisible();
 });
 
@@ -135,16 +136,17 @@ test('reset restores the demo safely and leaves user cases untouched', async ({ 
   await demoReady(page);
   await page.getByTestId('analyze-button').first().click();
   await expect(page.getByTestId('analysis-summary')).toBeVisible({ timeout: 30000 });
-  await page.goto('#/queue?q=metformin');
+  await page.goto('#/contradictions?case=current&q=metformin');
   await page.getByTestId('finding-link').first().click();
   await page.getByRole('button', { name: 'Begin review' }).click();
   await page.goto('#/cases');
+  await page.getByTestId('new-case').click();
   await page.getByTestId('new-case-label').fill('KEEP-ME');
   await page.getByTestId('create-case').click();
   // Creating a case navigates to its document library; wait for that before navigating on.
-  await expect(page.getByRole('heading', { name: 'Case records' })).toBeVisible();
-  await expect(page.locator('#case-switch option:checked')).toHaveText('KEEP-ME');
-  await page.goto('#/about');
+  
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('KEEP-ME');
+  await page.goto('#/settings');
   await page.getByTestId('reset-demo').click();
   await expect(page.getByRole('dialog')).toContainText('only the synthetic demonstration case');
   await page.getByTestId('confirm-reset').click();
@@ -159,7 +161,7 @@ test('backup → restore round trip creates a new case with review state intact;
   await demoReady(page);
   await page.getByTestId('analyze-button').first().click();
   await expect(page.getByTestId('analysis-summary')).toBeVisible({ timeout: 30000 });
-  await page.goto('#/queue?q=penicillin');
+  await page.goto('#/contradictions?case=current&q=penicillin');
   await page.getByTestId('finding-link').first().click();
   await page.getByRole('button', { name: 'Begin review' }).click();
   await page.getByRole('button', { name: 'Dismiss — not a contradiction' }).click();
@@ -173,7 +175,7 @@ test('backup → restore round trip creates a new case with review state intact;
   await page.getByTestId('restore-input').setInputFiles(backup.path);
   await expect(page.getByText(/Backup restored as a new case/)).toBeVisible({ timeout: 30000 });
   await expect(page.getByRole('heading', { level: 1 })).toContainText('(restored');
-  await page.goto('#/queue?status=dismissed');
+  await page.goto('#/contradictions?case=current&status=dismissed');
   await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(1);
 });
 

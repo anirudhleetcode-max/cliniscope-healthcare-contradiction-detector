@@ -12,7 +12,7 @@ const PASSWORD = 'synthetic-pass-123';
 async function signUp(browser: Browser, name: string, email: string): Promise<Page> {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await page.goto('#/about#workspace');
+  await page.goto('#/settings#workspace');
   await page.getByTestId('server-url').fill(API);
   await page.getByTestId('save-server-url').click();
   await expect(page.getByTestId('server-health')).toContainText('Reachable');
@@ -33,6 +33,7 @@ test('two authenticated reviewers share a case: decisions and audit history are 
 
   // Alice creates a shared case and uploads two synthetic records.
   await alice.goto('#/cases');
+  await alice.getByTestId('new-case').click();
   await alice.getByTestId('new-case-label').fill(`SHARED-${run} · synthetic`);
   await alice.getByTestId('create-shared-case').click();
   await expect(alice).toHaveURL(/#\/documents/);
@@ -51,7 +52,7 @@ test('two authenticated reviewers share a case: decisions and audit history are 
   await expect(alice.getByTestId('member-list')).toContainText('Bob Reviewer');
 
   // Alice reviews the allergy conflict: reason required, decision saved on the server.
-  await alice.goto('#/queue?q=penicillin');
+  await alice.goto('#/contradictions?case=current&q=penicillin');
   await alice.getByTestId('finding-link').first().click();
   await alice.getByRole('button', { name: 'Begin review' }).click();
   await expect(alice.getByTestId('finding-detail').getByTestId('status-badge').first()).toHaveText(/In review/);
@@ -69,7 +70,7 @@ test('two authenticated reviewers share a case: decisions and audit history are 
   await bob.goto('#/cases');
   await bob.getByTestId('shared-cases').getByRole('button', { name: 'Open shared case' }).click();
   await expect(bob.getByTestId('mode-chip')).toContainText('Shared workspace · reviewer');
-  await bob.goto('#/queue?q=penicillin');
+  await bob.goto('#/contradictions?case=current&q=penicillin');
   await bob.getByTestId('finding-link').first().click();
   await expect(bob.getByTestId('finding-detail').getByTestId('status-badge').first()).toHaveText(/Resolved by reviewer/);
   const audit = bob.getByTestId('finding-audit');
@@ -81,7 +82,7 @@ test('two authenticated reviewers share a case: decisions and audit history are 
   await expect(bob.getByTestId('timeline-events')).toContainText('Collaborator added');
 
   // Bob reopens with a reason; Alice sees it after refresh (server is the source of truth).
-  await bob.goto('#/queue?q=penicillin');
+  await bob.goto('#/contradictions?case=current&q=penicillin');
   await bob.getByTestId('finding-link').first().click();
   await bob.getByRole('button', { name: /Mark as unresolved/ }).click();
   await bob.getByTestId('reason-input').fill('New discharge letter received; re-check needed.');
@@ -102,7 +103,7 @@ test('an outsider cannot open a case they were not invited to; signed-out users 
   expect(r.status()).toBe(404);
   const anon = await eve.request.get(`${API}/api/cases`);
   expect(anon.status()).toBe(401);
-  await eve.goto('#/about#workspace');
+  await eve.goto('#/settings#workspace');
   await eve.getByTestId('sign-out').click();
   await expect(eve.getByTestId('ws-submit')).toBeVisible();
   // The revoked token no longer works.

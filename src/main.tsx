@@ -1,17 +1,20 @@
 import { StrictMode, Component, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { HashRouter, Link, Route, Routes } from 'react-router-dom';
+import { HashRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 import './index.css';
 import { AppProvider } from './app/state';
 import { WorkspaceProvider } from './app/workspace';
-import { Layout } from './components/Layout';
+import { AppShell } from './components/shell/AppShell';
 import { EmptyState } from './components/ui';
 import { Overview } from './pages/Overview';
-import { Queue } from './pages/Queue';
+import { Contradictions } from './pages/Contradictions';
+import { ReviewQueue } from './pages/ReviewQueue';
+import { CaseDetail, CurrentCase } from './pages/CaseDetail';
+import { Activity } from './pages/Activity';
+import { Help } from './pages/Help';
 import { FindingDetail } from './pages/FindingDetail';
 import { Documents } from './pages/Documents';
 import { DocumentViewer } from './pages/DocumentViewer';
-import { Timeline } from './pages/Timeline';
 import { Cases } from './pages/Cases';
 import { About } from './pages/About';
 
@@ -40,19 +43,25 @@ createRoot(document.getElementById('root')!).render(
       <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AppProvider>
           <WorkspaceProvider>
-          <Layout>
+          <AppShell>
             <Routes>
               <Route path="/" element={<Overview />} />
-              <Route path="/queue" element={<Queue />} />
+              <Route path="/queue" element={<ReviewQueue />} />
+              <Route path="/contradictions" element={<Contradictions />} />
+              <Route path="/cases/:id" element={<CaseDetail />} />
+              <Route path="/case" element={<CurrentCase />} />
+              <Route path="/activity" element={<Activity />} />
+              <Route path="/help" element={<Help />} />
+              <Route path="/settings" element={<About />} />
               <Route path="/findings/:id" element={<FindingDetail />} />
               <Route path="/documents" element={<Documents />} />
               <Route path="/documents/:id" element={<DocumentViewer />} />
-              <Route path="/timeline" element={<Timeline />} />
+              <Route path="/timeline" element={<Navigate to="/activity" replace />} />
               <Route path="/cases" element={<Cases />} />
               <Route path="/about" element={<About />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </Layout>
+          </AppShell>
           </WorkspaceProvider>
         </AppProvider>
       </HashRouter>

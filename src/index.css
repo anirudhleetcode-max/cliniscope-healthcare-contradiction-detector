@@ -1,26 +1,95 @@
+@import '@fontsource-variable/inter/index.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * CLINISCOPE design tokens — single source of truth.
+ * Values are RGB channels so Tailwind opacity modifiers work (bg-brand/10).
+ * See docs/FIGMA_DESIGN_SYSTEM.md for the rationale behind each token.
+ */
+:root {
+  --app-bg: 245 247 250;          /* #F5F7FA */
+  --surface: 255 255 255;         /* #FFFFFF */
+  --surface-subtle: 248 250 252;  /* #F8FAFC */
+  --surface-hover: 241 245 249;   /* #F1F5F9 */
+
+  --text-primary: 21 37 54;       /* #152536 */
+  --text-secondary: 82 101 121;   /* #526579 */
+  --text-muted: 102 118 138;      /* #66768A — darkened from #8090A0 for 4.5:1 contrast */
+
+  --border: 226 232 240;          /* #E2E8F0 */
+  --border-strong: 203 213 225;   /* #CBD5E1 */
+
+  --brand: 23 107 103;            /* #176B67 */
+  --brand-hover: 17 86 81;        /* #115651 */
+  --brand-strong: 14 71 68;       /* #0E4744 */
+  --brand-subtle: 229 244 241;    /* #E5F4F1 */
+  --brand-100: 205 234 228;       /* #CDEAE4 */
+
+  --danger: 196 61 77;            /* #C43D4D */
+  --danger-subtle: 252 235 237;   /* #FCEBED */
+  --warning: 154 100 18;          /* #9A6412 — darkened from #B7791F for text contrast */
+  --warning-subtle: 255 244 219;  /* #FFF4DB */
+  --success: 31 122 84;           /* #1F7A54 */
+  --success-subtle: 230 246 237;  /* #E6F6ED */
+  --info: 53 106 195;             /* #356AC3 */
+  --info-subtle: 234 241 255;     /* #EAF1FF */
+
+  --sidebar-w: 248px;
+  --sidebar-w-compact: 76px;
+  --header-h: 64px;
+}
+
 @layer base {
   html { -webkit-text-size-adjust: 100%; }
-  body { @apply bg-canvas text-ink font-sans antialiased; font-feature-settings: 'cv11', 'ss01'; }
-  :focus-visible { outline: 2px solid #315EFB; outline-offset: 2px; border-radius: 4px; }
+  body { @apply bg-canvas text-ink font-sans antialiased text-[14px] leading-[1.5]; font-feature-settings: 'cv11', 'ss01', 'tnum' 0; }
+  h1, h2, h3 { @apply text-ink; letter-spacing: -0.011em; }
+  :focus-visible { outline: 2px solid rgb(var(--brand)); outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: rgb(var(--brand) / 0.18); }
   mark.evidence-hl { background: #FFF1B8; color: inherit; border-bottom: 2px solid #B7791F; padding: 1px 0; scroll-margin: 120px; }
   mark.evidence-hl.active { animation: pulseHl 1.6s ease-out 1; }
   @keyframes pulseHl { 0% { background: #FFD666; } 100% { background: #FFF1B8; } }
-  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } }
+  .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
 @layer components {
-  .card { @apply bg-white border border-line rounded-xl shadow-card min-w-0; }
-  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap; }
-  .btn-primary { @apply btn bg-brand text-white hover:bg-brand-600 active:bg-brand-700; }
-  .btn-secondary { @apply btn bg-white text-ink border border-line hover:bg-soft; }
-  .btn-ghost { @apply btn text-muted hover:bg-soft hover:text-ink; }
+  .card { @apply bg-surface border border-line rounded-card shadow-card min-w-0; }
+  .panel { @apply bg-surface border border-line rounded-panel min-w-0; }
+  .card-header { @apply flex items-center justify-between gap-3 border-b border-line px-5 py-3.5; }
+  .card-title { @apply text-[15px] font-semibold text-ink; }
+
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-[9px] px-3.5 h-9 text-[13.5px] font-medium transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap select-none; }
+  .btn-sm { @apply h-8 px-2.5 text-[13px]; }
+  .btn-primary { @apply btn bg-brand text-white shadow-sm hover:bg-brand-600 active:bg-brand-700; }
+  .btn-secondary { @apply btn bg-surface text-ink border border-line hover:bg-hover hover:border-line-strong; }
+  .btn-ghost { @apply btn text-muted hover:bg-hover hover:text-ink; }
   .btn-danger { @apply btn bg-crit text-white hover:opacity-90; }
-  .input { @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20; }
-  .label { @apply block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5; }
-  .chip { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap; }
-  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted; }
+  .btn-icon { @apply inline-flex h-9 w-9 items-center justify-center rounded-[9px] text-muted transition-colors duration-150 hover:bg-hover hover:text-ink; }
+
+  .input { @apply w-full rounded-[9px] border border-line bg-surface px-3 h-9 text-[13.5px] text-ink placeholder:text-faint transition-colors duration-150 hover:border-line-strong focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/15 disabled:bg-subtle; }
+  textarea.input { @apply h-auto py-2 leading-relaxed; }
+  select.input { @apply pr-8; }
+  .label { @apply mb-1.5 block text-xs font-semibold text-muted; }
+
+  .chip { @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium whitespace-nowrap leading-[18px]; }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.07em] text-faint; }
+  .kbd { @apply inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-line bg-subtle px-1 font-sans text-[11px] font-medium text-muted; }
+
+  .table { @apply w-full border-separate border-spacing-0 text-left text-[13.5px]; }
+  .table thead th { @apply sticky top-0 z-[1] border-b border-line bg-subtle px-4 py-2.5 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-faint; }
+  .table tbody td { @apply border-b border-line px-4 py-3 align-middle; }
+  .table tbody tr:last-child td { @apply border-b-0; }
+  .table tbody tr.row-link { @apply cursor-pointer transition-colors duration-150 hover:bg-hover focus-within:bg-hover; }
+
+  .segmented { @apply inline-flex rounded-[9px] border border-line bg-subtle p-0.5; }
+  .segmented > button { @apply rounded-[7px] px-2.5 h-7 text-[13px] font-medium text-muted transition-colors duration-150; }
+  .segmented > button[aria-pressed='true'], .segmented > button[aria-selected='true'] { @apply bg-surface text-ink shadow-card; }
+}
+
+@layer utilities {
+  .scrollbar-thin { scrollbar-width: thin; }
+  .sr-only-focusable:not(:focus) { @apply sr-only; }
 }

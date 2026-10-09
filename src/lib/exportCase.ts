@@ -129,7 +129,7 @@ const BackupSchema = z.object({
   case: z.object({ id: z.string(), label: z.string().max(200), isDemo: z.boolean() }).passthrough(),
   documents: z.array(z.object({ id: z.string(), caseId: z.string(), title: z.string(), extractedText: z.string(), contentHash: z.string(), fileKind: z.enum(['pdf', 'txt', 'docx', 'image']) }).passthrough()).max(500),
   statements: z.array(z.object({ id: z.string(), documentId: z.string(), charStart: z.number(), charEnd: z.number(), originalText: z.string() }).passthrough()).max(50000),
-  findings: z.array(z.object({ id: z.string(), fingerprint: z.string(), reviewStatus: z.enum(['unreviewed', 'in_review', 'confirmed', 'resolved', 'dismissed']), evidence: z.array(z.object({ documentId: z.string(), statementId: z.string(), charStart: z.number(), charEnd: z.number(), quote: z.string() }).passthrough()) }).passthrough()).max(5000),
+  findings: z.array(z.object({ id: z.string(), fingerprint: z.string(), reviewStatus: z.enum(['unreviewed', 'in_review', 'confirmed', 'resolved', 'dismissed', 'needs_info', 'expected_change', 'undetermined']), evidence: z.array(z.object({ documentId: z.string(), statementId: z.string(), charStart: z.number(), charEnd: z.number(), quote: z.string() }).passthrough()) }).passthrough()).max(5000),
   events: z.array(z.object({ id: z.string(), kind: z.string(), at: z.string(), actor: z.string() }).passthrough()).max(100000),
   files: z.array(z.object({ documentId: z.string(), base64: z.string() })).max(500),
 });

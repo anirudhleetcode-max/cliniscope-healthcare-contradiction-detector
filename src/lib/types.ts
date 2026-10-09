@@ -90,6 +90,12 @@ export interface CaseRecord {
   id: string;
   label: string;
   isDemo: boolean;
+  /** Stable key of a synthetic demo case (e.g. "DEMO-0042"); absent for user-created cases. */
+  demoKey?: string;
+  /** Short description of what a synthetic demo case demonstrates. */
+  demoScenario?: string;
+  /** When seeding of a demo case finished. Events at or before this time are seeded examples. */
+  seededAt?: string;
   /** Present when this case is stored in a shared workspace server; the local copy is a cache. */
   remote?: {
     serverUrl: string; role: CaseRole; owner: string; syncedAt: string | null;
@@ -209,7 +215,13 @@ export const REVIEW_PRIORITY_LABEL: Record<ReviewPriority, string> = {
   low: 'Low — informational',
 };
 
-export type ReviewStatus = 'unreviewed' | 'in_review' | 'confirmed' | 'resolved' | 'dismissed';
+/**
+ * Review status. The first five exist in both local and shared mode; needs_info,
+ * expected_change and undetermined are local-mode review outcomes only (see lib/review.ts).
+ */
+export type ReviewStatus =
+  | 'unreviewed' | 'in_review' | 'confirmed' | 'resolved' | 'dismissed'
+  | 'needs_info' | 'expected_change' | 'undetermined';
 
 export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
   unreviewed: 'Unreviewed',
@@ -217,6 +229,9 @@ export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
   confirmed: 'Confirmed discrepancy',
   resolved: 'Resolved by reviewer',
   dismissed: 'Dismissed — not a contradiction',
+  needs_info: 'Needs more information',
+  expected_change: 'Expected change',
+  undetermined: 'Unable to determine',
 };
 
 export interface EvidenceRef {
@@ -291,7 +306,8 @@ export type EventKind =
   | 'case_shared'
   | 'member_added'
   | 'member_removed'
-  | 'case_synced';
+  | 'case_synced'
+  | 'demo_reset';
 
 /** Append-only audit / timeline event. Never updated after insert. */
 export interface AuditEvent {
