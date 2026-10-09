@@ -5,6 +5,7 @@
 //
 // Usage: node docs/dossier/render-pdf.mjs <input.html> <output.pdf>
 // Env:   CHROMIUM_PATH (optional) — Chromium executable for Playwright.
+//        DOC_FOOTER (optional) — left-hand footer text.
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -16,7 +17,7 @@ const [input, output] = process.argv.slice(2);
 if (!input || !output) { console.error('usage: render-pdf.mjs <input.html> <output.pdf>'); process.exit(2); }
 
 const FOOTER = `<div style="width:100%;font-family:Arial,sans-serif;font-size:7.5pt;color:#526176;padding:0 16mm;display:flex;justify-content:space-between">
-  <span>MEDGUARD · Hackathon Judge Preparation Dossier · PS-11R3</span>
+  <span>${process.env.DOC_FOOTER || 'MEDGUARD · Hackathon Judge Preparation Dossier · PS-11R3'}</span>
   <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>`;
 const HEADER = `<div style="width:100%;font-family:Arial,sans-serif;font-size:7pt;color:#8A96A8;padding:0 16mm;text-align:right">Evidence collected 9 Oct 2026 · synthetic data only · not for clinical use</div>`;
 
