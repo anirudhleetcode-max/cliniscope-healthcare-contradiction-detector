@@ -1,0 +1,28 @@
+%% MEDGUARD — Diagram 5: Security and trust boundaries (index.html CSP, server/app.ts, server/auth.ts, server/db.ts, src/lib/ai.ts)
+flowchart TB
+    subgraph TB1["1 · Browser"]
+        direction LR
+        DOC["Uploaded documents (UNTRUSTED)<br/>extension · MIME · magic bytes<br/>size · SHA-256 duplicate"]
+        APP["SPA under strict CSP<br/>text-only rendering"]
+        TOK["Bearer token<br/>sessionStorage"]
+        DOC --> APP --> TOK
+    end
+    subgraph TB2["2 · API server (Render)"]
+        direction LR
+        CORS["CORS allow-list<br/>exact origin"]
+        AUTH["scrypt passwords<br/>SHA-256 sessions, 8 h expiry<br/>login limit 10 / 15 min"]
+        AUTHZ["Role check per request<br/>non-member 404 · low role 403"]
+        VAL["zod validation · body limits<br/>quotes re-verified (422)"]
+        CORS --> AUTH --> AUTHZ --> VAL
+    end
+    subgraph TB3["3 · Database (Neon)"]
+        DB[("PostgreSQL<br/>verified TLS<br/>parameterised SQL<br/>append-only audit")]
+    end
+    subgraph TB4["4 · AI provider (off)"]
+        LLM["Anthropic API<br/>server-side key · consent first<br/>schema-checked · quotes re-verified"]
+    end
+    SECRET["Secrets: DATABASE_URL,<br/>ANTHROPIC_API_KEY<br/>Render env only"]
+    TOK -->|"HTTPS + Bearer"| CORS
+    VAL --> DB
+    VAL -. "consent + key only" .-> LLM
+    SECRET -.-> AUTH

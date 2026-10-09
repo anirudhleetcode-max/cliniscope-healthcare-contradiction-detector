@@ -1,0 +1,28 @@
+%% MEDGUARD — Diagram 7: Sequence — upload, analysis and review in local mode (src/lib/services.ts)
+sequenceDiagram
+    autonumber
+    actor R as Reviewer
+    participant UI as React UI
+    participant S as services.ts
+    participant X as extract.ts / browserOcr.ts
+    participant E as statements.ts + detect.ts
+    participant DB as IndexedDB (Dexie)
+    R->>UI: Drop file into case
+    UI->>S: uploadDocument(file, metadata)
+    S->>S: validate extension, MIME, magic bytes, size, SHA-256 duplicate
+    S->>DB: store original blob + 'uploaded' event
+    S->>X: extract text (pdf.js → OCR if page has < 20 chars → mammoth)
+    X-->>S: text, page spans, OCR confidence, low-confidence word spans
+    S->>E: extractStatements(text)
+    E-->>S: statements with charStart/charEnd
+    S->>DB: documents + statements + 'extracted' event
+    R->>UI: Click "Analyze documents"
+    UI->>S: analyzeCase(caseId)
+    S->>E: detectContradictions(case statements, case documents)
+    E->>E: group by concept · compare polarity/values/units/dates · verifyStatement()
+    E-->>S: draft findings + comparison stats
+    S->>DB: reconcile by fingerprint (keep review state, mark stale) + events
+    R->>UI: Open finding, choose decision + reason
+    UI->>S: transitionFinding(id, to, reason)
+    S->>S: validateTransition() (state machine, reason ≥ 5 chars)
+    S->>DB: update status + append event

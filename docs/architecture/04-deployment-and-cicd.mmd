@@ -1,0 +1,20 @@
+%% MEDGUARD — Diagram 4: Deployment and CI/CD (.github/workflows/ci-deploy.yml, verify-live.yml, render.yaml, Dockerfile)
+flowchart TB
+    DEV["Developer + Claude Code sessions"] -->|"git push / pull request"| GH["GitHub repository"]
+    GH --> J1
+    GH --> J2
+    subgraph CI["GitHub Actions · 'CI and deploy' (every push)"]
+        direction TB
+        J1["test: npm ci · typecheck · Vitest<br/>API/DB tests on postgres:16 · build · Playwright"]
+        J2["docker-api: build image · external postgres:16, no volume<br/>replace container · read back · start-up guard"]
+        J3["deploy (default branch only)<br/>dist/ → gh-pages branch"]
+        J4["verify-production<br/>live site serves build · e2e suite on live URL"]
+        J1 --> J3 --> J4
+    end
+    J3 --> PAGES["GitHub Pages<br/>static frontend"]
+    GH -->|"render.yaml Blueprint + Dockerfile"| RENDER["Render free web service<br/>medguard-api · health check /api/ready"]
+    RENDER -->|"DATABASE_URL (secret)"| NEON[("Neon free PostgreSQL")]
+    VL["GitHub Actions · 'Verify live deployment'<br/>manual dispatch · synthetic data"]
+    VL -->|"API checks"| RENDER
+    VL -->|"two-user browser tests"| PAGES
+    GH -.->|"Vercel GitHub app (outside repo)"| VERCEL["Vercel project 'medguard'<br/>deployments behind Vercel login"]

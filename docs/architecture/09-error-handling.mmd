@@ -1,0 +1,22 @@
+%% MEDGUARD — Diagram 9: Error-handling workflow (server/app.ts error mapping, src/lib/remote.ts, StatusPanel)
+flowchart LR
+    REQ["API request"] --> V{"Valid<br/>input?"}
+    V -- yes --> AU{"Signed<br/>in?"}
+    AU -- yes --> RO{"Case member<br/>with role?"}
+    RO -- yes --> DB{"Database<br/>reachable?"}
+    DB -- yes --> CF{"Stale view /<br/>concurrent<br/>change?"}
+    CF -- no --> RV{"Evidence<br/>quotes<br/>verify?"}
+    RV -- yes --> OK["200 + audit event<br/>logged: method · path<br/>· status · ms"]
+    V -- no --> E400["400<br/>readable message"]
+    AU -- no --> E401["401<br/>sign in again"]
+    RO -- "not member" --> E404["404<br/>IDs cannot be probed"]
+    RO -- "low role" --> E403["403<br/>role required"]
+    DB -- no --> E503["503<br/>database_unavailable"]
+    CF -- yes --> E409["409<br/>client refreshes"]
+    RV -- no --> E422["422<br/>evidence rejected"]
+    subgraph CLIENT["Browser-side handling"]
+        direction LR
+        W["Sleeping free server:<br/>waits up to 90 s, says so"]
+        U["Failed push: 'unsynced changes'<br/>Retry sync · polling paused"]
+        AIE["AI 503 / 429 / 504:<br/>rules results unaffected"]
+    end

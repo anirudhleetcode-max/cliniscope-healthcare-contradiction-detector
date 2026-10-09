@@ -1,0 +1,19 @@
+%% MEDGUARD — Diagram 6: End-to-end user workflow (local mode default; shared mode optional)
+flowchart TD
+    A["Open site (local demo mode, no login)"] --> B["Choose / create case"]
+    B --> C["Upload PDF · scanned PDF · PNG/JPEG · TXT · DOCX"]
+    C --> D{"Valid file?<br/>type · magic bytes · size · duplicate"}
+    D -- no --> D1["Rejected with readable message"]
+    D -- yes --> E["Extract text: pdf.js text layer → OCR for thin pages → mammoth → UTF-8"]
+    E --> F{"Text usable?"}
+    F -- "no (blank scan / failure)" --> F1["Status: Needs attention / Failed (never hidden)"]
+    F -- yes --> G["Rules extract statements with exact character offsets"]
+    G --> H["Analyze: compare statements across documents of the SAME case"]
+    H --> I{"Differences found?"}
+    I -- no --> I1["'No potential contradictions were detected by the available rules.'"]
+    I -- yes --> J["Findings classified: explicit conflict · potential discrepancy ·<br/>temporal inconsistency · historical/contextual · insufficient evidence"]
+    J --> K["Every quote re-verified at its offsets (else no finding)"]
+    K --> L["Reviewer inspects evidence: quotes · page · OCR confidence · original page"]
+    L --> M["Decision with reason (confirm · dismiss · needs info · expected change ·<br/>undetermined · resolve) + notes"]
+    M --> N["Append-only history · timeline · exports"]
+    H -. "optional: AI-assisted analysis via server (consent, quote-verified)" .-> J
