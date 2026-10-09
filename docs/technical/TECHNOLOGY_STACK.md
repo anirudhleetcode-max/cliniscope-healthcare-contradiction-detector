@@ -1,5 +1,7 @@
 # MEDGUARD — Technology Stack
 
+> **Database update (after this audit):** the optional server now uses **PostgreSQL** instead of SQLite: an external server via `DATABASE_URL` (a free Neon project in the prepared deployment), or embedded PGlite for local use. Original files are stored in the database (`document_files`, schema v3). Where this page says SQLite, `node:sqlite`, `medguard.db` or a files directory, read PostgreSQL / `document_files`; the tables, constraints, roles and append-only triggers are otherwise unchanged. Current sources: [`docs/backend/DATABASE_ARCHITECTURE.md`](../backend/DATABASE_ARCHITECTURE.md) and [`docs/backend/DEPLOYMENT.md`](../backend/DEPLOYMENT.md).
+
 > Audit basis: branch `claude/optimistic-tesla-466st5` at commit `a77a427`. Versions are the exact versions resolved in `package-lock.json`. The range declared in `package.json` is shown in parentheses where it matters.
 
 **Status labels.** These labels are used throughout `docs/technical/`:

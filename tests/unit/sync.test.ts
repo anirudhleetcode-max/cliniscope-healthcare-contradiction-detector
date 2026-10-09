@@ -1,12 +1,11 @@
 // Regression tests for shared-workspace sync safety (review findings #1-#5, #9, #11, #12).
 import 'fake-indexeddb/auto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createApp } from '../../server/app';
 import { loadConfig } from '../../server/config';
+import { openDb } from '../../server/db';
+import { newDatabase } from './testDb';
 import { MedguardDB } from '../../src/lib/db';
 import { applySnapshot, markUnsynced, pullCase, pushCase, remoteApi, type RemoteSession } from '../../src/lib/remote';
 import { analyzeCase, createCase, deleteDocument, uploadDocument, type Extractor } from '../../src/lib/services';
@@ -19,7 +18,7 @@ import { makeDoc } from './helpers';
 const extractor: Extractor = async (_k, bytes) => extractTxt(bytes);
 const enc = (s: string) => new TextEncoder().encode(s);
 let base = '';
-let app: ReturnType<typeof createApp>;
+let app: Awaited<ReturnType<typeof createApp>>;
 let n = 0;
 
 async function session(name: string): Promise<RemoteSession> {
@@ -29,8 +28,7 @@ async function session(name: string): Promise<RemoteSession> {
 }
 
 beforeAll(async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'medguard-sync-'));
-  app = createApp({ config: { ...loadConfig({}), dataDir: dir, allowRegistration: true, allowedOrigins: [] }, ai: null, log: () => {} });
+  app = await createApp({ config: { ...loadConfig({}), allowRegistration: true, allowedOrigins: [] }, db: await openDb(await newDatabase()), ai: null, log: () => {} });
   await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', () => r()));
   base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
 });

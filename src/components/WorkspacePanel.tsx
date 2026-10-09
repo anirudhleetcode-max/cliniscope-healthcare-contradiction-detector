@@ -48,7 +48,9 @@ export function WorkspacePanel() {
               <span className={cx('chip', ws.health.ai.configured ? 'bg-ok-50 text-ok' : 'bg-slate-100 text-slate-600')} data-testid="ai-status">AI: {ws.health.ai.configured ? `configured (${ws.health.ai.provider}, ${ws.health.ai.model})` : 'not configured on server'}</span>
               <button className="inline-flex items-center gap-1 text-brand hover:underline" onClick={() => void ws.refreshHealth()}><RefreshCw size={12} />recheck</button>
             </p>
-          ) : <p className="flex items-center gap-2 text-xs text-crit"><ServerCrash size={14} />{ws.healthError ?? 'Checking…'}</p>}
+          ) : ws.healthError
+            ? <p className="flex items-center gap-2 text-xs text-crit"><ServerCrash size={14} />{ws.healthError}</p>
+            : <p className="text-xs text-muted">Connecting… A server on a free hosting plan can take up to a minute to wake up.</p>}
       </div>
       {ws.session ? (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-soft px-3 py-2">

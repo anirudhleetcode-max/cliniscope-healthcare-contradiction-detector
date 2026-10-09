@@ -15,7 +15,8 @@ async function signUp(browser: Browser, name: string, email: string): Promise<Pa
   await page.goto('#/settings#workspace');
   await page.getByTestId('server-url').fill(API);
   await page.getByTestId('save-server-url').click();
-  await expect(page.getByTestId('server-health')).toContainText('Reachable');
+  // A deployed API on a free hosting plan may need up to a minute to wake up.
+  await expect(page.getByTestId('server-health')).toContainText('Reachable', { timeout: 100_000 });
   await expect(page.getByTestId('ai-status')).toContainText('not configured');
   await page.getByRole('tab', { name: 'Create account' }).click();
   await page.getByTestId('ws-name').fill(name);
@@ -27,7 +28,7 @@ async function signUp(browser: Browser, name: string, email: string): Promise<Pa
 }
 
 test('two authenticated reviewers share a case: decisions and audit history are visible to both', async ({ browser }) => {
-  test.setTimeout(120000);
+  test.setTimeout(240000);
   const bob = await signUp(browser, 'Bob Reviewer', `bob-${run}@example.test`);
   const alice = await signUp(browser, 'Alice Owner', `alice-${run}@example.test`);
 
