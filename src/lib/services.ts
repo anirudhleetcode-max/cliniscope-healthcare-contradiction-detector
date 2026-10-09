@@ -352,14 +352,16 @@ export async function seedDemoCase(
   db: CliniscopeDB,
   extractor: Extractor,
   files: { meta: DemoFile; bytes: Uint8Array }[],
+  onProgress?: (message: string) => void,
 ): Promise<CaseRecord> {
   const demos = await db.cases.filter((c) => c.isDemo).toArray();
   for (const d of demos) await deleteCase(db, d.id);
   const c = await createCase(db, DEMO_CASE_LABEL, { isDemo: true, actor: 'System' });
-  for (const f of files) {
+  for (const [i, f] of files.entries()) {
+    onProgress?.(`Document ${i + 1} of ${files.length}: ${f.meta.title}`);
     await uploadDocument(db, extractor, c.id, { name: f.meta.file, mime: f.meta.mime, bytes: f.bytes }, {
-      title: f.meta.title, documentType: f.meta.documentType, documentDate: f.meta.documentDate, isSeededDemo: true,
-    }, { actor: 'System (demo seed)' });
+      title: f.meta.title, documentDate: f.meta.documentDate, documentType: f.meta.documentType, isSeededDemo: true,
+    }, { actor: 'System (demo seed)', onProgress: (stage) => onProgress?.(`Document ${i + 1} of ${files.length}: ${f.meta.title} — ${stage}${/OCR/.test(stage) ? ' (first run downloads the OCR engine, ~7 MB)' : ''}`) });
   }
   return c;
 }

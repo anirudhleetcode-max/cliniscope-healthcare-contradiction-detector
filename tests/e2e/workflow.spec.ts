@@ -9,7 +9,7 @@ async function freshDemo(page: Page) {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto('#/');
-  await expect(page.getByText('Documents are ready for analysis')).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('Documents are ready for analysis')).toBeVisible({ timeout: 90000 });
   await expect(page.getByTestId('demo-banner')).toContainText('synthetic data');
   return errors;
 }

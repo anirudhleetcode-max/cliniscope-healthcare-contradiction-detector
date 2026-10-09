@@ -11,13 +11,13 @@ import { AiPanel } from '../components/AiPanel';
 import { CollaborationPanel } from '../components/CollaborationPanel';
 
 export function Overview() {
-  const { currentCase, caseId, seeding, seedError, resetDemo, storageError } = useApp();
+  const { currentCase, caseId, seeding, seedStage, seedError, resetDemo, storageError } = useApp();
   const { documents, findings, statements, events, loading } = useCaseData(caseId);
 
   if (storageError) {
     return <Callout tone="warn" title="Browser storage unavailable">CLINISCOPE stores data in this browser's IndexedDB, which is unavailable ({storageError}). Private browsing modes or blocked site data can cause this. Try a normal window.</Callout>;
   }
-  if (seeding) return <div className="space-y-4"><Callout title="Preparing the synthetic demo case">Loading five fictional records and extracting their text in your browser (including OCR of a scanned letter)…</Callout><PageSkeleton /></div>;
+  if (seeding) return <div className="space-y-4"><Callout title="Preparing the synthetic demo case">Loading five fictional records and extracting their text in your browser (including OCR of a scanned letter)…<div className="mt-1 font-medium" role="status" data-testid="seed-stage">{seedStage ?? 'Starting…'}</div></Callout><PageSkeleton /></div>;
   if (seedError) return <Callout tone="warn" title="The demo case could not be loaded">{seedError} <button className="btn-secondary ml-2 mt-2" onClick={() => void resetDemo()}>Try again</button></Callout>;
   if (!currentCase || loading) return <PageSkeleton />;
 

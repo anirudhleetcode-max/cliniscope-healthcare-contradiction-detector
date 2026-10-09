@@ -32,6 +32,7 @@ interface AppState {
   toast: (kind: Toast['kind'], text: string) => void;
   dismissToast: (id: number) => void;
   seeding: boolean;
+  seedStage: string | null;
   seedError: string | null;
   resetDemo: (opts?: { select?: boolean }) => Promise<CaseRecord | null>;
   storageError: string | null;
@@ -63,6 +64,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [reviewer, setReviewerState] = useState<string>(() => lsGet(LS_REVIEWER) || DEMO_REVIEWER);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [seeding, setSeeding] = useState(false);
+  const [seedStage, setSeedStage] = useState<string | null>(null);
   const [seedError, setSeedError] = useState<string | null>(null);
   const seededOnce = useRef(false);
   const toastId = useRef(0);
@@ -83,8 +85,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSeedError(null);
     const before = caseIdRef.current;
     try {
+      setSeedStage('Downloading the synthetic demo documents');
       const files = await fetchDemoFiles();
-      const c = await seedDemoCase(db, extractor, files);
+      const c = await seedDemoCase(db, extractor, files, setSeedStage);
       // Background auto-seeding must not hijack a case the user opened meanwhile.
       if (opts.select !== false || !caseIdRef.current || caseIdRef.current === before) setCaseId(c.id);
       return c;
@@ -93,6 +96,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return null;
     } finally {
       setSeeding(false);
+      setSeedStage(null);
     }
   }, [setCaseId]);
 
@@ -110,8 +114,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const currentCase = cases?.find((c) => c.id === caseId);
   const value = useMemo<AppState>(() => ({
     cases, caseId: currentCase ? caseId : null, currentCase, setCaseId, reviewer, setReviewer, toasts, toast, dismissToast,
-    seeding, seedError, resetDemo, storageError,
-  }), [cases, caseId, currentCase, setCaseId, reviewer, setReviewer, toasts, toast, dismissToast, seeding, seedError, resetDemo, storageError]);
+    seeding, seedStage, seedError, resetDemo, storageError,
+  }), [cases, caseId, currentCase, setCaseId, reviewer, setReviewer, toasts, toast, dismissToast, seeding, seedStage, seedError, resetDemo, storageError]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
