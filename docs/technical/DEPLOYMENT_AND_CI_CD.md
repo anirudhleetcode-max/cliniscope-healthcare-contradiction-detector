@@ -16,7 +16,7 @@
 
 **Vercel (configured outside the repository).** The Vercel GitHub app is connected to this repository: a Vercel project named `medguard` posts preview deployments (status "Ready") on pull requests, including this one. GitHub deployment records also show a **Production** deployment of `16ebafa` created by `vercel[bot]` with status `success`, so Vercel deploys the default branch to production. The production domain is configured in Vercel (Project → Settings → Domains), not in the code, and is **UNKNOWN** here. The repository contains no `vercel.json` or other Vercel configuration, so Vercel's build settings are **UNKNOWN** from the code. The auditor did not open the preview or the production deployment (the audit sandbox cannot reach `vercel.app`). Because the app uses relative asset paths and hash routing, it is expected to work at a Vercel root URL as well. **This is an inference; it has not been verified.**
 
-The URL is built in the workflow as `https://<owner>.github.io/<repo>/`. It keeps the original repository name: the repository has **not** been renamed. The MEDGUARD rebrand changed only user-facing names.
+The URL is built in the workflow as `https://<owner>.github.io/<repo>/`. It keeps the original repository name: the repository has **not** been renamed. Internal identifiers were renamed to `medguard` in `16ebafa` (see §4); only the repository name, and therefore this URL, keeps the original name.
 
 ## 2. Base path and asset paths (GitHub Pages sub-path)
 
