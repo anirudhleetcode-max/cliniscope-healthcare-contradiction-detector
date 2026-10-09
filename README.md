@@ -131,7 +131,7 @@ Other commands:
 | `npm test` | Vitest: engine, extraction, **real OCR**, AI verification, API integration tests |
 | `npm run test:e2e` | Playwright: builds the app and starts two real API servers plus a local fake AI provider |
 | `BASE_URL=<live url> npm run smoke` | e2e suite against a deployed frontend (shared/AI specs skip without an API URL) |
-| `npm run server:build && npm run server:start` | bundled production server (`dist-server/server.mjs`) |
+| `npm run server:build && npm run server:start` | self-contained production server bundle (`dist-server/server.mjs`, no node_modules needed) |
 | `CLINISCOPE_NEW_USER_PASSWORD=… npx tsx server/index.ts create-user alice@example.org "Alice"` | create an account when registration is disabled |
 | `npm run demo:generate` | regenerate synthetic documents, including the rendered scans |
 
@@ -148,7 +148,7 @@ The server creates `CLINISCOPE_DATA_DIR/cliniscope.db` and applies versioned mig
   - `Dockerfile`: `docker build -t cliniscope-api . && docker run -p 8787:8787 -v cliniscope-data:/data -e CLINISCOPE_ALLOWED_ORIGINS=https://anirudhleetcode-max.github.io cliniscope-api`
   - `render.yaml`: a Render Blueprint (Docker service with a persistent disk). Set `ANTHROPIC_API_KEY` in the dashboard to enable AI.
 
-  Neither has been executed from this environment. Once deployed, enter its HTTPS URL in the live app (About & settings), or set `VITE_API_BASE_URL` at build time.
+  The self-contained bundle (`npm run server:build`) was verified to start and serve `/api/health` without `node_modules`. The Docker image itself could not be built here (container registry rate limit and no container network egress); neither the image nor the Render blueprint has been run. Once deployed, enter its HTTPS URL in the live app (About & settings), or set `VITE_API_BASE_URL` at build time.
 
 ## Synthetic demo case
 `DEMO-0042 · Synthetic Patient SP-0042`, labelled *DEMO CASE — SYNTHETIC DATA — NOT A REAL PATIENT* and *Fictional demonstration data. Not for clinical use.* All five files in `public/demo/` go through the real pipeline:
