@@ -8,6 +8,7 @@ export type Category =
   | 'lab'
   | 'procedure'
   | 'history'
+  | 'demographic'
   | 'other';
 
 export const CATEGORY_LABEL: Record<Category, string> = {
@@ -17,6 +18,7 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   lab: 'Laboratory result',
   procedure: 'Procedure',
   history: 'Medical history',
+  demographic: 'Demographics',
   other: 'Other clinical information',
 };
 

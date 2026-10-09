@@ -3,6 +3,8 @@ import { AlertTriangle, Cpu, Database, FileCheck2, Lock, ScanSearch, UserRound }
 import { useApp } from '../app/state';
 import { Callout, PageHeader } from '../components/ui';
 import { WorkspacePanel } from '../components/WorkspacePanel';
+import { StatusPanel } from '../components/StatusPanel';
+import { DemoControls } from '../components/DemoControls';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { DETECTION_METHOD } from '../lib/detect';
@@ -19,6 +21,14 @@ export function About() {
       <PageHeader eyebrow="About & settings" title="CLINISCOPE" description="Evidence-first healthcare record contradiction detection and clinical review support — PS-11R3 hackathon prototype." />
       <div className="mb-6"><Callout tone="warn" title="Review-support tool — not a diagnostic system">CLINISCOPE identifies possible inconsistencies between records and shows the evidence for each. It does not diagnose, does not decide which statement is medically correct, and does not replace professional judgment. It holds no regulatory certification or compliance attestation (e.g. HIPAA) and must not be used with real patient data.</Callout></div>
 
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2"><StatusPanel /></div>
+        <section className="card p-5" aria-label="Demonstration controls">
+          <h2 className="mb-1 text-base font-semibold">Demonstration</h2>
+          <p className="mb-3 text-sm text-muted">Load the bundled synthetic case, or reset it to its original state. Only the demo case is affected.</p>
+          <DemoControls />
+        </section>
+      </div>
       <div className="mb-6"><WorkspacePanel /></div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

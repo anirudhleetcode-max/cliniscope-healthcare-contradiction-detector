@@ -20,10 +20,29 @@
 | Deterministic statement extraction and contradiction detection | Implemented and tested | Browser |
 | Evidence verification, source highlighting, original-page comparison | Implemented and tested | Browser |
 | Review workflow (state machine, required reasons, notes, audit) | Implemented and tested | Browser (local) or server (shared) |
+| Dashboard metrics, document search/filter, original-file download | Implemented and tested | Browser |
+| Exports: JSON case report, findings CSV, full backup + validated restore | Implemented and tested | Browser |
+| Offline use after first load (service worker) | Implemented and tested (e2e reload while offline) | Browser |
 | **Shared workspace**: accounts, case sharing, server-enforced roles, shared review state, append-only audit | Implemented and tested against a real local server (integration and two-browser e2e). **Not deployed publicly**: no hosting account was available | `server/` (Node + SQLite) |
 | **AI-assisted reasoning** with schema validation and quote verification | Pipeline implemented and tested with a local fake provider. **Live model calls have not been tested**: no API key was available | `server/` (key never in the browser) |
 
 Without a server the app runs in **local demo mode**, and data stays in the browser's IndexedDB. The UI always shows which mode a case is in.
+
+## Local mode (the default — no backend, no login, no API key)
+
+The complete review workflow runs in the browser. Nothing in this list needs a server, a database, a paid API or an AI service:
+
+- **Demonstration case**: seeded on first load. **About & settings → Demonstration** (and the Cases page) has **Load Demonstration Case** and **Reset Demonstration**. Reset asks for confirmation and removes and rebuilds *only* the synthetic demo case; your own cases are untouched.
+- **Documents**: upload (PDF, scanned PDF, PNG/JPEG, TXT, DOCX), search by title or file name, filter by processing status, and download the original file.
+- **Detection**: deterministic rules (`src/lib/statements.ts`, `src/lib/detect.ts`). Every finding stores verbatim quotes with document, page, section and character offsets, and each quote is re-verified against the extracted text before it is shown. When nothing is flagged the queue says *"No potential contradictions were detected by the available rules."*, not "no contradictions exist".
+- **Review**: Unreviewed → In review → Confirmed / Dismissed / Resolved. Dismiss, resolve and reopen need a reason. Notes and every transition go to an append-only history.
+- **Dashboard**: every number on the Overview is counted from the stored documents and findings.
+- **Status panel** (About & settings → Application status): mode, persistence (a real IndexedDB write/read probe plus storage usage), OCR (with a self-test button), AI (shows *Unavailable* unless a server reports a configured provider), sync and data classification. Nothing is shown as working unless it has been checked.
+- **Exports** (Overview → Export & backup): JSON case report, findings CSV (spreadsheet-formula-safe), and a full backup containing originals, extracted text, findings and review history. File names carry `-SYNTHETIC` for the demo case.
+- **Restore** (Cases → Restore from backup): the file is schema-validated, file hashes and evidence quotes are re-checked, and it is always restored **as a new case**. Nothing existing is overwritten; an invalid file changes nothing.
+- **Offline**: a service worker (`public/sw.js`) caches the app shell, the OCR engine and language data, pdf.js and the demo files, so after one online visit the app reloads and works with no network.
+
+Local data lives in this browser profile only. Clearing site data deletes it, so use **Full backup** to keep a copy.
 
 ## Workflow
 
@@ -114,6 +133,9 @@ Requires Node.js 22.13 or later (for `node:sqlite`).
 ```bash
 npm ci
 npm run dev                       # frontend at http://localhost:5173 (local demo mode)
+npm run build && npm run preview  # production build at http://localhost:4173 (service worker active)
+npm test                          # unit + integration tests (Vitest)
+npm run test:e2e                  # browser tests (Playwright; builds the app first)
 
 # optional shared workspace + AI
 CLINISCOPE_ALLOW_REGISTRATION=true \
@@ -162,7 +184,7 @@ The server creates `CLINISCOPE_DATA_DIR/cliniscope.db` and applies versioned mig
 | Medication Reconciliation | TXT | 14 Mar 2026 | |
 | Patient Intake Form | DOCX | 15 Mar 2026 | |
 
-The pipeline produces 8 findings. Each expectation below is asserted in the tests:
+The pipeline produces 10 findings. Each expectation below is asserted in the tests:
 - **Penicillin allergy vs "No known drug allergies":** explicit conflict, with quotes from the discharge summary (page 2), the medication reconciliation and the **OCR'd scan**.
 - **Metformin 500 mg vs 1000 mg:** potential discrepancy; neither dose is called wrong.
 - **Lisinopril 10 → 20 mg with "increased from 10 mg":** historical/contextual difference.
@@ -171,6 +193,8 @@ The pipeline produces 8 findings. Each expectation below is asserted in the test
 - **Chronic kidney disease documented vs "No history of kidney disease":** explicit conflict.
 - **Potassium 5.4 vs 4.4 mmol/L on the same specimen date:** potential discrepancy. The potassium 4.2 from Nov 2025 and HbA1c values from different dates are **not** flagged.
 - **Former vs never smoker:** explicit conflict.
+- **Aspirin discontinued (discharge summary, 12 Mar) but listed as active (medication reconciliation, 14 Mar):** temporal inconsistency (medication status).
+- **Date of birth 14 Feb 1961 vs 4 Feb 1961:** explicit conflict (demographic).
 - Diabetes, hypertension, creatinine and the typed atorvastatin entries agree and are not flagged.
 
 Extra samples for uploads: `sample-follow-up-note-2026-03-20.txt`, `sample-mixed-text-and-scan-2026-03-22.pdf` (page 1 digital, page 2 scanned), `scanned-discharge-letter-2025-11-20.png`, `sample-scanned-no-text-layer.pdf` (blank scan).
@@ -192,6 +216,9 @@ See [`docs/JUDGE_DEMO.md`](docs/JUDGE_DEMO.md) for the three-minute script.
   Not suitable for real patient data.
 
 ## Known limitations
+- Local mode is single-user and per browser. It is not collaboration, and nothing is encrypted beyond what the browser provides.
+- The detection rules are a fixed vocabulary, not clinical NLP. They have not been clinically validated, and precision and recall on real records are unknown.
+- Offline mode needs one complete online visit first. The OCR engine and English language data (about 7 MB) are cached in the background, so offline OCR works only once that has finished.
 - Rules vocabulary is limited (about 25 drugs, 14 allergens, 14 diagnoses, 10 lab tests). OCR is English only, with no handwriting, and takes a few seconds per page in the browser.
 - AI-assisted reasoning has not been validated against a live model in this build, so its real-world precision is unknown.
 - Shared state refreshes by polling, not real-time push. The API server is not publicly deployed.

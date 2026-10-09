@@ -141,7 +141,7 @@ describe('shared workspace API: cases, permissions and two-user review', () => {
     const ok = await api(`/api/cases/${caseId}/snapshot`, { method: 'PUT', token: alice, body: { documents: sdocs, statements: sstmts, findings: sfind, analyzed: true } });
     expect(ok.status).toBe(200);
     findings = ok.json.findings;
-    expect(findings).toHaveLength(8);
+    expect(findings).toHaveLength(10);
     // Client-supplied review status is ignored: everything starts unreviewed.
     expect(findings.every((f) => f.reviewStatus === 'unreviewed')).toBe(true);
     // Re-syncing the same snapshot is idempotent.

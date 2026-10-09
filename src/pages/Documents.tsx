@@ -51,6 +51,8 @@ export function Documents() {
   const [summary, setSummary] = useState<AnalysisSummary | null>(null);
   const [toDelete, setToDelete] = useState<DocumentRecord | null>(null);
   const [drag, setDrag] = useState(false);
+  const [docQuery, setDocQuery] = useState('');
+  const [docStatus, setDocStatus] = useState<'all' | 'ok' | 'attention'>('all');
   const input = useRef<HTMLInputElement>(null);
 
   if (!currentCase || loading) return <PageSkeleton />;
@@ -189,6 +191,16 @@ export function Documents() {
         ) : null}
       </section>
 
+      {documents!.length > 0 ? (
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row" role="search">
+          <input className="input sm:max-w-sm" placeholder="Search title, file name, type or text…" aria-label="Search documents" value={docQuery} onChange={(e) => setDocQuery(e.target.value)} data-testid="doc-search" />
+          <select className="input sm:w-56" aria-label="Filter by processing status" value={docStatus} onChange={(e) => setDocStatus(e.target.value as 'all' | 'ok' | 'attention')} data-testid="doc-status-filter">
+            <option value="all">All documents</option>
+            <option value="ok">Processed successfully</option>
+            <option value="attention">Needs attention / failed</option>
+          </select>
+        </div>
+      ) : null}
       {documents!.length === 0 ? (
         <EmptyState title="No documents in this case" body="Upload discharge summaries, intake forms, medication lists or lab reports to compare them." />
       ) : (
@@ -201,7 +213,13 @@ export function Documents() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {[...documents!].sort((a, b) => (a.documentDate ?? '').localeCompare(b.documentDate ?? '')).map((d) => (
+                {[...documents!].filter((d) => {
+                  const q = docQuery.trim().toLowerCase();
+                  const bad = d.status === 'needs_attention' || d.status === 'failed';
+                  if (docStatus === 'ok' && bad) return false;
+                  if (docStatus === 'attention' && !bad) return false;
+                  return !q || [d.title, d.originalFilename, DOCUMENT_TYPE_LABEL[d.documentType], d.extractedText].join(' ').toLowerCase().includes(q);
+                }).sort((a, b) => (a.documentDate ?? '').localeCompare(b.documentDate ?? '')).map((d) => (
                   <tr key={d.id} className="align-top hover:bg-soft/30">
                     <td className="px-4 py-3">
                       <Link to={`/documents/${d.id}`} className="font-medium hover:text-brand">{d.title}</Link>

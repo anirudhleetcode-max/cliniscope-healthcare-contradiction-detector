@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FolderPlus, RotateCcw, Trash2 } from 'lucide-react';
+import { FolderPlus, Trash2, Upload } from 'lucide-react';
 import { db, useApp } from '../app/state';
 import { Callout, Modal, PageHeader, PageSkeleton, cx } from '../components/ui';
 import { formatDateTime } from '../lib/dates';
 import { createCase, deleteCase } from '../lib/services';
+import { restoreBackup } from '../lib/exportCase';
+import { DemoControls } from '../components/DemoControls';
 import { useWorkspace } from '../app/workspace';
 import { applySnapshot, remoteApi, type RemoteCaseSummary } from '../lib/remote';
 import { useEffect } from 'react';
@@ -13,7 +15,7 @@ import { Cloud, Share2 } from 'lucide-react';
 import type { CaseRecord } from '../lib/types';
 
 export function Cases() {
-  const { cases, caseId, setCaseId, toast, resetDemo, seeding, reviewer } = useApp();
+  const { cases, caseId, setCaseId, toast, reviewer } = useApp();
   const ws = useWorkspace();
   const [shared, setShared] = useState<RemoteCaseSummary[] | null>(null);
   const [sharing, setSharing] = useState<string | null>(null);
@@ -23,7 +25,7 @@ export function Cases() {
   }, [ws.session, cases]);
   const [params] = useSearchParams();
   const [label, setLabel] = useState('');
-  const [confirmReset, setConfirmReset] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [toDelete, setToDelete] = useState<CaseRecord | null>(null);
   const navigate = useNavigate();
   const counts = useLiveQuery(async () => {
@@ -63,9 +65,35 @@ export function Cases() {
             } catch (e) { toast('error', (e as Error).message); }
           }}><Cloud size={16} />Create in shared workspace</button> : <p className="mt-2 text-xs text-muted">Sign in to a shared workspace (About &amp; settings) to create cases other reviewers can access.</p>}
           <div className="mt-6 border-t border-line pt-4">
-            <h3 className="mb-1 text-sm font-semibold">Synthetic demo case</h3>
-            <p className="mb-3 text-xs text-muted">Re-creates DEMO-0042 from the bundled fictional files. Only the demo case is reset; your own cases are not touched.</p>
-            <button className="btn-secondary w-full" onClick={() => setConfirmReset(true)} disabled={seeding} data-testid="reset-demo"><RotateCcw size={15} />{seeding ? 'Resetting…' : 'Reset demo case'}</button>
+            <h3 className="mb-1 text-sm font-semibold">Synthetic demonstration case</h3>
+            <p className="mb-3 text-xs text-muted">DEMO-0042: five fictional records. Reset affects only the demo case; your own cases are not touched.</p>
+            <DemoControls />
+          </div>
+          <div className="mt-6 border-t border-line pt-4">
+            <h3 className="mb-1 text-sm font-semibold">Restore from backup</h3>
+            <p className="mb-3 text-xs text-muted">Imports a CLINISCOPE backup file as a <strong>new</strong> local case. It is validated first (format, evidence quotes, file hashes); existing cases are never overwritten.</p>
+            <label className="btn-secondary w-full cursor-pointer">
+              <Upload size={15} />{restoring ? 'Validating…' : 'Choose backup file'}
+              <input type="file" accept=".json,application/json" className="sr-only" data-testid="restore-input" disabled={restoring} onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (!file) return;
+                setRestoring(true);
+                try {
+                  if (file.size > 200 * 1048576) throw new Error('The file is larger than 200 MB.');
+                  let raw: unknown;
+                  try { raw = JSON.parse(await file.text()); } catch { throw new Error('The file is not valid JSON.'); }
+                  const c = await restoreBackup(db, raw);
+                  setCaseId(c.id);
+                  toast('success', `Backup restored as a new case: "${c.label}".`);
+                  navigate('/');
+                } catch (err) {
+                  toast('error', `Restore failed — nothing was changed. ${(err as Error).message}`);
+                } finally {
+                  setRestoring(false);
+                }
+              }} />
+            </label>
           </div>
         </section>
         <section className="card overflow-hidden lg:col-span-2" aria-label="All cases">
@@ -107,11 +135,6 @@ export function Cases() {
         </section>
       ) : null}
       <div className="mt-6"><Callout tone="info" title="Where is this data stored?">Local cases are stored only in this browser's IndexedDB. Shared cases are stored on the shared-workspace server and cached locally; the server copy is authoritative and only members of the case can read it.</Callout></div>
-
-      <Modal open={confirmReset} onClose={() => setConfirmReset(false)} title="Reset the demo case?" footer={<>
-        <button className="btn-secondary" onClick={() => setConfirmReset(false)}>Cancel</button>
-        <button className="btn-danger" data-testid="confirm-reset" onClick={async () => { setConfirmReset(false); const c = await resetDemo(); if (c) { toast('success', 'Demo case reset. Run the analysis to regenerate findings.'); navigate('/'); } else toast('error', 'Demo reset failed.'); }}>Reset demo</button>
-      </>}><p className="text-sm">This deletes the synthetic demo case, including its review decisions and audit history, and re-ingests the five fictional documents. Other cases are not affected.</p></Modal>
 
       <Modal open={!!toDelete} onClose={() => setToDelete(null)} title="Delete case?" footer={<>
         <button className="btn-secondary" onClick={() => setToDelete(null)}>Cancel</button>

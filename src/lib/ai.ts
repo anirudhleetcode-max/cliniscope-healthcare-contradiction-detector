@@ -14,7 +14,7 @@ import type { DraftFinding } from './detect';
 import type { Category, DocumentRecord, EvidenceRef, Finding, FindingType, ReviewPriority } from './types';
 
 export const AI_CATEGORIES = ['explicit_conflict', 'potential_discrepancy', 'historical_or_contextual', 'insufficient_evidence', 'consistent'] as const;
-export const AI_TOPICS = ['allergy', 'medication', 'diagnosis', 'lab', 'procedure', 'history', 'other'] as const;
+export const AI_TOPICS = ['allergy', 'medication', 'diagnosis', 'lab', 'procedure', 'history', 'demographic', 'other'] as const;
 
 export const AiEvidenceSchema = z.object({
   document_id: z.string(),

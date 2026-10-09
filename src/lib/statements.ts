@@ -327,6 +327,21 @@ const SMOKING: [RegExp, string][] = [
   [/\b(current smoker|currently smokes|smokes \d+|active smoker|smoking status:\s*current|smok\w*:\s*(current|yes))\b/i, 'current'],
 ];
 
+const DOB_RE = /\b(date of birth|d\.?o\.?b\.?|born on)\b\s*[:\-]?\s*/i;
+
+/** Demographic attributes with an explicit label (currently: date of birth). */
+function extractDemographics(seg: Segment): Draft[] {
+  const m = DOB_RE.exec(seg.text);
+  if (!m) return [];
+  const date = findDate(seg.text.slice(m.index + m[0].length, m.index + m[0].length + 40));
+  // Only full, unambiguous dates; a partial or missing value is not compared.
+  if (!date || date.length !== 10) return [];
+  return [{
+    category: 'demographic', concept: 'demographic:date-of-birth', conceptLabel: 'Date of birth', polarity: 'positive',
+    value: date, temporality: 'current', status: 'active', confidence: 'high',
+  }];
+}
+
 function extractOther(seg: Segment): Draft[] {
   for (const [re, value] of SMOKING) {
     if (re.test(seg.text)) {
@@ -405,6 +420,7 @@ export function extractStatements(doc: Pick<DocumentRecord, 'id' | 'caseId' | 'e
       ...extractDiagnoses(seg),
       ...extractLabs(seg, seg.hint === 'lab' || specimenDate ? specimenDate : null),
       ...extractOther(seg),
+      ...extractDemographics(seg),
       ...extractProcedures(seg),
     ];
     for (const d of drafts) {

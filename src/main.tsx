@@ -59,3 +59,18 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 );
+
+// Offline support in production builds: after load, ask the service worker to cache everything already fetched.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    const known = ['./', './pdf.worker.min.js', './ocr/worker.min.js', './ocr/tesseract-core-simd-lstm.wasm.js', './ocr/tesseract-core-lstm.wasm.js', './ocr/lang/eng.traineddata.gz'];
+    const precache = async () => {
+      const reg = await navigator.serviceWorker.ready;
+      const urls = [location.href.split('#')[0], ...known.map((u) => new URL(u, document.baseURI).href), ...performance.getEntriesByType('resource').map((r) => r.name)];
+      reg.active?.postMessage({ type: 'precache', urls });
+    };
+    navigator.serviceWorker.register('./sw.js').then(precache).catch(() => { /* offline support is optional */ });
+    // Lazily loaded chunks (pdf.js, mammoth, OCR, demo files) appear after the first seeding run.
+    setTimeout(() => { void precache().catch(() => {}); }, 15000);
+  });
+}

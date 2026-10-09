@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, FileStack, Inbox, ListChecks, Quote, Scale, Timer } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, FileStack, Inbox, ListChecks, Scale, Timer } from 'lucide-react';
 import { useApp, useCaseData } from '../app/state';
 import { AnalyzeButton } from '../components/AnalyzeButton';
 import { Callout, EmptyState, PageHeader, PageSkeleton, ProcessingBadge, Stat, StatusBadge, TypeBadge, cx } from '../components/ui';
@@ -8,6 +8,8 @@ import type { AnalysisSummary, Category, FindingType, ReviewStatus } from '../li
 import { CATEGORY_LABEL, FINDING_TYPE_LABEL, REVIEW_STATUS_LABEL } from '../lib/types';
 import { describeEvent } from './Timeline';
 import { AiPanel } from '../components/AiPanel';
+import { ExportPanel } from '../components/ExportPanel';
+import { DemoControls } from '../components/DemoControls';
 import { CollaborationPanel } from '../components/CollaborationPanel';
 
 export function Overview() {
@@ -25,6 +27,7 @@ export function Overview() {
   const awaiting = active.filter((f) => f.reviewStatus === 'unreviewed' || f.reviewStatus === 'in_review');
   const closed = active.filter((f) => f.reviewStatus === 'resolved' || f.reviewStatus === 'dismissed');
   const confirmed = active.filter((f) => f.reviewStatus === 'confirmed');
+  const dismissed = active.filter((f) => f.reviewStatus === 'dismissed');
   const lastSummaryEv = [...events!].reverse().find((e) => e.kind === 'analysis_completed');
   let summary: AnalysisSummary | null = null;
   try { summary = lastSummaryEv?.detail ? JSON.parse(lastSummaryEv.detail) : null; } catch { summary = null; }
@@ -39,6 +42,7 @@ export function Overview() {
   const maxCat = Math.max(1, ...byCat.values());
   const docsProcessing = documents!.filter((d) => d.status === 'extracting' || d.status === 'analyzing').length;
   const docsAttention = documents!.filter((d) => d.status === 'needs_attention' || d.status === 'failed').length;
+  const docsProcessed = documents!.filter((d) => d.status === 'extracted' || d.status === 'analyzed').length;
   const needsAnalysis = documents!.length > 0 && (!currentCase.lastAnalyzedAt || documents!.some((d) => d.status === 'extracted'));
   const caseStatus = documents!.length === 0 ? 'No documents' : docsProcessing ? 'Processing' : needsAnalysis ? 'Awaiting analysis' : awaiting.length ? 'Review in progress' : active.length ? 'All findings reviewed' : 'Analyzed — no findings';
 
@@ -60,13 +64,13 @@ export function Overview() {
         </Callout></div>
       ) : null}
 
-      <section aria-label="Case metrics" className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Documents" value={documents!.length} icon={<FileStack size={16} />} hint={docsAttention ? `${docsAttention} need attention` : 'in this case'} />
-        <Stat label="Statements" value={statements!.length} icon={<Quote size={16} />} hint="extracted by rules" />
-        <Stat label="Findings" value={active.length} icon={<Scale size={16} />} tone="brand" hint="potential discrepancies" />
+      <section aria-label="Case metrics" className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-3 xl:grid-cols-6" data-testid="metrics">
+        <Stat label="Documents" value={documents!.length} icon={<FileStack size={16} />} hint={`${docsProcessed} processed${docsAttention ? ` · ${docsAttention} need attention` : ''}`} />
+        <Stat label="Potential findings" value={active.length} icon={<Scale size={16} />} tone="brand" hint={currentCase.lastAnalyzedAt ? `${statements!.length} statements compared` : 'analysis not run yet'} />
         <Stat label="Awaiting review" value={awaiting.length} icon={<Inbox size={16} />} tone={awaiting.length ? 'crit' : undefined} hint="unreviewed or in review" />
-        <Stat label="Closed by reviewer" value={closed.length} icon={<CheckCircle2 size={16} />} tone="ok" hint={`resolved or dismissed${confirmed.length ? ` · ${confirmed.length} confirmed` : ''}`} />
-        <Stat label="Last analysis" value={<span className="text-base">{currentCase.lastAnalyzedAt ? formatDateTime(currentCase.lastAnalyzedAt) : 'Not run'}</span>} icon={<Timer size={16} />} hint={caseStatus} />
+        <Stat label="Confirmed" value={confirmed.length} icon={<AlertTriangle size={16} />} hint="discrepancy confirmed by a reviewer" />
+        <Stat label="Dismissed / resolved" value={closed.length} icon={<CheckCircle2 size={16} />} tone="ok" hint={`${dismissed.length} dismissed · ${closed.length - dismissed.length} resolved`} />
+        <Stat label="Need attention" value={docsAttention} icon={<Timer size={16} />} tone={docsAttention ? 'crit' : undefined} hint={docsAttention ? 'documents with extraction problems' : caseStatus} />
       </section>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -76,7 +80,7 @@ export function Overview() {
             <Link to="/queue" className="text-sm font-medium text-brand hover:underline">View all</Link>
           </div>
           {active.length === 0 ? (
-            <EmptyState title={currentCase.lastAnalyzedAt ? 'No discrepancies detected' : 'No findings yet'} body={currentCase.lastAnalyzedAt ? 'The analysis compared statements across documents and found no inconsistencies. This does not guarantee the records are complete or correct.' : 'Analyze the documents to generate findings.'} action={!currentCase.lastAnalyzedAt && documents!.length ? <AnalyzeButton /> : documents!.length === 0 ? <Link className="btn-primary" to="/documents">Upload documents</Link> : undefined} />
+            <EmptyState title={currentCase.lastAnalyzedAt ? 'No potential contradictions were detected by the available rules.' : 'No findings yet'} body={currentCase.lastAnalyzedAt ? 'This does not mean the records are free of contradictions: the rules cover a limited vocabulary and the records may be incomplete.' : 'Analyze the documents to generate findings.'} action={!currentCase.lastAnalyzedAt && documents!.length ? <AnalyzeButton /> : documents!.length === 0 ? <Link className="btn-primary" to="/documents">Upload documents</Link> : undefined} />
           ) : (
             <ul className="divide-y divide-line">
               {[...active].sort((a, b) => ['prompt', 'routine', 'low'].indexOf(a.reviewPriority) - ['prompt', 'routine', 'low'].indexOf(b.reviewPriority)).slice(0, 6).map((f) => (
@@ -165,6 +169,16 @@ export function Overview() {
         )}
         <AiPanel disabled={documents!.length === 0} />
       </div>
+
+      <div className="mt-6"><ExportPanel c={currentCase} /></div>
+
+      {!currentCase.isDemo ? (
+        <section className="card mt-6 p-5" aria-label="Demonstration">
+          <h2 className="mb-1 text-base font-semibold">Synthetic demonstration</h2>
+          <p className="mb-3 text-sm text-muted">Open the bundled synthetic case (5 fictional records with deliberate contradictions) or restore it to its original state.</p>
+          <DemoControls compact />
+        </section>
+      ) : null}
 
       <section className="card mt-6 p-5" aria-label="Document processing status">
         <div className="mb-3 flex items-center justify-between"><h2 className="text-base font-semibold">Case records</h2><Link to="/documents" className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline">Document library<ArrowRight size={14} /></Link></div>

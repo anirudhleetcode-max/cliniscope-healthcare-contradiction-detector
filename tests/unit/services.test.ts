@@ -73,7 +73,7 @@ describe('review workflow and audit trail', () => {
   it('TEST 9/10/12: a finding can be inspected, transitioned, and each transition is audited', async () => {
     const c = await demo();
     const findings = await db.findings.where('caseId').equals(c.id).toArray();
-    expect(findings).toHaveLength(8);
+    expect(findings).toHaveLength(10);
     const pen = findings.find((f) => f.concept === 'allergy:penicillin')!;
     expect(pen.evidence.length).toBeGreaterThanOrEqual(2);
     await transitionFinding(db, pen.id, 'in_review');
@@ -119,7 +119,7 @@ describe('review workflow and audit trail', () => {
     await transitionFinding(db, f.id, 'in_review');
     const again = await analyzeCase(db, c.id);
     expect(again.findingsCreated).toBe(0);
-    expect(again.findingsRetained).toBe(8);
+    expect(again.findingsRetained).toBe(10);
     expect((await db.findings.get(f.id))!.reviewStatus).toBe('in_review');
     const intake = (await db.documents.where('caseId').equals(c.id).toArray()).find((d) => d.documentType === 'intake_form')!;
     await deleteDocument(db, intake.id);
@@ -145,7 +145,7 @@ describe('review workflow and audit trail', () => {
     expect(filterFindings(all, { search: 'no known drug allergies' }).map((f) => f.concept).sort()).toEqual(['allergy:penicillin', 'allergy:sulfonamide']);
     expect(filterFindings(all, { type: 'context_dependent' })).toHaveLength(1);
     expect(filterFindings(all, { category: 'lab' })).toHaveLength(1);
-    expect(filterFindings(all, { status: 'unreviewed' })).toHaveLength(8);
+    expect(filterFindings(all, { status: 'unreviewed' })).toHaveLength(10);
     expect(filterFindings(all, { quality: 'limited' })).toHaveLength(2);
   });
 });

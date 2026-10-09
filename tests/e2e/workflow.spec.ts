@@ -24,7 +24,7 @@ test('TEST 20: app loads, demo case is seeded and analysis produces evidence-bac
   await analyze(page);
   await expect(page.getByTestId('analysis-summary')).toContainText('Findings produced');
   await page.getByTestId('open-queue').click();
-  await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(8);
+  await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(10);
   expect(errors).toEqual([]);
 });
 

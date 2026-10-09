@@ -95,7 +95,7 @@ export function Queue() {
       </div>
 
       {findings!.length === 0 ? (
-        <EmptyState title={currentCase.lastAnalyzedAt ? 'No discrepancies detected' : 'No findings yet'} body={currentCase.lastAnalyzedAt ? 'The last analysis found no cross-document inconsistencies. This is not a guarantee that the records are correct or complete.' : 'Run the analysis to compare statements across this case\'s documents.'} action={documents!.length ? <AnalyzeButton /> : <Link className="btn-primary" to="/documents">Upload documents</Link>} />
+        <EmptyState title={currentCase.lastAnalyzedAt ? 'No potential contradictions were detected by the available rules.' : 'No findings yet'} body={currentCase.lastAnalyzedAt ? 'This does not mean the records are free of contradictions: the rules cover a limited vocabulary and the records may be incomplete.' : 'Run the analysis to compare statements across this case\'s documents.'} action={documents!.length ? <AnalyzeButton /> : <Link className="btn-primary" to="/documents">Upload documents</Link>} />
       ) : rows.length === 0 ? (
         <EmptyState icon={<Search size={20} />} title="No findings match these filters" body="Try clearing the search or selecting a different filter." />
       ) : (
