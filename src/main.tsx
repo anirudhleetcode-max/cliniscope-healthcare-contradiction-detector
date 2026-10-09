@@ -17,6 +17,7 @@ import { Documents } from './pages/Documents';
 import { DocumentViewer } from './pages/DocumentViewer';
 import { Cases } from './pages/Cases';
 import { About } from './pages/About';
+import { GoogleCallback } from './pages/GoogleCallback';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
   state = { error: false };
@@ -59,6 +60,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="/timeline" element={<Navigate to="/activity" replace />} />
               <Route path="/cases" element={<Cases />} />
               <Route path="/about" element={<About />} />
+              <Route path="/auth/google" element={<GoogleCallback />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AppShell>

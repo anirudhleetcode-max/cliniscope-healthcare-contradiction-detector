@@ -143,6 +143,23 @@ const MIGRATIONS: string[] = [
    );
    ALTER TABLE documents DROP COLUMN file_path;
    ALTER TABLE documents DROP COLUMN file_size;`,
+  // v4: Google sign-in. A user is linked to Google by Google's stable subject id (never by email alone);
+  // Google-only accounts have no password. OAuth state and the one-time hand-off codes are single-use rows.
+  `ALTER TABLE users ADD COLUMN google_sub TEXT UNIQUE;
+   ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+   CREATE TABLE oauth_states (
+     state_hash TEXT PRIMARY KEY,
+     code_verifier TEXT NOT NULL,
+     nonce TEXT NOT NULL,
+     return_to TEXT NOT NULL,
+     link_user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+     expires_at TEXT NOT NULL
+   );
+   CREATE TABLE oauth_handoffs (
+     code_hash TEXT PRIMARY KEY,
+     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     expires_at TEXT NOT NULL
+   );`,
 ];
 
 /** Latest schema version this build migrates to. */
