@@ -28,6 +28,24 @@
 
 Without a server the app runs in **local demo mode**, and data stays in the browser's IndexedDB. The UI always shows which mode a case is in.
 
+## Frontend workspace
+
+| Screen | Route | What it does |
+|---|---|---|
+| Clinical Overview | `#/` | Workspace metrics (cases reviewed, open contradictions, pending reviews, documents processed), category chart, review-status chart, open contradictions, recent activity |
+| Clinical Cases | `#/cases` | Searchable, filterable, sortable case table; create, restore from backup |
+| Case workspace | `#/cases/:id` | Three columns: case summary, documents and findings · evidence comparison · review decision and history |
+| Contradictions | `#/contradictions` | All findings with type tabs, severity/category/case/status filters, chips, sorting and a quick-preview drawer |
+| Finding detail | `#/findings/:id` | Explanation, certainty note, suggested review question (template), evidence, caveats, decision, history |
+| Documents | `#/documents` | Per-case import (validated), extraction status, search/filter, viewer and original download |
+| Review Queue | `#/queue` | Pending findings with status counts and a review workspace |
+| Activity | `#/activity` | Local activity log, filterable by type, case and origin (seeded example vs local action) |
+| Settings / Help | `#/settings`, `#/help` | Storage stats, appearance, capability status, demo reset; workflow and definitions |
+
+Global search: **Ctrl/Cmd+K** (or `/`). Review outcomes: *Confirmed discrepancy*, *Dismissed — not a contradiction*, *Needs more information*, *Temporal difference / expected change*, *Unable to determine*, *Resolved*. The last three new outcomes exist only for local cases; the optional server keeps its original five-state machine.
+
+Design system: [`docs/FIGMA_DESIGN_SYSTEM.md`](docs/FIGMA_DESIGN_SYSTEM.md) (tokens live in `src/index.css`). Three-minute script: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md).
+
 ## Local mode (the default — no backend, no login, no API key)
 
 The complete review workflow runs in the browser. Nothing in this list needs a server, a database, a paid API or an AI service:
@@ -173,7 +191,20 @@ The server creates `CLINISCOPE_DATA_DIR/cliniscope.db` and applies versioned mig
 
   The self-contained bundle (`npm run server:build`) was verified to start and serve `/api/health` without `node_modules`. The Docker image is built and its container health-checked in CI on every push (`docker-api` job). The Render blueprint has not been run. Once deployed, enter its HTTPS URL in the live app (About & settings), or set `VITE_API_BASE_URL` at build time.
 
-## Synthetic demo case
+## Synthetic demonstration workspace
+Six fictional cases (16 records). **DEMO-0042** is ingested but not analysed, so the analysis can be shown live. The other five are ingested and analysed on first load by the same rules engine, and a few carry clearly labelled *seeded* review decisions:
+
+| Case | Demonstrates | Findings (from the rules) |
+|---|---|---|
+| DEMO-0107 | warfarin listed as active after a documented switch; codeine allergy vs "no known drug allergies"; atrial fibrillation documented vs denied | 3 |
+| DEMO-0118 | documented levothyroxine dose increase (harmless temporal change) | 1 |
+| DEMO-0125 | insulin dose illegible on a fax; unverified contrast reaction (missing / uncertain information) | 2 |
+| DEMO-0131 | date of birth 7 Mar vs 3 Jul 1958 (day/month swap); two INR values for one specimen date | 2 |
+| DEMO-0144 | heart failure documented vs denied; furosemide 40 mg vs 20 mg | 2 |
+
+Their texts are in `src/lib/demoWorkspace.ts`, and `tests/unit/workspace.test.ts` asserts each expected finding and that every quote matches its document text.
+
+### DEMO-0042
 `DEMO-0042 · Synthetic Patient SP-0042`, labelled *DEMO CASE — SYNTHETIC DATA — NOT A REAL PATIENT* and *Fictional demonstration data. Not for clinical use.* All five files in `public/demo/` go through the real pipeline:
 
 | Document | Format | Date | Notes |

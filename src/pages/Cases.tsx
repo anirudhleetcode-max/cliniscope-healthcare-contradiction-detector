@@ -70,7 +70,7 @@ export function Cases() {
       setNewOpen(false);
       setCaseId(c.id);
       toast('success', `Case "${c.label}" created. Upload documents to begin.`);
-      navigate(`/cases/${c.id}`);
+      navigate('/documents');
     } catch (e) { toast('error', e instanceof Error ? e.message : 'Could not create case'); }
   };
   const createShared = async () => {
@@ -81,7 +81,7 @@ export function Cases() {
       setNewOpen(false);
       setCaseId(snap.case.id);
       toast('success', `Shared case "${snap.case.label}" created on the shared workspace.`);
-      navigate(`/cases/${snap.case.id}`);
+      navigate('/documents');
     } catch (e) { toast('error', (e as Error).message); }
   };
   const onRestore = async (file: File | undefined) => {

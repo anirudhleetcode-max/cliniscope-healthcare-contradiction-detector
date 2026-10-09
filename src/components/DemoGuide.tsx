@@ -25,7 +25,7 @@ export function useDemoGuide() {
   const { cases, setCaseId } = useApp();
   const update = useCallback((s: GuideState) => { setState(s); save(s); }, []);
   const start = useCallback(() => {
-    const demo = cases?.find((c) => c.isDemo);
+    const demo = cases?.find((c) => c.demoKey === 'DEMO-0042') ?? cases?.find((c) => c.isDemo);
     if (demo) setCaseId(demo.id);
     update({ open: true, step: 0 });
   }, [cases, setCaseId, update]);
@@ -44,18 +44,18 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { title: 'Open the fictional patient case', body: 'The demo case DEMO-0042 is synthetic. Note the banner at the top of the screen. The overview shows the case status.', go: () => '/', goLabel: 'Open overview' },
+  { title: 'Open the fictional patient case', body: 'The workspace holds six synthetic cases. DEMO-0042 has five records that have not been analysed yet. Note the synthetic-data banner at the top.', go: (x) => (x.c ? `/cases/${x.c.id}` : '/cases'), goLabel: 'Open DEMO-0042' },
   { title: 'Inspect the uploaded medical records', body: 'Five fictional records were ingested through the real pipeline: two digital PDFs, one DOCX, one TXT and a SCANNED discharge letter read with on-device OCR. Open the scanned letter to compare its OCR text with the original page.', go: () => '/documents', goLabel: 'Open document library' },
-  { title: 'Start document analysis', body: 'Click "Analyze documents". The rules engine compares statements across documents in this case only.', go: () => '/documents', goLabel: 'Go to Analyze', done: (x) => !!x.c?.lastAnalyzedAt },
-  { title: 'View the analysis summary', body: 'The overview now shows counts derived from stored records: statements, comparisons, consistent results, and findings.', go: () => '/', goLabel: 'Open overview', done: (x) => !!x.c?.lastAnalyzedAt },
+  { title: 'Start document analysis', body: 'Click "Analyze documents". The rules engine compares statements across documents in this case only.', go: (x) => (x.c ? `/cases/${x.c.id}` : '/'), goLabel: 'Go to Analyze', done: (x) => !!x.c?.lastAnalyzedAt },
+  { title: 'View the analysis summary', body: 'The case workspace now shows counts derived from stored records, and the Overview metrics include the new findings.', go: (x) => (x.c ? `/cases/${x.c.id}` : '/'), goLabel: 'Open case workspace', done: (x) => !!x.c?.lastAnalyzedAt },
   { title: 'Open the allergy documentation conflict', body: 'The discharge summary records a penicillin allergy; the intake form says "No known drug allergies".', go: (x) => { const f = x.byConcept('allergy:penicillin'); return f ? `/findings/${f.id}` : null; }, goLabel: 'Open allergy finding' },
   { title: 'Inspect the exact evidence', body: 'Each side shows the verbatim quote, the document, its date, and a page number only when it is verified. Click "View in source" to see the passage highlighted in the extracted text.', go: (x) => { const f = x.byConcept('allergy:penicillin'); return f ? `/findings/${f.id}` : null; }, goLabel: 'Show evidence' },
   { title: 'Review the medication dose discrepancy', body: 'Metformin 500 mg twice daily (14 March) vs. 1000 mg twice daily (15 March). The system does not decide which dose is correct.', go: (x) => { const f = x.byConcept('medication:metformin'); return f ? `/findings/${f.id}` : null; }, goLabel: 'Open metformin finding' },
   { title: 'See how dates change interpretation', body: 'Lisinopril 10 mg → 20 mg is classified as a historical/contextual difference, because the later record documents the increase. HbA1c values from different dates are not flagged at all.', go: (x) => { const f = x.byConcept('medication:lisinopril'); return f ? `/findings/${f.id}` : null; }, goLabel: 'Open lisinopril finding' },
   { title: 'Add a reviewer note', body: 'On any finding, write a note in the review panel and save it. Notes are appended to the audit trail.', go: (x) => { const f = x.byConcept('medication:metformin'); return f ? `/findings/${f.id}#review` : null; }, goLabel: 'Open review panel', done: (x) => x.events.some((e) => e.kind === 'note_added') },
-  { title: 'Resolve or dismiss with an explanation', body: 'Click "Begin review", then "Mark as resolved" or "Dismiss". A reason is required, and the decision is recorded with a timestamp.', go: (x) => { const f = x.byConcept('medication:metformin'); return f ? `/findings/${f.id}#review` : null; }, goLabel: 'Open review panel', done: (x) => x.events.some((e) => e.kind === 'status_changed' && (e.toStatus === 'resolved' || e.toStatus === 'dismissed')) },
+  { title: 'Record a review decision', body: 'Choose an outcome — confirmed, not a contradiction, needs more information, expected change or unable to determine. Dismissing or resolving requires a reason; every decision is recorded with a timestamp.', go: (x) => { const f = x.byConcept('medication:metformin'); return f ? `/findings/${f.id}#review` : null; }, goLabel: 'Open review panel', done: (x) => x.events.some((e) => e.kind === 'status_changed' && (e.toStatus === 'resolved' || e.toStatus === 'dismissed')) },
   { title: 'Refresh the application', body: 'Reload the page. Data is read back from this browser\'s IndexedDB, so nothing is kept only in memory.', reload: true },
-  { title: 'Verify the decision and audit history', body: 'The decision, the reason, and your note are still present after the reload. The case timeline lists every event with its timestamp.', go: () => '/timeline', goLabel: 'Open timeline', done: (x) => x.events.some((e) => e.kind === 'status_changed' && (e.toStatus === 'resolved' || e.toStatus === 'dismissed')) },
+  { title: 'Verify the decision and audit history', body: 'The decision, the reason, and your note are still present after the reload. The Activity page lists every event with its timestamp.', go: () => '/activity', goLabel: 'Open activity', done: (x) => x.events.some((e) => e.kind === 'status_changed' && (e.toStatus === 'resolved' || e.toStatus === 'dismissed')) },
 ];
 
 export function DemoGuide({ guide }: { guide: ReturnType<typeof useDemoGuide> }) {
@@ -84,7 +84,7 @@ export function DemoGuide({ guide }: { guide: ReturnType<typeof useDemoGuide> })
   }
 
   return (
-    <aside className="fixed bottom-3 left-3 right-3 z-40 animate-fade-up rounded-xl border border-brand/20 bg-white shadow-2xl sm:left-auto sm:right-4 sm:bottom-4 sm:w-[380px] lg:left-[17rem] lg:right-auto" aria-label="Interactive demo guide" data-testid="demo-guide">
+    <aside className="fixed bottom-3 left-3 right-3 z-40 animate-fade-up rounded-xl border border-brand/20 bg-surface shadow-overlay sm:left-auto sm:right-4 sm:bottom-4 sm:w-[380px] lg:left-auto lg:right-4" aria-label="Interactive demo guide" data-testid="demo-guide">
       <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
         <div className="eyebrow text-brand">Interactive demo · step {state.step + 1} of {STEPS.length}</div>
         <div className="flex gap-1">
@@ -93,7 +93,7 @@ export function DemoGuide({ guide }: { guide: ReturnType<typeof useDemoGuide> })
         </div>
       </div>
       <div className="flex gap-1 px-4 pt-3" aria-hidden>
-        {STEPS.map((_, i) => <span key={i} className={cx('h-1 flex-1 rounded-full', i <= state.step ? 'bg-brand' : 'bg-slate-200')} />)}
+        {STEPS.map((_, i) => <span key={i} className={cx('h-1 flex-1 rounded-full', i <= state.step ? 'bg-brand' : 'bg-line')} />)}
       </div>
       <div className="px-4 py-3">
         <h3 className="flex items-center gap-2 text-sm font-semibold">

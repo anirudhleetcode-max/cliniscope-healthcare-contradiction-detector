@@ -13,8 +13,8 @@ const LS_CASE = 'cliniscope.currentCase';
 const LS_REVIEWER = 'cliniscope.reviewer';
 const LS_PREFS = 'cliniscope.prefs';
 
-export interface Prefs { sidebarCompact: boolean; reduceMotion: boolean; denseTables: boolean }
-const DEFAULT_PREFS: Prefs = { sidebarCompact: false, reduceMotion: false, denseTables: false };
+export interface Prefs { sidebarCompact: boolean; reduceMotion: boolean }
+const DEFAULT_PREFS: Prefs = { sidebarCompact: false, reduceMotion: false };
 
 function lsGet(k: string): string | null {
   try { return localStorage.getItem(k); } catch { return null; }

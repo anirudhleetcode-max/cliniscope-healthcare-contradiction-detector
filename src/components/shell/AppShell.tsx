@@ -93,7 +93,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Breadcrumbs />
             <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
               <button className="hidden h-9 w-[260px] items-center gap-2 rounded-[9px] border border-line bg-subtle px-3 text-[13px] text-faint transition-colors duration-150 hover:border-line-strong hover:bg-surface md:flex xl:w-[300px]" onClick={() => setPaletteOpen(true)} data-testid="open-search">
-                <Search size={15} aria-hidden /><span className="flex-1 text-left">Search cases, findings, documents…</span><Kbd>Ctrl</Kbd><Kbd>K</Kbd>
+                <Search size={15} aria-hidden className="shrink-0" /><span className="flex-1 truncate whitespace-nowrap text-left">Search cases, findings…</span><Kbd>Ctrl</Kbd><Kbd>K</Kbd>
               </button>
               <button className="btn-icon md:hidden" onClick={() => setPaletteOpen(true)} aria-label="Search"><Search size={18} /></button>
               <ModeChip />

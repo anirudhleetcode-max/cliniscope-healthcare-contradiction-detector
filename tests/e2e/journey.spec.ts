@@ -68,7 +68,7 @@ test('judge journey: demo → evidence → review → export → reload (local m
   await page.goto('#/contradictions?case=current&status=confirmed');
   await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(1);
   // 17-18. Export the case report; it contains the finding, decision, note and history.
-  await page.goto('#/');
+  await page.goto('#/case');
   const report = await download(page, 'export-report');
   expect(report.name).toMatch(/report.*SYNTHETIC\.json$/);
   const json = JSON.parse(report.text);
@@ -100,12 +100,12 @@ test('works offline after the app has loaded, including a reload while disconnec
   await page.waitForFunction(async () => (await caches.keys()).length > 0 && (await (await caches.open('cliniscope-v1')).keys()).length > 5, null, { timeout: 30000 });
   await context.setOffline(true);
   await page.reload();
-  await expect(page.getByTestId('metrics')).toBeVisible({ timeout: 30000 });
+  await expect(page.getByTestId('overview-metrics')).toBeVisible({ timeout: 30000 });
   await page.goto('#/contradictions?case=current&q=penicillin');
   await page.getByTestId('finding-link').first().click();
   await page.getByRole('button', { name: 'Begin review' }).click();
   await expect(page.getByTestId('finding-detail').getByTestId('status-badge').first()).toHaveText(/In review/);
-  await page.goto('#/');
+  await page.goto('#/case');
   const r = await download(page, 'export-report');
   expect(JSON.parse(r.text).findings.length).toBe(10);
   await context.setOffline(false);
@@ -119,7 +119,7 @@ test('empty states and "no potential contradictions" wording', async ({ page }) 
   await page.getByTestId('create-case').click();
   // Creating a case navigates to its document library; wait for that before navigating on.
   
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('EMPTY-CASE');
+  await expect(page.getByTestId('doc-case-select').locator('option:checked')).toHaveText('EMPTY-CASE');
   await page.goto('#/contradictions?case=current');
   await expect(page.getByText('No findings yet')).toBeVisible();
   await page.goto('#/documents');
@@ -145,7 +145,7 @@ test('reset restores the demo safely and leaves user cases untouched', async ({ 
   await page.getByTestId('create-case').click();
   // Creating a case navigates to its document library; wait for that before navigating on.
   
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('KEEP-ME');
+  await expect(page.getByTestId('doc-case-select').locator('option:checked')).toHaveText('KEEP-ME');
   await page.goto('#/settings');
   await page.getByTestId('reset-demo').click();
   await expect(page.getByRole('dialog')).toContainText('only the synthetic demonstration case');
@@ -153,7 +153,7 @@ test('reset restores the demo safely and leaves user cases untouched', async ({ 
   await expect(page.getByText('Documents are ready for analysis')).toBeVisible({ timeout: 90000 });
   await expect(page.getByTestId('metrics')).toContainText('analysis not run yet');
   await page.goto('#/cases');
-  await expect(page.getByRole('main').getByText('KEEP-ME', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('cases-table').getByText('KEEP-ME', { exact: true })).toBeVisible();
 });
 
 test('backup → restore round trip creates a new case with review state intact; invalid backups are rejected', async ({ page }) => {
@@ -167,7 +167,7 @@ test('backup → restore round trip creates a new case with review state intact;
   await page.getByRole('button', { name: 'Dismiss — not a contradiction' }).click();
   await page.getByTestId('reason-input').fill('Test dismissal for backup round trip.');
   await page.getByTestId('confirm-decision').click();
-  await page.goto('#/');
+  await page.goto('#/case');
   const backup = await download(page, 'export-backup');
   await page.goto('#/cases');
   await page.getByTestId('restore-input').setInputFiles({ name: 'bad.json', mimeType: 'application/json', buffer: Buffer.from('{"format":"something-else"}') });

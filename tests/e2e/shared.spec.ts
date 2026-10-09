@@ -46,7 +46,7 @@ test('two authenticated reviewers share a case: decisions and audit history are 
   await expect(alice.getByTestId('upload-summary')).toContainText('2 findings', { timeout: 30000 });
 
   // Alice shares the case with Bob as reviewer.
-  await alice.goto('#/');
+  await alice.goto('#/case');
   await alice.getByTestId('member-email').fill(`bob-${run}@example.test`);
   await alice.getByTestId('add-member').click();
   await expect(alice.getByTestId('member-list')).toContainText('Bob Reviewer');

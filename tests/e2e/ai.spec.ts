@@ -31,7 +31,7 @@ test('AI-assisted findings require consent, keep only verified quotes, and are l
   await page.getByTestId('upload-submit').click();
   await expect(page.getByTestId('upload-summary')).toBeVisible({ timeout: 30000 });
 
-  await page.goto('#/');
+  await page.goto('#/case');
   await expect(page.getByTestId('ai-availability')).toContainText('available');
   await page.getByTestId('run-ai').click();
   await expect(page.getByRole('dialog')).toContainText('Send case text to the AI provider?');

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AlertTriangle, Cpu, Database, FileCheck2, Lock, ScanSearch, UserRound } from 'lucide-react';
 import { useApp } from '../app/state';
-import { Callout, PageHeader, MetricCard } from '../components/ui';
+import { Callout, PageHeader, MetricCard, SectionCard, Toggle } from '../components/ui';
 import { useWorkspaceData } from '../app/state';
 import { workspaceMetrics } from '../lib/metrics';
 import { WorkspacePanel } from '../components/WorkspacePanel';
@@ -22,6 +22,7 @@ export function About() {
     <div className="animate-fade-up">
       <PageHeader title="Settings" description="Demo Workspace · local frontend mode. No backend, database server, login or API key is required; data stays in this browser." />
       <div className="mb-6"><WorkspaceStats /></div>
+      <div className="mb-6"><Appearance /></div>
       <div className="mb-6"><Callout tone="warn" title="Review-support tool — not a diagnostic system">CLINISCOPE identifies possible inconsistencies between records and shows the evidence for each. It does not diagnose, does not decide which statement is medically correct, and does not replace professional judgment. It holds no regulatory certification or compliance attestation (e.g. HIPAA) and must not be used with real patient data.</Callout></div>
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -120,5 +121,17 @@ function WorkspaceStats() {
       <MetricCard label="Findings" value={[...m.byCategory.values()].reduce((a, b) => a + b, 0)} hint={`${m.pendingReviews} pending review`} />
       <MetricCard label="Last local save" value={<span className="text-[15px]">{last}</span>} hint="Not synchronized to any server" />
     </section>
+  );
+}
+
+function Appearance() {
+  const { prefs, setPref } = useApp();
+  return (
+    <SectionCard title="Appearance" description="Stored in this browser only">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Toggle label="Compact sidebar" description="Show icons only in the left navigation." checked={prefs.sidebarCompact} onChange={(v) => setPref('sidebarCompact', v)} testId="pref-compact" />
+        <Toggle label="Reduce motion" description="Turn off transitions and animations (the system setting is also honoured)." checked={prefs.reduceMotion} onChange={(v) => setPref('reduceMotion', v)} testId="pref-motion" />
+      </div>
+    </SectionCard>
   );
 }
