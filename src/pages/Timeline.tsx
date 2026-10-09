@@ -14,6 +14,8 @@ const GROUP_OF: Record<AuditEvent['kind'], Group> = {
   analysis_started: 'analysis', analysis_completed: 'analysis', analysis_failed: 'analysis',
   finding_created: 'finding', finding_superseded: 'finding',
   status_changed: 'review', note_added: 'review',
+  ai_analysis_completed: 'analysis', ai_analysis_failed: 'analysis',
+  case_shared: 'review', member_added: 'review', member_removed: 'review', case_synced: 'upload',
 };
 
 const GROUP_META: Record<Group, { label: string; stamp: string; icon: typeof FileUp; cls: string }> = {
@@ -45,6 +47,12 @@ export function describeEvent(e: AuditEvent, findings: Finding[], docs: Document
     case 'finding_superseded': return { title: `Finding superseded: ${fRef}`, body: e.detail };
     case 'status_changed': return { title: `${fRef}: ${REVIEW_STATUS_LABEL[e.fromStatus!]} → ${REVIEW_STATUS_LABEL[e.toStatus!]}`, body: e.reason ? `Reason: ${e.reason}` : undefined };
     case 'note_added': return { title: `Reviewer note on ${fRef}`, body: e.note };
+    case 'ai_analysis_completed': return { title: 'AI-assisted analysis completed', body: e.detail };
+    case 'ai_analysis_failed': return { title: 'AI-assisted analysis did not complete', body: e.detail };
+    case 'case_shared': return { title: 'Case published to the shared workspace', body: e.detail };
+    case 'member_added': return { title: 'Collaborator added', body: e.detail };
+    case 'member_removed': return { title: 'Collaborator removed', body: e.detail };
+    case 'case_synced': return { title: 'Case data synchronized to the shared workspace', body: e.detail };
   }
 }
 

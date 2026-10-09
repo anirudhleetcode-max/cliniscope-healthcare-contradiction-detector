@@ -7,6 +7,8 @@ import { Callout, EmptyState, Modal, PageHeader, PageSkeleton, ProcessingBadge, 
 import { findDate, formatDate, formatDateTime, isValidIsoDate } from '../lib/dates';
 import { DEFAULT_MAX_UPLOAD_BYTES } from '../lib/extract';
 import { analyzeCase, deleteDocument, uploadDocument } from '../lib/services';
+import { withLocalWork } from '../lib/remote';
+import { useWorkspace } from '../app/workspace';
 import type { AnalysisSummary, DocumentRecord, DocumentType } from '../lib/types';
 import { DOCUMENT_TYPE_LABEL } from '../lib/types';
 
@@ -41,6 +43,7 @@ function guessDate(name: string): string {
 
 export function Documents() {
   const { caseId, currentCase, reviewer, toast } = useApp();
+  const ws = useWorkspace();
   const { documents, findings, loading } = useCaseData(caseId);
   const [staged, setStaged] = useState<Staged[]>([]);
   const [processing, setProcessing] = useState(false);
@@ -69,7 +72,15 @@ export function Documents() {
 
   const process = async () => {
     if (!caseId) return;
+    if (currentCase?.remote) {
+      try { ws.requireSession(); } catch (e) { toast('error', (e as Error).message); return; }
+    }
     setProcessing(true);
+    await withLocalWork(() => processInner(caseId));
+    setProcessing(false);
+  };
+
+  const processInner = async (caseId: string) => {
     setSummary(null);
     let ok = 0;
     for (const s of staged.filter((x) => x.state === 'ready' || x.state === 'error')) {
@@ -77,12 +88,14 @@ export function Documents() {
       patch(s.key, { state: 'working', message: 'Reading file and extracting text…' });
       try {
         const bytes = new Uint8Array(await s.file.arrayBuffer());
-        const doc = await uploadDocument(db, extractor, caseId, { name: s.file.name, mime: s.file.type, bytes }, { title: s.title, documentType: s.documentType, documentDate: s.documentDate || null }, { actor: reviewer, maxBytes: MAX_MB * 1048576 });
+        const doc = await uploadDocument(db, extractor, caseId, { name: s.file.name, mime: s.file.type, bytes }, { title: s.title, documentType: s.documentType, documentDate: s.documentDate || null }, { actor: reviewer, maxBytes: MAX_MB * 1048576, onProgress: (stage) => patch(s.key, { message: `${stage}…` }) });
         if (doc.status === 'failed' || (doc.status === 'needs_attention' && !doc.extractedText)) {
           patch(s.key, { state: 'error', message: doc.extractionErrors[0] ?? 'Extraction failed.' });
         } else {
           ok++;
-          patch(s.key, { state: 'done', message: `${doc.statementCount} statement(s) extracted${doc.pageCount ? ` from ${doc.pageCount} page(s)` : ''}${doc.extractionWarnings.length ? ' — with warnings' : ''}.` });
+          const ocrPages = doc.pageSpans.filter((p) => p.method === 'ocr').map((p) => p.page);
+          const ocrNote = doc.extractionMethod === 'image-ocr' ? ' via OCR' : ocrPages.length ? ` (OCR on page${ocrPages.length > 1 ? 's' : ''} ${ocrPages.join(', ')})` : '';
+          patch(s.key, { state: 'done', message: `${doc.statementCount} statement(s) extracted${doc.pageCount ? ` from ${doc.pageCount} page(s)` : ''}${ocrNote}${doc.extractionWarnings.length ? ' — completed with warnings: ' + doc.extractionWarnings[0] : ''}` });
         }
       } catch (e) {
         patch(s.key, { state: 'error', message: e instanceof Error ? e.message : 'Upload failed.' });
@@ -90,7 +103,7 @@ export function Documents() {
     }
     if (ok && autoAnalyze) {
       try {
-        const sum = await analyzeCase(db, caseId, reviewer);
+        const sum = await analyzeCase(db, caseId, ws.session?.user.displayName ?? reviewer);
         setSummary(sum);
         toast('success', `Analysis complete: ${sum.findingsTotalActive} finding(s), ${sum.findingsCreated} new.`);
       } catch (e) {
@@ -99,7 +112,14 @@ export function Documents() {
     } else if (ok) {
       toast('success', `${ok} document(s) uploaded. Run analysis to compare them.`);
     }
-    setProcessing(false);
+    if (ok && currentCase?.remote) {
+      try {
+        await ws.push(caseId, { analyzed: autoAnalyze, detail: `${ok} document(s) uploaded${autoAnalyze ? ' and analysed' : ''} by ${ws.session?.user.displayName}` });
+        toast('success', 'Documents, extracted text, findings and original files synchronized to the shared workspace.');
+      } catch (e) {
+        toast('error', `Saved locally, but synchronization failed: ${(e as Error).message}`);
+      }
+    }
   };
 
   const onDrop = (e: DragEvent) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); };
@@ -120,9 +140,9 @@ export function Documents() {
           <UploadCloud size={28} className="text-brand" aria-hidden />
           <p className="mt-2 text-sm font-medium">Drag and drop files here, or</p>
           <button className="btn-primary mt-2" onClick={() => input.current?.click()} data-testid="choose-files"><FileUp size={16} aria-hidden />Choose files</button>
-          <input ref={input} type="file" multiple accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="sr-only" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} data-testid="file-input" aria-label="Choose files to upload" />
-          <p className="mt-3 text-xs text-muted">PDF (text layer), TXT (UTF-8) or DOCX · up to {MAX_MB} MB each · scanned PDFs are detected but OCR is not available</p>
-          <p className="mt-1 text-xs text-muted">Synthetic test files: <a className="font-medium text-brand hover:underline" href="./demo/sample-follow-up-note-2026-03-20.txt" download>follow-up note (TXT)</a> · <a className="font-medium text-brand hover:underline" href="./demo/sample-scanned-no-text-layer.pdf" download>scanned PDF without text</a></p>
+          <input ref={input} type="file" multiple accept=".pdf,.txt,.docx,.png,.jpg,.jpeg,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg" className="sr-only" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }} data-testid="file-input" aria-label="Choose files to upload" />
+          <p className="mt-3 text-xs text-muted">PDF (digital or scanned), PNG/JPEG scans, TXT (UTF-8) or DOCX · up to {MAX_MB} MB each · scanned pages are read with on-device OCR (Tesseract.js); OCR text is marked for review</p>
+          <p className="mt-1 text-xs text-muted">Synthetic test files: <a className="font-medium text-brand hover:underline" href="./demo/sample-follow-up-note-2026-03-20.txt" download>follow-up note (TXT)</a> · <a className="font-medium text-brand hover:underline" href="./demo/sample-mixed-text-and-scan-2026-03-22.pdf" download>mixed digital + scanned PDF</a> · <a className="font-medium text-brand hover:underline" href="./demo/sample-scanned-no-text-layer.pdf" download>blank scan (no readable text)</a></p>
         </div>
 
         {staged.length ? (
@@ -192,7 +212,7 @@ export function Documents() {
                     <td className="px-4 py-3">{d.documentDate ? formatDate(d.documentDate) : <span className="text-warn">Not recorded</span>}</td>
                     <td className="px-4 py-3 text-xs text-muted">{formatDateTime(d.uploadedAt)}</td>
                     <td className="px-4 py-3"><ProcessingBadge status={d.status} /></td>
-                    <td className="px-4 py-3 text-xs">{d.extractedText ? <span className="text-ok">{d.extractedText.length.toLocaleString()} chars{d.pageCount ? ` · ${d.pageCount} pp` : ''}</span> : <span className="text-crit">None</span>}</td>
+                    <td className="px-4 py-3 text-xs">{d.extractedText ? <span className="text-ok">{d.extractedText.length.toLocaleString()} chars{d.pageCount ? ` · ${d.pageCount} pp` : ''}</span> : <span className="text-crit">None</span>}{d.extractionMethod && /ocr/.test(d.extractionMethod) ? <div className="mt-1"><span className="chip bg-warn-50 text-warn" title="Text produced by OCR — verify against the original">OCR{d.ocrLowConfidence?.length ? ` · ${d.ocrLowConfidence.length} low-confidence` : ''}</span></div> : null}</td>
                     <td className="px-4 py-3 tabular-nums">{d.statementCount}</td>
                     <td className="px-4 py-3 tabular-nums">{findingCount(d.id)}</td>
                     <td className="px-4 py-3 text-right">
@@ -213,7 +233,13 @@ export function Documents() {
         <button className="btn-secondary" onClick={() => setToDelete(null)}>Cancel</button>
         <button className="btn-danger" data-testid="confirm-delete" onClick={async () => {
           if (!toDelete) return;
-          try { await deleteDocument(db, toDelete.id, reviewer); toast('success', `${toDelete.title} removed. Re-run analysis to reconcile findings.`); } catch (e) { toast('error', e instanceof Error ? e.message : 'Delete failed'); }
+          try {
+            await withLocalWork(async () => {
+              await deleteDocument(db, toDelete.id, reviewer);
+              if (currentCase?.remote) await ws.push(toDelete.caseId, { detail: `${toDelete.title} removed` });
+            });
+            toast('success', `${toDelete.title} removed. Re-run analysis to reconcile findings.`);
+          } catch (e) { toast('error', e instanceof Error ? e.message : 'Delete failed'); }
           setToDelete(null);
         }}><Trash2 size={15} />Remove</button>
       </>}>

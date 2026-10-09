@@ -16,7 +16,7 @@ import type {
 } from './types';
 import { DOCUMENT_TYPE_LABEL } from './types';
 
-export type Extractor = (kind: FileKind, bytes: Uint8Array) => Promise<ExtractionResult>;
+export type Extractor = (kind: FileKind, bytes: Uint8Array, onProgress?: (stage: string) => void) => Promise<ExtractionResult>;
 
 export const DEMO_CASE_LABEL = 'DEMO-0042 · Synthetic Patient SP-0042';
 export const DEMO_REVIEWER = 'Demo Reviewer (unauthenticated demo identity)';
@@ -84,7 +84,7 @@ export async function uploadDocument(
   caseId: string,
   file: UploadInput,
   meta: DocumentMeta = {},
-  opts: { actor?: string; maxBytes?: number } = {},
+  opts: { actor?: string; maxBytes?: number; onProgress?: (stage: string) => void } = {},
 ): Promise<DocumentRecord> {
   await requireCase(db, caseId);
   const filename = sanitizeFilename(file.name);
@@ -130,8 +130,16 @@ export async function uploadDocument(
   });
 
   let res: ExtractionResult;
+  let ocrMarked = false;
+  const onProgress = (stage: string) => {
+    opts.onProgress?.(stage);
+    if (!ocrMarked && /OCR/.test(stage)) {
+      ocrMarked = true;
+      void db.documents.update(doc.id, { status: 'ocr_running' });
+    }
+  };
   try {
-    res = await extractor(kind, file.bytes);
+    res = await extractor(kind, file.bytes, onProgress);
   } catch {
     res = { ok: false, text: '', method: null, pageCount: null, pageSpans: [], errors: ['Text extraction failed unexpectedly.'], warnings: [], needsAttention: false };
   }
@@ -143,6 +151,8 @@ export async function uploadDocument(
     pageSpans: res.pageSpans,
     extractionErrors: res.errors,
     extractionWarnings: res.warnings,
+    ocrLowConfidence: res.ocrLowConfidence ?? [],
+    ocrRegions: res.ocrRegions ?? [],
     status: !res.ok ? (res.needsAttention ? 'needs_attention' : 'failed') : res.needsAttention ? 'needs_attention' : 'extracted',
   };
   const statements = res.ok ? extractStatements(updated) : [];
@@ -246,6 +256,8 @@ async function runAnalysis(db: CliniscopeDB, caseId: string, actor: string): Pro
         }
       }
       for (const f of existing) {
+        // AI-assisted findings are not produced by the rules engine, so a rules re-run never supersedes them.
+        if (f.origin === 'ai') continue;
         if (!produced.has(f.fingerprint) && !f.stale) {
           superseded++;
           await db.findings.put({ ...f, stale: true, updatedAt: ts });
@@ -340,14 +352,54 @@ export async function seedDemoCase(
   db: CliniscopeDB,
   extractor: Extractor,
   files: { meta: DemoFile; bytes: Uint8Array }[],
+  onProgress?: (message: string) => void,
 ): Promise<CaseRecord> {
   const demos = await db.cases.filter((c) => c.isDemo).toArray();
   for (const d of demos) await deleteCase(db, d.id);
   const c = await createCase(db, DEMO_CASE_LABEL, { isDemo: true, actor: 'System' });
-  for (const f of files) {
+  for (const [i, f] of files.entries()) {
+    onProgress?.(`Document ${i + 1} of ${files.length}: ${f.meta.title}`);
     await uploadDocument(db, extractor, c.id, { name: f.meta.file, mime: f.meta.mime, bytes: f.bytes }, {
-      title: f.meta.title, documentType: f.meta.documentType, documentDate: f.meta.documentDate, isSeededDemo: true,
-    }, { actor: 'System (demo seed)' });
+      title: f.meta.title, documentDate: f.meta.documentDate, documentType: f.meta.documentType, isSeededDemo: true,
+    }, { actor: 'System (demo seed)', onProgress: (stage) => onProgress?.(`Document ${i + 1} of ${files.length}: ${f.meta.title} — ${stage}${/OCR/.test(stage) ? ' (first run downloads the OCR engine, ~7 MB)' : ''}`) });
   }
   return c;
+}
+
+// ---------------------------------------------------------------- AI findings
+/**
+ * Stores evidence-verified AI-assisted findings (see lib/ai.ts verifyAiOutput).
+ * Reconciled by fingerprint; existing findings keep their review state.
+ */
+export async function addAiFindings(
+  db: CliniscopeDB,
+  caseId: string,
+  drafts: import('./detect').DraftFinding[],
+  info: { model: string; actor: string; rejected: number; corroborated: string[]; consistent: number; downgraded: number },
+): Promise<{ created: number; retained: number }> {
+  const c = await requireCase(db, caseId);
+  let created = 0;
+  let retained = 0;
+  await db.transaction('rw', [db.findings, db.events, db.cases], async () => {
+    const ts = now();
+    for (const d of drafts) {
+      if (d.caseId !== caseId) continue;
+      const prior = await db.findings.where('[caseId+fingerprint]').equals([caseId, d.fingerprint]).first();
+      if (prior) { retained++; continue; }
+      const f: Finding = { ...d, id: uid('fd'), reviewStatus: 'unreviewed', stale: false, createdAt: ts, updatedAt: ts, isSeededDemo: c.isDemo };
+      await db.findings.add(f);
+      created++;
+      await logEvent(db, { caseId, findingId: f.id, kind: 'finding_created', actor: `AI-assisted analysis (${info.model})`, detail: `${f.displayId}: ${f.title}` });
+    }
+    await logEvent(db, {
+      caseId, kind: 'ai_analysis_completed', actor: info.actor,
+      detail: `Model ${info.model}: ${created} new finding(s), ${retained} already present, ${info.corroborated.length} corroborating existing rules findings${info.corroborated.length ? ` (${info.corroborated.join(', ')})` : ''}, ${info.downgraded} downgraded, ${info.rejected} rejected for unverifiable evidence, ${info.consistent} consistency note(s).`,
+    });
+    await touchCase(db, caseId);
+  });
+  return { created, retained };
+}
+
+export async function logAiFailure(db: CliniscopeDB, caseId: string, actor: string, message: string): Promise<void> {
+  await logEvent(db, { caseId, kind: 'ai_analysis_failed', actor, detail: message });
 }

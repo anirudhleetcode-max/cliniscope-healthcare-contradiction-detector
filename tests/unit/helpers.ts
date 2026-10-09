@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
-import { extractDocx, extractPdf, extractTxt, type ExtractionResult, type PdfJsLike } from '../../src/lib/extract';
+import { extractDocx, extractImage, extractPdf, extractTxt, type ExtractionResult, type PdfJsLike } from '../../src/lib/extract';
+import { nodeOcr } from './nodeOcr';
 import { extractStatements } from '../../src/lib/statements';
 import type { DocumentRecord, DocumentType, FileKind } from '../../src/lib/types';
 
@@ -12,8 +13,10 @@ export const nodeMammoth = {
 
 export const demoPath = (f: string) => new URL(`../../public/demo/${f}`, import.meta.url);
 
-export async function extractFile(name: string, bytes: Uint8Array): Promise<ExtractionResult> {
-  if (name.endsWith('.pdf')) return extractPdf(bytes, pdfjs as unknown as PdfJsLike);
+export async function extractFile(name: string, bytes: Uint8Array, opts: { ocr?: boolean } = {}): Promise<ExtractionResult> {
+  const ocr = opts.ocr === false ? undefined : nodeOcr;
+  if (name.endsWith('.pdf')) return extractPdf(bytes, pdfjs as unknown as PdfJsLike, { ocr });
+  if (/\.(png|jpe?g|image)$/.test(name)) return extractImage(bytes, ocr);
   if (name.endsWith('.docx')) return extractDocx(bytes, nodeMammoth);
   return extractTxt(bytes);
 }
@@ -54,7 +57,7 @@ export async function loadDemoDocs(caseId = 'case_demo') {
     const r = await extractFile(m.file, bytes);
     if (!r.ok) throw new Error(`extract failed ${m.file}: ${r.errors.join()}`);
     docs.push(makeDoc(caseId, r.text, {
-      id: `demo_${m.documentType}`,
+      id: m.file.startsWith("scanned") ? "demo_scanned_discharge" : `demo_${m.documentType}`,
       title: m.title,
       documentType: m.documentType as DocumentType,
       documentDate: m.documentDate,
@@ -62,6 +65,8 @@ export async function loadDemoDocs(caseId = 'case_demo') {
       extractionMethod: r.method,
       pageSpans: r.pageSpans,
       pageCount: r.pageCount,
+      ocrLowConfidence: r.ocrLowConfidence,
+      ocrRegions: r.ocrRegions,
     }));
   }
   const statements = docs.flatMap((d) => extractStatements(d));

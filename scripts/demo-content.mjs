@@ -123,4 +123,57 @@ export const DEMO_MANIFEST = [
   { file: 'patient-intake-form-2026-03-15.docx', title: 'Patient Intake Form', documentType: 'intake_form', documentDate: '2026-03-15', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
   { file: 'medication-reconciliation-2026-03-14.txt', title: 'Medication Reconciliation Record', documentType: 'medication_reconciliation', documentDate: '2026-03-14', mime: 'text/plain' },
   { file: 'laboratory-report-2026-03-11.pdf', title: 'Laboratory Report', documentType: 'lab_report', documentDate: '2026-03-11', mime: 'application/pdf' },
+  { file: 'scanned-discharge-letter-2025-11-20.pdf', title: 'Discharge Letter (scanned copy)', documentType: 'discharge_summary', documentDate: '2025-11-20', mime: 'application/pdf' },
 ];
+
+export const FICTION_NOTICE = 'Fictional demonstration data. Not for clinical use.';
+
+// Rendered to an IMAGE and embedded in a PDF with no text layer, so it can
+// only be read through OCR. The atorvastatin dose is deliberately smudged to
+// produce an ambiguous OCR value.
+export const SCANNED_DISCHARGE_LINES = [
+  BANNER,
+  FICTION_NOTICE,
+  'RIVERSIDE CLINIC (FICTIONAL) - DISCHARGE LETTER',
+  'Scanned copy of previous admission',
+  'Patient: Synthetic Patient SP-0042',
+  'Discharge date: 20 November 2025',
+  '',
+  'DIAGNOSES',
+  'Type 2 diabetes mellitus.',
+  'Hypertension.',
+  '',
+  'ALLERGIES',
+  'Penicillin allergy - urticaria.',
+  '',
+  'MEDICATIONS ON DISCHARGE',
+  'Metformin 500 mg twice daily.',
+  'Atorvastatin {SMUDGE:20} mg at night.',
+  '',
+  'LABORATORY RESULTS',
+  'Potassium 4.2 mmol/L (18 November 2025).',
+  'HbA1c 8.6% (18 November 2025).',
+];
+
+// Sample for the upload demo: page 1 has a text layer, page 2 is a scan.
+export const MIXED_PAGE1_LINES = [
+  BANNER,
+  'CARDIOLOGY CLINIC NOTE (FICTIONAL) - PAGE 1 (DIGITAL)',
+  'Patient: Synthetic Patient SP-0042',
+  'Visit date: 22 March 2026',
+  '',
+  'CURRENT MEDICATIONS',
+  'Lisinopril 20 mg once daily.',
+  'Metformin 500 mg twice daily.',
+];
+export const MIXED_PAGE2_LINES = [
+  BANNER,
+  'CARDIOLOGY CLINIC NOTE - PAGE 2 (SCANNED ATTACHMENT)',
+  '',
+  'ALLERGIES',
+  'No known drug allergies.',
+  '',
+  'SOCIAL HISTORY',
+  'Never smoker.',
+];
+

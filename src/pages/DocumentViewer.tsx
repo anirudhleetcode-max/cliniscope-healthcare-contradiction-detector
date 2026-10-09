@@ -1,24 +1,28 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, ExternalLink, Pencil, Save } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Pencil, Save, ScanLine } from 'lucide-react';
 import { db, useApp } from '../app/state';
-import { Callout, EmptyState, PageSkeleton, ProcessingBadge, StatusBadge, cx } from '../components/ui';
+import { Callout, EmptyState, Modal, PageSkeleton, ProcessingBadge, StatusBadge, cx } from '../components/ui';
 import { formatDate, formatDateTime, isValidIsoDate } from '../lib/dates';
 import { updateDocumentMeta } from '../lib/services';
-import type { DocumentType } from '../lib/types';
+import { getOriginalBlob, type RemoteSession } from '../lib/remote';
+import { useWorkspace } from '../app/workspace';
+import type { DocumentType, OcrSpan, PageSpan } from '../lib/types';
 import { CATEGORY_LABEL, DOCUMENT_TYPE_LABEL, EXTRACTION_METHOD_LABEL } from '../lib/types';
 
 export function DocumentViewer() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const { toast } = useApp();
+  const ws = useWorkspace();
   const doc = useLiveQuery(() => db.documents.get(id ?? '').then((d) => d ?? null), [id]);
   const statements = useLiveQuery(() => db.statements.where('documentId').equals(id ?? '').toArray(), [id]);
   const findings = useLiveQuery(() => (doc ? db.findings.where('caseId').equals(doc.caseId).toArray() : []), [doc?.caseId]);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: '', documentType: 'other' as DocumentType, documentDate: '' });
   const markRef = useRef<HTMLElement | null>(null);
+  const [previewPage, setPreviewPage] = useState<number | null>(null);
 
   const hl = useMemo(() => {
     const m = /^(\d+)-(\d+)$/.exec(params.get('hl') ?? '');
@@ -44,10 +48,10 @@ export function DocumentViewer() {
   const related = findings.filter((f) => f.sourceDocumentIds.includes(doc.id) && !f.stale);
 
   const openOriginal = async () => {
-    const f = await db.files.get(doc.id);
-    if (!f) { toast('error', 'The original file is not available.'); return; }
+    const blob = await getOriginalBlob(db, doc.id, ws.session);
+    if (!blob) { toast('error', 'The original file is not available (not stored locally or on the shared workspace).'); return; }
     // Object URL is local to this browser session; there is no public URL.
-    const url = URL.createObjectURL(f.blob);
+    const url = URL.createObjectURL(blob);
     if (doc.fileKind === 'pdf') window.open(url, '_blank', 'noopener');
     else { const a = document.createElement('a'); a.href = url; a.download = doc.originalFilename; a.click(); }
     setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -66,7 +70,7 @@ export function DocumentViewer() {
   return (
     <div className="animate-fade-up">
       <Link to="/documents" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-brand"><ArrowLeft size={15} />Document library</Link>
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <aside className="order-2 space-y-4 lg:order-2">
           <section className="card p-5">
             <div className="mb-3 flex items-start justify-between gap-2">
@@ -89,11 +93,12 @@ export function DocumentViewer() {
                 <dt className="text-muted">File</dt><dd className="break-all">{doc.originalFilename} · {(doc.sizeBytes / 1024).toFixed(1)} KB</dd>
                 <dt className="text-muted">Status</dt><dd><ProcessingBadge status={doc.status} /></dd>
                 <dt className="text-muted">Extraction</dt><dd>{doc.extractionMethod ? EXTRACTION_METHOD_LABEL[doc.extractionMethod] : '—'}</dd>
-                <dt className="text-muted">Pages</dt><dd>{doc.pageCount ?? 'Not a paged format'}</dd>
+                <dt className="text-muted">Pages</dt><dd>{doc.pageCount ?? (doc.fileKind === 'image' ? 'Single image' : 'Not a paged format')}</dd>
                 <dt className="text-muted">SHA-256</dt><dd className="truncate font-mono text-xs" title={doc.contentHash}>{doc.contentHash.slice(0, 16)}…</dd>
               </dl>
             )}
-            <button className="btn-secondary mt-4 w-full" onClick={openOriginal}><ExternalLink size={15} />{doc.fileKind === 'pdf' ? 'Open original PDF' : 'Download original file'}</button>
+            {doc.fileKind === 'image' || doc.pageSpans.some((p) => p.method === 'ocr') ? <button className="btn-secondary mt-4 w-full" onClick={() => setPreviewPage(doc.pageSpans.find((p) => p.method === 'ocr')?.page ?? 1)} data-testid="compare-original"><ScanLine size={15} />Compare OCR text with original</button> : null}
+            <button className="btn-secondary mt-2 w-full" onClick={openOriginal}><ExternalLink size={15} />{doc.fileKind === 'pdf' ? 'Open original PDF' : 'Download original file'}</button>
           </section>
 
           {doc.extractionErrors.map((e, i) => <Callout key={i} tone="warn" title="Extraction problem">{e}</Callout>)}
@@ -132,44 +137,110 @@ export function DocumentViewer() {
             <div className="p-5"><EmptyState title="No extracted text" body={doc.extractionErrors[0] ?? 'Text could not be extracted from this file.'} /></div>
           ) : (
             <div ref={textRef} className="relative max-h-[75vh] overflow-auto py-3 font-mono text-[12.5px] leading-6" data-testid="doc-text">
-              <ExtractedText text={doc.extractedText} pageSpans={doc.fileKind === 'pdf' ? doc.pageSpans : []} hl={validHl} markRef={markRef} />
+              <ExtractedText text={doc.extractedText} pageSpans={doc.fileKind === 'pdf' ? doc.pageSpans : []} lowConf={doc.ocrLowConfidence ?? []} hl={validHl} markRef={markRef} onPreview={doc.fileKind === 'pdf' ? setPreviewPage : undefined} />
             </div>
           )}
         </section>
       </div>
+      {previewPage != null ? <OriginalPreview docId={doc.id} fileKind={doc.fileKind} page={previewPage} session={ws.session} onClose={() => setPreviewPage(null)} /> : null}
     </div>
   );
 }
 
-function ExtractedText({ text, pageSpans, hl, markRef }: { text: string; pageSpans: { page: number; start: number; end: number }[]; hl: { start: number; end: number } | null; markRef: React.MutableRefObject<HTMLElement | null> }) {
+function ExtractedText({ text, pageSpans, lowConf, hl, markRef, onPreview }: {
+  text: string;
+  pageSpans: PageSpan[];
+  lowConf: OcrSpan[];
+  hl: { start: number; end: number } | null;
+  markRef: React.MutableRefObject<HTMLElement | null>;
+  onPreview?: (page: number) => void;
+}) {
   // Build line rows with global offsets, inserting verified page markers for PDFs.
   const rows: ReactNode[] = [];
   let offset = 0;
   let lineNo = 1;
-  const pageStarts = new Map(pageSpans.map((p) => [p.start, p.page]));
+  const pageStarts = new Map(pageSpans.map((p) => [p.start, p]));
   let firstMark = true;
   for (const line of text.split('\n')) {
     const start = offset;
     const end = start + line.length;
-    if (pageStarts.has(start)) {
-      rows.push(<div key={`p${start}`} className="my-2 flex items-center gap-2 px-5 font-sans text-[11px] font-semibold uppercase tracking-wider text-brand"><span className="h-px flex-1 bg-brand/20" />Page {pageStarts.get(start)} (verified)<span className="h-px flex-1 bg-brand/20" /></div>);
+    const ps = pageStarts.get(start);
+    if (ps) {
+      rows.push(
+        <div key={`p${start}`} className="my-2 flex items-center gap-2 px-5 font-sans text-[11px] font-semibold uppercase tracking-wider text-brand">
+          <span className="h-px flex-1 bg-brand/20" />
+          Page {ps.page} (verified){ps.method === 'ocr' ? <span className="chip bg-warn-50 normal-case tracking-normal text-warn">OCR{ps.ocrConfidence != null ? ` · mean confidence ${ps.ocrConfidence}%` : ''}</span> : null}
+          {onPreview ? <button className="normal-case tracking-normal text-brand underline-offset-2 hover:underline" onClick={() => onPreview(ps.page)}>compare with original</button> : null}
+          <span className="h-px flex-1 bg-brand/20" />
+        </div>,
+      );
     }
-    let content: ReactNode = line || ' ';
-    if (hl && hl.start < end && hl.end > start) {
-      const a = Math.max(hl.start, start) - start;
-      const b = Math.min(hl.end, end) - start;
-      const isFirst = firstMark;
-      firstMark = false;
-      content = <>{line.slice(0, a)}<mark className="evidence-hl active" ref={isFirst ? (el) => { markRef.current = el; } : undefined} data-testid="evidence-highlight">{line.slice(a, b)}</mark>{line.slice(b)}</>;
+    // Split the line at highlight and low-confidence-word boundaries.
+    const cuts = new Set<number>([start, end]);
+    const inHl = hl && hl.start < end && hl.end > start;
+    if (inHl) { cuts.add(Math.max(hl!.start, start)); cuts.add(Math.min(hl!.end, end)); }
+    const lows = lowConf.filter((w) => w.start < end && w.end > start);
+    for (const w of lows) { cuts.add(Math.max(w.start, start)); cuts.add(Math.min(w.end, end)); }
+    const pts = [...cuts].sort((a, b) => a - b);
+    const pieces: ReactNode[] = [];
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k];
+      const b = pts[k + 1];
+      if (a === b) continue;
+      let node: ReactNode = text.slice(a, b);
+      const low = lows.find((w) => w.start <= a && w.end >= b);
+      if (low) node = <span className="underline decoration-warn decoration-dotted decoration-2 underline-offset-4" title={`OCR confidence ${Math.round(low.confidence)}% — requires review`} data-testid="ocr-low">{node}</span>;
+      if (inHl && a >= hl!.start && b <= hl!.end) {
+        const isFirst = firstMark;
+        firstMark = false;
+        node = <mark key={a} className="evidence-hl active" ref={isFirst ? (el) => { markRef.current = el; } : undefined} data-testid="evidence-highlight">{node}</mark>;
+      }
+      pieces.push(<span key={a}>{node}</span>);
     }
     rows.push(
-      <div key={start} className={cx('grid grid-cols-[3.5rem,1fr] px-2', hl && hl.start < end && hl.end > start && 'bg-[#FFFBEB]')}>
+      <div key={start} className={cx('grid grid-cols-[3.5rem,1fr] px-2', inHl && 'bg-[#FFFBEB]')}>
         <span className="select-none pr-3 text-right text-slate-400">{lineNo}</span>
-        <span className="whitespace-pre-wrap break-words pr-4">{content}</span>
+        <span className="whitespace-pre-wrap break-words pr-4">{line ? pieces : '\u00a0'}</span>
       </div>,
     );
     offset = end + 1;
     lineNo++;
   }
   return <>{rows}</>;
+}
+
+/** Renders the original page (PDF) or image so OCR text can be compared with the source. */
+function OriginalPreview({ docId, fileKind, page, onClose, session }: { docId: string; fileKind: string; page: number; onClose: () => void; session: RemoteSession | null }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [imgUrl, setImgUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let url: string | null = null;
+    let cancelled = false;
+    (async () => {
+      const blob = await getOriginalBlob(db, docId, session);
+      if (!blob) { setError('The original file is not available.'); return; }
+      if (fileKind === 'image') { url = URL.createObjectURL(blob); setImgUrl(url); return; }
+      const pdfjs = await import('pdfjs-dist');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.min.js', document.baseURI).href;
+      const pdf = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false }).promise;
+      const pg = await pdf.getPage(page);
+      const vp = pg.getViewport({ scale: 1.4 });
+      const c = ref.current;
+      if (!c || cancelled) return;
+      c.width = vp.width; c.height = vp.height;
+      await pg.render({ canvasContext: c.getContext('2d')!, viewport: vp }).promise;
+      await pdf.destroy();
+    })().catch(() => setError('The original page could not be rendered.'));
+    return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
+  }, [docId, fileKind, page, session]);
+  return (
+    <Modal open onClose={onClose} title={fileKind === 'image' ? 'Original image' : `Original page ${page}`} wide>
+      {error ? <p className="text-sm text-crit">{error}</p> : null}
+      <div className="max-h-[70vh] overflow-auto rounded border border-line bg-slate-50" data-testid="original-preview">
+        {fileKind === 'image' ? (imgUrl ? <img src={imgUrl} alt="Original scanned image" className="w-full" /> : null) : <canvas ref={ref} className="h-auto w-full" />}
+      </div>
+      <p className="mt-2 text-xs text-muted">Rendered locally from the stored original file. Compare it with the OCR text to verify characters, decimal points and units.</p>
+    </Modal>
+  );
 }

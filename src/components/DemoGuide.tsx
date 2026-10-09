@@ -45,7 +45,7 @@ interface Step {
 
 const STEPS: Step[] = [
   { title: 'Open the fictional patient case', body: 'The demo case DEMO-0042 is synthetic. Note the banner at the top of the screen. The overview shows the case status.', go: () => '/', goLabel: 'Open overview' },
-  { title: 'Inspect the uploaded medical records', body: 'Four fictional records were ingested through the real pipeline: two PDFs (pdf.js text layer), one DOCX and one TXT. Open one to see its extracted text.', go: () => '/documents', goLabel: 'Open document library' },
+  { title: 'Inspect the uploaded medical records', body: 'Five fictional records were ingested through the real pipeline: two digital PDFs, one DOCX, one TXT and a SCANNED discharge letter read with on-device OCR. Open the scanned letter to compare its OCR text with the original page.', go: () => '/documents', goLabel: 'Open document library' },
   { title: 'Start document analysis', body: 'Click "Analyze documents". The rules engine compares statements across documents in this case only.', go: () => '/documents', goLabel: 'Go to Analyze', done: (x) => !!x.c?.lastAnalyzedAt },
   { title: 'View the analysis summary', body: 'The overview now shows counts derived from stored records: statements, comparisons, consistent results, and findings.', go: () => '/', goLabel: 'Open overview', done: (x) => !!x.c?.lastAnalyzedAt },
   { title: 'Open the allergy documentation conflict', body: 'The discharge summary records a penicillin allergy; the intake form says "No known drug allergies".', go: (x) => { const f = x.byConcept('allergy:penicillin'); return f ? `/findings/${f.id}` : null; }, goLabel: 'Open allergy finding' },

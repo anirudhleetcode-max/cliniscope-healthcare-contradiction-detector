@@ -1,6 +1,6 @@
 // Document text extraction. Pure functions: the PDF and DOCX parsers are
 // injected so the same code runs in the browser and in Node-based tests.
-import type { ExtractionMethod, FileKind, PageSpan } from './types';
+import type { ExtractionMethod, FileKind, OcrSpan, PageSpan } from './types';
 
 export const DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
@@ -14,15 +14,18 @@ export interface ExtractionResult {
   warnings: string[];
   /** True when the text layer exists but is too thin to be trusted (likely scanned). */
   needsAttention: boolean;
+  ocrLowConfidence?: OcrSpan[];
+  ocrRegions?: { start: number; end: number; confidence: number | null }[];
 }
 
 export class UploadValidationError extends Error {}
 
-const EXT_KIND: Record<string, FileKind> = { pdf: 'pdf', txt: 'txt', docx: 'docx' };
+const EXT_KIND: Record<string, FileKind> = { pdf: 'pdf', txt: 'txt', docx: 'docx', png: 'image', jpg: 'image', jpeg: 'image' };
 const ALLOWED_MIME: Record<FileKind, string[]> = {
   pdf: ['application/pdf', 'application/x-pdf'],
   txt: ['text/plain'],
   docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  image: ['image/png', 'image/jpeg'],
 };
 
 /** Strip path components and unsafe characters from a user-supplied filename. */
@@ -50,7 +53,7 @@ export function validateUpload(
   const kind = EXT_KIND[ext];
   if (!kind || !name.includes('.')) {
     throw new UploadValidationError(
-      `Unsupported file type ".${ext}". Supported formats: PDF, TXT and DOCX.`,
+      `Unsupported file type ".${ext}". Supported formats: PDF, TXT, DOCX, PNG and JPEG.`,
     );
   }
   if (mime && mime !== 'application/octet-stream' && !ALLOWED_MIME[kind].includes(mime)) {
@@ -71,6 +74,11 @@ export function validateUpload(
   }
   if (kind === 'docx' && !(bytes[0] === 0x50 && bytes[1] === 0x4b)) {
     throw new UploadValidationError('The file has a .docx extension but is not a valid DOCX (ZIP) archive.');
+  }
+  if (kind === 'image') {
+    const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    const jpg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    if (!png && !jpg) throw new UploadValidationError('The file has an image extension but is not a valid PNG or JPEG image.');
   }
   return kind;
 }
@@ -139,26 +147,74 @@ interface PdfTextItem {
   transform?: number[];
   height?: number;
 }
+export interface PdfPageLike {
+  getTextContent(): Promise<{ items: unknown[] }>;
+}
 export interface PdfJsLike {
   getDocument(src: { data: Uint8Array; isEvalSupported?: boolean; useSystemFonts?: boolean; disableFontFace?: boolean }): {
     promise: Promise<{
       numPages: number;
-      getPage(n: number): Promise<{ getTextContent(): Promise<{ items: unknown[] }> }>;
+      getPage(n: number): Promise<PdfPageLike>;
       destroy?: () => Promise<void>;
     }>;
   };
 }
 
+// ------------------------------------------------------------------ OCR
+export interface OcrWord { text: string; confidence: number }
+export interface OcrLine { words: OcrWord[] }
+export interface OcrPageResult {
+  lines: OcrLine[];
+  /** Engine-reported mean confidence (0-100). */
+  confidence: number;
+}
+/** OCR engine abstraction. The browser implementation uses Tesseract.js. */
+export interface OcrEngine {
+  recognizePdfPage(page: PdfPageLike, pageNumber: number): Promise<OcrPageResult>;
+  recognizeImage(bytes: Uint8Array): Promise<OcrPageResult>;
+}
+export type ProgressFn = (stage: string) => void;
+
+/** Words below this engine-reported confidence are marked "OCR text requires review". */
+export const OCR_LOW_CONFIDENCE = 70;
+/** Pages whose mean OCR confidence is below this produce a document-level warning. */
+export const OCR_PAGE_WARN_CONFIDENCE = 75;
+
+/** Builds plain text from OCR lines while recording each word's exact character span. */
+export function ocrToText(r: OcrPageResult, base = 0): { text: string; words: OcrSpan[] } {
+  let text = '';
+  const words: OcrSpan[] = [];
+  for (const line of r.lines) {
+    const ws = line.words.filter((w) => w.text.trim());
+    if (!ws.length) continue;
+    if (text) text += '\n';
+    ws.forEach((w, i) => {
+      if (i) text += ' ';
+      const clean = w.text.replace(/[\u0000-\u001f]/g, '');
+      words.push({ start: base + text.length, end: base + text.length + clean.length, confidence: w.confidence, text: clean });
+      text += clean;
+    });
+  }
+  return { text, words };
+}
+
 const MIN_CHARS_PER_PAGE = 20;
+
+interface PageOut { text: string; method: 'text-layer' | 'ocr'; confidence: number | null; words: OcrSpan[] }
 
 export async function extractPdf(
   bytes: Uint8Array,
   pdfjs: PdfJsLike,
-  timeoutMs = 30000,
+  timeoutOrOpts: number | { timeoutMs?: number; ocr?: OcrEngine; onProgress?: ProgressFn; ocrPageTimeoutMs?: number } = 30000,
 ): Promise<ExtractionResult> {
+  const opts = typeof timeoutOrOpts === 'number' ? { timeoutMs: timeoutOrOpts } : timeoutOrOpts;
+  const ocr = opts.ocr;
+  const timeoutMs = opts.timeoutMs ?? (ocr ? 180000 : 30000);
+  const progress = opts.onProgress ?? (() => {});
   const work = async (): Promise<ExtractionResult> => {
     let doc;
     try {
+      progress('Extracting text layer');
       // Copy: pdf.js may transfer/detach the buffer it is given.
       doc = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, disableFontFace: true }).promise;
     } catch {
@@ -167,8 +223,7 @@ export async function extractPdf(
         errors: ['The PDF could not be opened. It may be corrupt, encrypted or not a PDF.'],
       });
     }
-    let text = '';
-    const spans: PageSpan[] = [];
+    const pages: PageOut[] = [];
     const thinPages: number[] = [];
     for (let p = 1; p <= doc.numPages; p++) {
       const page = await doc.getPage(p);
@@ -192,42 +247,111 @@ export async function extractPdf(
       }
       pageText = normalizeText(pageText).trim();
       if (pageText.replace(/\s/g, '').length < MIN_CHARS_PER_PAGE) thinPages.push(p);
-      if (text) text += '\n\n';
-      const start = text.length;
-      text += pageText;
-      spans.push({ page: p, start, end: text.length });
+      pages.push({ text: pageText, method: 'text-layer', confidence: null, words: [] });
+    }
+
+    const warnings: string[] = [];
+    const ocrFailed: number[] = [];
+    const ocrEmpty: number[] = [];
+    if (thinPages.length && ocr) {
+      // OCR pages one at a time so only one rendered page is in memory.
+      for (const [i, p] of thinPages.entries()) {
+        progress(`Running OCR on page ${p} (${i + 1} of ${thinPages.length} scanned page${thinPages.length > 1 ? 's' : ''})`);
+        try {
+          const page = await doc.getPage(p);
+          const r = await withTimeout(ocr.recognizePdfPage(page, p), opts.ocrPageTimeoutMs ?? 90000, () => null);
+          if (!r) { ocrFailed.push(p); continue; }
+          const built = ocrToText(r);
+          if (built.text.replace(/\s/g, '').length < MIN_CHARS_PER_PAGE) { ocrEmpty.push(p); continue; }
+          pages[p - 1] = { text: built.text, method: 'ocr', confidence: Math.round(r.confidence), words: built.words };
+          if (r.confidence < OCR_PAGE_WARN_CONFIDENCE) warnings.push(`OCR confidence on page ${p} is low (${Math.round(r.confidence)}%). Verify the extracted text against the original page.`);
+        } catch {
+          ocrFailed.push(p);
+        }
+      }
     }
     await doc.destroy?.();
-    const warnings: string[] = [];
+
+    // Assemble the document text with verified page spans.
+    let text = '';
+    const spans: PageSpan[] = [];
+    const lowConf: OcrSpan[] = [];
+    const regions: { start: number; end: number; confidence: number | null }[] = [];
+    pages.forEach((pg, idx) => {
+      if (text) text += '\n\n';
+      const start = text.length;
+      text += pg.text;
+      spans.push({ page: idx + 1, start, end: text.length, method: pg.method, ocrConfidence: pg.confidence });
+      if (pg.method === 'ocr') {
+        regions.push({ start, end: text.length, confidence: pg.confidence });
+        for (const w of pg.words) if (w.confidence < OCR_LOW_CONFIDENCE) lowConf.push({ ...w, start: w.start + start, end: w.end + start });
+      }
+    });
+    const ocrPages = pages.map((p, i) => (p.method === 'ocr' ? i + 1 : 0)).filter(Boolean);
+    const unread = thinPages.filter((p) => !ocrPages.includes(p));
+    const method: ExtractionMethod = ocrPages.length === 0 ? 'pdf-text-layer' : ocrPages.length === pages.length ? 'pdf-ocr' : 'pdf-text-layer+ocr';
+    if (ocrPages.length) warnings.unshift(`Page(s) ${ocrPages.join(', ')} were read with OCR. OCR text can contain character, decimal-point and unit errors and requires review against the original.`);
+    if (lowConf.length) warnings.push(`${lowConf.length} OCR word(s) fell below ${OCR_LOW_CONFIDENCE}% confidence and are marked for review.`);
+    if (ocrFailed.length) warnings.push(`OCR failed or timed out on page(s) ${ocrFailed.join(', ')}; their text is missing.`);
+    if (ocrEmpty.length) warnings.push(`OCR found no readable text on page(s) ${ocrEmpty.join(', ')}.`);
+
     if (!text.replace(/\s/g, '').length) {
       return result({
-        method: 'pdf-text-layer',
-        pageCount: doc.numPages,
+        method: ocr ? 'pdf-ocr' : 'pdf-text-layer',
+        pageCount: pages.length,
         pageSpans: spans,
         needsAttention: true,
         errors: [
-          'No selectable text was found. The PDF is probably a scanned image. OCR is not available in this build, so no statements were extracted. Upload a text-based PDF, a TXT/DOCX transcription, or run OCR before uploading.',
+          ocr
+            ? 'No readable text was found, even after OCR. The scan may be blank, too faint or handwritten. Upload a clearer scan or a typed transcription.'
+            : 'No selectable text was found. The PDF is probably a scanned image and OCR is not available here, so no statements were extracted.',
         ],
+        warnings,
       });
     }
-    if (thinPages.length) {
-      warnings.push(
-        `Page(s) ${thinPages.join(', ')} contain little or no selectable text and may be scanned images. Text on those pages was not extracted (OCR not available).`,
-      );
+    if (unread.length && !ocr) {
+      warnings.push(`Page(s) ${unread.join(', ')} contain little or no selectable text and may be scanned images. OCR was not run, so their text was not extracted.`);
     }
     return result({
       ok: true,
       text,
-      method: 'pdf-text-layer',
-      pageCount: doc.numPages,
+      method,
+      pageCount: pages.length,
       pageSpans: spans,
       warnings,
-      needsAttention: thinPages.length > 0,
+      needsAttention: unread.length > 0 || lowConf.length > 0 || ocrFailed.length > 0,
+      ocrLowConfidence: lowConf,
+      ocrRegions: regions,
     });
   };
   return withTimeout(work(), timeoutMs, () =>
     result({ method: 'pdf-text-layer', errors: [`PDF extraction timed out after ${timeoutMs / 1000}s.`] }),
   );
+}
+
+/** OCR of a PNG/JPEG image. */
+export async function extractImage(bytes: Uint8Array, ocr: OcrEngine | undefined, onProgress?: ProgressFn, timeoutMs = 90000): Promise<ExtractionResult> {
+  if (!ocr) return result({ method: 'image-ocr', errors: ['OCR is not available in this environment, so images cannot be read.'] });
+  onProgress?.('Running OCR on image');
+  let r: OcrPageResult | null;
+  try {
+    r = await withTimeout(ocr.recognizeImage(bytes), timeoutMs, () => null);
+  } catch {
+    r = null;
+  }
+  if (!r) return result({ method: 'image-ocr', errors: ['OCR failed or timed out on this image.'] });
+  const built = ocrToText(r);
+  if (built.text.replace(/\s/g, '').length < MIN_CHARS_PER_PAGE) {
+    return result({ method: 'image-ocr', needsAttention: true, errors: ['OCR found no readable text in this image.'] });
+  }
+  const low = built.words.filter((w) => w.confidence < OCR_LOW_CONFIDENCE);
+  const warnings = ['This text was read with OCR. It can contain character, decimal-point and unit errors and requires review against the original image.'];
+  if (r.confidence < OCR_PAGE_WARN_CONFIDENCE) warnings.push(`OCR confidence is low (${Math.round(r.confidence)}%).`);
+  if (low.length) warnings.push(`${low.length} OCR word(s) fell below ${OCR_LOW_CONFIDENCE}% confidence and are marked for review.`);
+  return result({
+    ok: true, text: built.text, method: 'image-ocr', warnings, needsAttention: low.length > 0,
+    ocrLowConfidence: low, ocrRegions: [{ start: 0, end: built.text.length, confidence: Math.round(r.confidence) }],
+  });
 }
 
 export interface MammothLike {

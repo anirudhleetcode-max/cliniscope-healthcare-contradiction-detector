@@ -52,6 +52,8 @@ function evidenceFor(s: ClinicalStatement, doc: DocumentRecord, side: 'A' | 'B')
     documentTitle: doc.title,
     documentDate: doc.documentDate,
     extractionMethod: doc.extractionMethod,
+    ocrDerived: s.ocrDerived || undefined,
+    ocrMinConfidence: s.ocrMinConfidence ?? null,
   };
 }
 
@@ -77,11 +79,17 @@ function quality(ctx: Ctx, all: ClinicalStatement[], type: FindingType): { q: Ev
       reason: 'Quotes were located in the source text, but at least one statement is hedged or incomplete, so a reliable comparison is not possible.',
     };
   }
+  if (all.some((s) => s.ocrLowConfidence || s.valueUnreadable)) {
+    return { q: 'limited', reason: 'OCR text requires review: part of the quoted source text was read with low OCR confidence or is unreadable.' };
+  }
   if (all.some((s) => s.extractionConfidence === 'low') || docs.some((d) => d.status === 'needs_attention')) {
     return { q: 'limited', reason: 'Quotes were located in the source text, but one source has incomplete context or extraction warnings.' };
   }
   if (docs.some((d) => !d.documentDate)) {
     return { q: 'moderate', reason: 'Quotes were located at verified offsets, but at least one document has no recorded document date.' };
+  }
+  if (all.some((s) => s.ocrDerived)) {
+    return { q: 'moderate', reason: 'Quotes were located at verified offsets, but at least one quote was produced by OCR and should be compared with the original scan.' };
   }
   if (all.some((s) => s.extractionConfidence === 'moderate')) {
     return { q: 'moderate', reason: 'Quotes were located at verified offsets; at least one statement was found outside a matching section heading.' };
@@ -113,7 +121,8 @@ interface Spec {
   alternatives: string[];
 }
 
-function emit(ctx: Ctx, spec: Spec): void {
+function emit(ctx: Ctx, specIn: Spec): void {
+  let spec = specIn;
   // Enforce case separation and evidence verification.
   const ok = (s: ClinicalStatement) => s.caseId === ctx.caseId && verifyStatement(s, ctx.docs.get(s.documentId));
   // Stable evidence order: chronological by document date, then by position.
@@ -127,6 +136,20 @@ function emit(ctx: Ctx, spec: Spec): void {
   // Cross-document only: at least one document on each side must differ.
   if ([...docIdsA].every((d) => docIdsB.has(d)) && [...docIdsB].every((d) => docIdsA.has(d))) return;
   const all = [...A, ...B];
+  // Uncertain OCR output is never turned into a definitive contradiction.
+  const lowOcr = all.filter((s) => s.ocrLowConfidence);
+  if (lowOcr.length && spec.type !== 'insufficient_evidence' && spec.type !== 'context_dependent') {
+    spec = {
+      ...spec,
+      type: 'insufficient_evidence',
+      title: `OCR text requires review — ${spec.title}`,
+      explanation: `${spec.explanation} However, part of the quoted text was read by OCR with low confidence (lowest word ${Math.round(Math.min(...lowOcr.map((s) => s.ocrMinConfidence ?? 0)))}%), so this is reported as insufficient evidence until the original scan is checked.`,
+    };
+  }
+  const ocrStmts = all.filter((s) => s.ocrDerived);
+  if (ocrStmts.length) {
+    spec = { ...spec, caveats: [...spec.caveats, `Evidence from ${docTitles(ctx, ocrStmts)} was produced by OCR. OCR can confuse characters, decimal points and units; compare the quote with the original scan.`] };
+  }
   const statementIds = [...new Set(all.map((s) => s.id))].sort();
   const fingerprint = hashId(`${ctx.caseId}|${spec.concept}|${statementIds.join(',')}`);
   if (ctx.out.some((f) => f.fingerprint === fingerprint)) return;
@@ -355,6 +378,25 @@ function compareMedications(ctx: Ctx, list: ClinicalStatement[]): void {
           });
         }
       }
+    }
+  }
+
+  // A dose that could not be read (e.g. smudged on a scan) is surfaced as insufficient evidence, never compared as a value.
+  const unreadable = list.filter((s) => s.valueUnreadable && s.status === 'active' && s.polarity === 'positive');
+  if (unreadable.length && active.length) {
+    const others = active.filter((a) => !unreadable.some((u) => u.documentId === a.documentId));
+    if (others.length) {
+      ctx.stats.evaluated++;
+      emit(ctx, {
+        category: 'medication', concept, type: 'insufficient_evidence',
+        title: `${label}: dose could not be read in ${docTitles(ctx, unreadable)}`,
+        sideA: unreadable, sideB: others,
+        sideALabel: `${label} — dose unreadable`, sideBLabel: `${label} ${others[0].value ?? ''}`.trim(),
+        explanation: `The ${label.toLowerCase()} statement in ${docTitles(ctx, unreadable)} names a unit but no readable dose${unreadable.some((u) => u.ocrDerived) ? ' (the value was not recovered by OCR)' : ''}. The system is unable to determine the value reliably, so it cannot say whether this record agrees with the others. Check the original document.`,
+        comparisonReason: 'Same medication; one statement contains a dose unit without a readable number, so no value comparison is possible.',
+        caveats: [...dateGapCaveat(ctx, unreadable, others), 'Unable to determine the value reliably. No value has been inferred or guessed.'],
+        alternatives: ['The dose may match the other records but be illegible on the scan.', 'The dose may have been different at that time.'],
+      });
     }
   }
 

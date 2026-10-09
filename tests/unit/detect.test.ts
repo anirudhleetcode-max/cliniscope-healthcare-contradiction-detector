@@ -117,7 +117,7 @@ describe('contradiction detection engine', () => {
   });
 });
 
-describe('seeded demo case (real PDF/DOCX/TXT files through the real pipeline)', () => {
+describe('seeded demo case (real PDF/DOCX/TXT/scanned files through the real pipeline incl. OCR)', () => {
   it('TEST 19: demo evidence is internally consistent with the source documents', async () => {
     const { docs, statements } = await loadDemoDocs();
     const r = detectContradictions('case_demo', statements, docs);
@@ -134,12 +134,15 @@ describe('seeded demo case (real PDF/DOCX/TXT files through the real pipeline)',
     expect(types['allergy:penicillin']).toBe('explicit_conflict'); // Scenario A
     expect(types['medication:metformin']).toBe('potential_discrepancy'); // Scenario B
     expect(types['medication:lisinopril']).toBe('context_dependent'); // Scenario C
-    expect(types['medication:atorvastatin']).toBeUndefined(); // Scenario D (consistent)
+    // Atorvastatin 20 mg agrees in the typed records; the scanned letter's smudged dose is unreadable → insufficient evidence, not a conflict.
+    expect(types['medication:atorvastatin']).toBe('insufficient_evidence');
     expect(types['diagnosis:hypertension']).toBeUndefined(); // Scenario D (consistent)
     expect(types['allergy:sulfonamide']).toBe('insufficient_evidence'); // Scenario E
     expect(types['lab:potassium']).toBe('potential_discrepancy');
     expect(types['lab:hba1c']).toBeUndefined();
-    expect(r.findings).toHaveLength(7);
+    expect(types['diagnosis:diabetes-mellitus']).toBeUndefined(); // consistent incl. OCR'd scan
+    expect(types['lab:potassium']).toBe('potential_discrepancy'); // same-day values only; Nov 2025 value not flagged
+    expect(r.findings).toHaveLength(8);
   });
 
   it('TEST 8: page numbers are present only for PDF sources with verified page spans', async () => {

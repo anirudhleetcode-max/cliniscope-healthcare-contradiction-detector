@@ -9,7 +9,8 @@ import { db, useApp } from '../app/state';
 import { Callout, EmptyState, Modal, PageSkeleton, PriorityTag, QualityIndicator, StatusBadge, TypeBadge, cx } from '../components/ui';
 import { formatDate, formatDateTime } from '../lib/dates';
 import { MIN_REASON_LENGTH, TRANSITIONS, reasonRequired } from '../lib/review';
-import { addReviewerNote, transitionFinding } from '../lib/services';
+import { useReviewActions, useWorkspace } from '../app/workspace';
+import { useLiveQuery as useLive } from 'dexie-react-hooks';
 import type { DocumentRecord, EvidenceRef, Finding, ReviewStatus } from '../lib/types';
 import { CATEGORY_LABEL, DOCUMENT_TYPE_LABEL, EXTRACTION_METHOD_LABEL, REVIEW_STATUS_LABEL } from '../lib/types';
 import { describeEvent } from './Timeline';
@@ -26,7 +27,10 @@ export function FindingDetail() {
   const { id } = useParams();
   const location = useLocation();
   const { caseId, reviewer, toast, setCaseId } = useApp();
+  const ws = useWorkspace();
+  const actions = useReviewActions();
   const finding = useLiveQuery(() => db.findings.get(id ?? ''), [id]);
+  const caseRec = useLive(() => (finding ? db.cases.get(finding.caseId) : undefined), [finding?.caseId]);
   const docs = useLiveQuery(async () => (finding ? db.documents.bulkGet(finding.sourceDocumentIds) : []), [finding?.id, finding?.updatedAt]);
   const events = useLiveQuery(() => db.events.where('findingId').equals(id ?? '').sortBy('at'), [id]);
   const [pending, setPending] = useState<ReviewStatus | null>(null);
@@ -52,8 +56,8 @@ export function FindingDetail() {
 
   const doTransition = async (to: ReviewStatus, reason?: string) => {
     try {
-      await transitionFinding(db, finding.id, to, { reason, reviewer });
-      toast('success', `${finding.displayId} → ${REVIEW_STATUS_LABEL[to]}. Saved to this browser's database and recorded in the audit trail.`);
+      await actions.transition(finding, caseRec, to, reason);
+      toast('success', `${finding.displayId} → ${REVIEW_STATUS_LABEL[to]}. ${caseRec?.remote ? 'Saved to the shared workspace and recorded in its audit trail.' : "Saved to this browser's database and recorded in the audit trail."}`);
       setPending(null);
       return true;
     } catch (e) {
@@ -73,6 +77,7 @@ export function FindingDetail() {
           <TypeBadge type={finding.findingType} />
           <StatusBadge status={finding.reviewStatus} />
           {finding.isSeededDemo ? <span className="chip bg-ink text-white">Synthetic demo data</span> : null}
+          {finding.origin === 'ai' ? <span className="chip bg-brand-50 text-brand-700 ring-1 ring-brand/20" data-testid="ai-badge">AI-assisted · quotes verified</span> : null}
         </div>
         <h1 className="text-2xl font-semibold tracking-tight" data-testid="finding-title">{finding.title}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-muted">
@@ -85,7 +90,7 @@ export function FindingDetail() {
 
       {finding.stale ? <div className="mb-4"><Callout tone="warn" title="Superseded finding">The latest analysis no longer produces this finding (a source document may have been removed or changed). The original evidence and review history below are preserved.</Callout></div> : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <section className="card overflow-hidden" aria-labelledby="why">
             <div className="border-b border-line bg-soft/50 px-5 py-3">
@@ -93,7 +98,7 @@ export function FindingDetail() {
             </div>
             <div className="space-y-3 px-5 py-4">
               <div>
-                <div className="eyebrow mb-1">System explanation <span className="normal-case tracking-normal text-slate-400">· interpretation generated from a rules template, not quoted evidence</span></div>
+                <div className="eyebrow mb-1">{finding.origin === 'ai' ? <>AI-generated interpretation <span className="normal-case tracking-normal text-slate-400">· written by {finding.aiModel}; this explanation is not evidence — only the verified quotes below are</span></> : <>System explanation <span className="normal-case tracking-normal text-slate-400">· interpretation generated from a rules template, not quoted evidence</span></>}</div>
                 <p className="text-[15px] leading-relaxed">{finding.explanation}</p>
               </div>
               <div className="rounded-lg bg-soft/60 px-3 py-2 text-sm"><span className="font-semibold">Comparison rule: </span><span className="text-ink/80">{finding.comparisonReason}</span></div>
@@ -124,9 +129,14 @@ export function FindingDetail() {
         <aside className="space-y-6">
           <section id="review" className="card scroll-mt-20 p-5" aria-labelledby="review-h">
             <h2 id="review-h" className="mb-1 text-base font-semibold">Reviewer decision</h2>
-            <p className="mb-3 text-xs text-muted">Reviewing as <span className="font-medium text-ink">{reviewer}</span>. This prototype has no authentication.</p>
+            {caseRec?.remote ? (
+              <p className="mb-3 text-xs text-muted">Shared case · {ws.session ? <>signed in as <span className="font-medium text-ink">{ws.session.user.displayName}</span> ({caseRec.remote.role}). Decisions are saved on the server with a server timestamp.</> : <span className="text-warn">sign in (About &amp; settings) to record decisions.</span>}</p>
+            ) : (
+              <p className="mb-3 text-xs text-muted">Local demo mode · reviewing as <span className="font-medium text-ink">{reviewer}</span> (self-declared, not authenticated).</p>
+            )}
             <div className="mb-4 flex items-center gap-2 text-sm">Current status: <StatusBadge status={finding.reviewStatus} /></div>
-            <div className="flex flex-col gap-2" data-testid="review-actions">
+            {caseRec?.remote?.role === 'viewer' ? <p className="mb-2 rounded-md bg-soft px-3 py-2 text-xs text-muted" data-testid="viewer-readonly">You have read-only (viewer) access to this case.</p> : null}
+            <div className={cx('flex flex-col gap-2', caseRec?.remote?.role === 'viewer' && 'hidden')} data-testid="review-actions">
               {allowed.map((to) => {
                 const m = ACTION_META[to];
                 const label = to === 'in_review' && finding.reviewStatus !== 'unreviewed' ? 'Mark as unresolved (reopen)' : m.label;
@@ -139,7 +149,7 @@ export function FindingDetail() {
               })}
             </div>
             <p className="mt-3 text-xs leading-relaxed text-muted">Confirming a discrepancy records that the documents disagree. It does not establish which statement is medically correct.</p>
-            <NoteForm finding={finding} />
+            {caseRec?.remote?.role === 'viewer' ? null : <NoteForm finding={finding} />}
           </section>
 
           <section className="card p-5" aria-labelledby="audit-h">
@@ -180,11 +190,11 @@ function EvidenceColumn({ side, label, refs, docs }: { side: 'A' | 'B'; label: s
 
 function EvidenceCard({ ev, doc, side }: { ev: EvidenceRef; doc: DocumentRecord | undefined; side: 'A' | 'B' }) {
   const verified = !!doc && doc.extractedText.slice(ev.charStart, ev.charEnd) === ev.quote;
-  const location = ev.page != null ? `Page ${ev.page} (verified PDF page)` : null;
+  const location = ev.page != null ? `Page ${ev.page} (verified PDF page${ev.ocrDerived ? ', OCR' : ''})` : null;
   return (
     <article className={cx('card animate-fade-up overflow-hidden border-t-4', side === 'A' ? 'border-t-brand' : 'border-t-ink')}>
       <div className="px-4 pt-3">
-        <div className="eyebrow">Source {side}</div>
+        <div className="flex items-center justify-between gap-2"><span className="eyebrow">Source {side}</span>{ev.ocrDerived ? <span className="chip bg-warn-50 text-warn" data-testid="ocr-badge" title="This quotation was produced by OCR from a scanned image">OCR text{ev.ocrMinConfidence != null ? ` · min ${Math.round(ev.ocrMinConfidence)}%` : ''}</span> : null}</div>
         {doc ? (
           <Link to={`/documents/${doc.id}`} className="mt-0.5 inline-flex items-center gap-1.5 font-semibold hover:text-brand"><FileText size={15} aria-hidden />{ev.documentTitle}</Link>
         ) : (
@@ -208,6 +218,7 @@ function EvidenceCard({ ev, doc, side }: { ev: EvidenceRef; doc: DocumentRecord 
       <blockquote className="mx-4 my-3 rounded-lg border-l-4 border-warn bg-[#FFFBEB] px-3 py-2.5 font-mono text-[13px] leading-relaxed text-ink" data-testid="evidence-quote">
         “{ev.quote}”
       </blockquote>
+      {ev.ocrDerived ? <p className="mx-4 -mt-1 mb-3 text-xs text-warn">OCR text requires review: characters, decimal points and units may be misread. Compare with the original page.</p> : null}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-soft/40 px-4 py-2">
         {verified ? (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-ok"><CheckCircle2 size={13} aria-hidden />Quote verified against document text</span>
@@ -250,14 +261,16 @@ function ReasonModal({ status, from, onClose, onSubmit }: { status: ReviewStatus
 }
 
 function NoteForm({ finding }: { finding: Finding }) {
-  const { reviewer, toast } = useApp();
+  const { toast } = useApp();
+  const actions = useReviewActions();
+  const caseRec = useLive(() => db.cases.get(finding.caseId), [finding.caseId]);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const save = async () => {
     if (!note.trim()) { toast('error', 'Write a note before saving.'); return; }
     setBusy(true);
     try {
-      await addReviewerNote(db, finding.id, note, reviewer);
+      await actions.note(finding, caseRec, note);
       setNote('');
       toast('success', 'Note saved to the audit trail.');
     } catch (e) {

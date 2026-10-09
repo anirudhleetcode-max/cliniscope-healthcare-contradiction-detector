@@ -9,7 +9,7 @@ async function freshDemo(page: Page) {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto('#/');
-  await expect(page.getByText('Documents are ready for analysis')).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('Documents are ready for analysis')).toBeVisible({ timeout: 90000 });
   await expect(page.getByTestId('demo-banner')).toContainText('synthetic data');
   return errors;
 }
@@ -24,7 +24,7 @@ test('TEST 20: app loads, demo case is seeded and analysis produces evidence-bac
   await analyze(page);
   await expect(page.getByTestId('analysis-summary')).toContainText('Findings produced');
   await page.getByTestId('open-queue').click();
-  await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(7);
+  await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(8);
   expect(errors).toEqual([]);
 });
 
@@ -36,13 +36,18 @@ test('TEST 9/7/8: open a finding, inspect evidence, view the highlighted source 
   await expect(page.getByTestId('finding-title')).toContainText('Penicillin allergy');
   const a = page.getByTestId('evidence-side-A');
   const b = page.getByTestId('evidence-side-B');
-  await expect(a.getByTestId('evidence-quote').first()).toHaveText('“Penicillin allergy documented.”');
+  const ds = a.locator('article', { hasText: 'Penicillin allergy documented.' });
+  await expect(ds.getByTestId('evidence-quote')).toHaveText('“Penicillin allergy documented.”');
   await expect(b.getByTestId('evidence-quote').first()).toHaveText('“No known drug allergies.”');
-  // Page number shown only for the PDF source; not for DOCX/TXT.
-  await expect(a.getByTestId('evidence-location').first()).toContainText('Page 2 (verified PDF page)');
+  // Page number shown only for PDF sources; not for DOCX/TXT.
+  await expect(ds.getByTestId('evidence-location')).toContainText('Page 2 (verified PDF page)');
   await expect(b.getByTestId('evidence-location').first()).toContainText('Not a paged format');
   await expect(b.getByTestId('evidence-location').first()).not.toContainText('Page');
-  await a.getByTestId('view-in-source').first().click();
+  // OCR-derived evidence from the scanned letter is labelled as OCR output.
+  const scan = a.locator('article', { hasText: 'Discharge Letter (scanned copy)' });
+  await expect(scan.getByTestId('ocr-badge')).toBeVisible();
+  await expect(scan.getByTestId('evidence-location')).toContainText('Page 1 (verified PDF page, OCR)');
+  await ds.getByTestId('view-in-source').click();
   await expect(page.getByTestId('evidence-highlight')).toHaveText('Penicillin allergy documented.');
   await expect(page.getByTestId('doc-text')).toContainText('Page 2 (verified)');
 });
@@ -97,6 +102,7 @@ test('TEST 14/16/17: upload TXT (new findings), reject unsupported and empty fil
   await page.getByTestId('file-input').setInputFiles([
     file('sample-follow-up-note-2026-03-20.txt', 'text/plain'),
     { name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from('PNG') },
+    { name: 'macro.exe', mimeType: 'application/octet-stream', buffer: Buffer.from('MZ') },
     { name: 'empty.txt', mimeType: 'text/plain', buffer: Buffer.alloc(0) },
     { name: 'scan.pdf', mimeType: 'application/pdf', buffer: readFileSync(demo('sample-scanned-no-text-layer.pdf')) },
   ]);
@@ -104,9 +110,10 @@ test('TEST 14/16/17: upload TXT (new findings), reject unsupported and empty fil
   await page.getByTestId('upload-submit').click();
   await expect(page.getByTestId('upload-summary')).toBeVisible({ timeout: 30000 });
   const staged = page.getByTestId('staged-list');
-  await expect(staged).toContainText('Unsupported file type ".png"');
+  await expect(staged).toContainText('Unsupported file type ".exe"');
+  await expect(staged).toContainText('not a valid PNG or JPEG');
   await expect(staged).toContainText('empty');
-  await expect(staged).toContainText('OCR is not available');
+  await expect(staged).toContainText('even after OCR');
   await expect(page.getByTestId('upload-summary')).toContainText('new');
   // never vs current, never vs former (existing), former vs current
   await page.goto('#/queue?q=smoking');

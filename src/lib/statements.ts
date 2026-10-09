@@ -175,6 +175,7 @@ interface Draft {
   status: StatementStatus;
   eventDate?: string | null;
   confidence: 'high' | 'moderate' | 'low';
+  valueUnreadable?: boolean;
 }
 
 function negatedBefore(seg: string, termIndex: number): boolean {
@@ -238,7 +239,9 @@ function extractMedications(seg: Segment): Draft[] {
     const discontinued = MED_DISCONTINUED_RE.test(t);
     const change = MED_CHANGE_RE.exec(t);
     const negative = negatedBefore(t, m.index) && !discontinued;
-    if (!dose && !discontinued && seg.hint !== 'medication') continue;
+    // A unit with no readable number (e.g. OCR dropped a smudged digit) means the value is unreadable.
+    const unitOnly = !dose && /^[^\d]{0,12}\b(mg|mcg|µg|units?|iu|ml)\b/i.test(tail);
+    if (!dose && !discontinued && !unitOnly && seg.hint !== 'medication') continue;
     const unit = dose ? dose[2].toLowerCase().replace(/^units?$/, 'units').replace('µg', 'mcg') : null;
     const num = dose ? parseFloat(dose[1]) : null;
     drafts.push({
@@ -253,6 +256,7 @@ function extractMedications(seg: Segment): Draft[] {
       status: discontinued ? 'discontinued' : 'active',
       eventDate: findDate(t),
       confidence: dose && seg.hint === 'medication' ? 'high' : dose ? 'moderate' : 'low',
+      valueUnreadable: unitOnly,
     });
   }
   return drafts;
@@ -362,8 +366,28 @@ function extractProcedures(seg: Segment): Draft[] {
   return drafts;
 }
 
+/** OCR provenance for a quote: whether it came from OCR, and the lowest word confidence inside it. */
+function ocrInfo(
+  doc: Pick<DocumentRecord, 'ocrLowConfidence' | 'ocrRegions'>,
+  start: number,
+  end: number,
+  base: 'high' | 'moderate' | 'low',
+): Partial<ClinicalStatement> {
+  const region = (doc.ocrRegions ?? []).find((r) => start >= r.start && start <= r.end);
+  if (!region) return {};
+  const low = (doc.ocrLowConfidence ?? []).filter((w) => w.start < end && w.end > start);
+  const min = low.length ? Math.min(...low.map((w) => w.confidence)) : null;
+  return {
+    ocrDerived: true,
+    ocrMinConfidence: min,
+    ocrLowConfidence: low.length > 0,
+    // OCR text is never treated as high confidence.
+    extractionConfidence: low.length ? 'low' : base === 'high' ? 'moderate' : base,
+  };
+}
+
 /** Extracts structured clinical statements from one document's extracted text. */
-export function extractStatements(doc: Pick<DocumentRecord, 'id' | 'caseId' | 'extractedText' | 'pageSpans' | 'fileKind'>): ClinicalStatement[] {
+export function extractStatements(doc: Pick<DocumentRecord, 'id' | 'caseId' | 'extractedText' | 'pageSpans' | 'fileKind' | 'ocrLowConfidence' | 'ocrRegions'>): ClinicalStatement[] {
   const text = doc.extractedText;
   const segments = segment(text);
   const out: ClinicalStatement[] = [];
@@ -414,6 +438,8 @@ export function extractStatements(doc: Pick<DocumentRecord, 'id' | 'caseId' | 'e
         charEnd: seg.end,
         extractionMethod: 'deterministic-rules',
         extractionConfidence: d.confidence,
+        ...ocrInfo(doc, seg.start, seg.end, d.confidence),
+        valueUnreadable: d.valueUnreadable || undefined,
       });
     }
   }

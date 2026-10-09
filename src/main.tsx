@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { HashRouter, Link, Route, Routes } from 'react-router-dom';
 import './index.css';
 import { AppProvider } from './app/state';
+import { WorkspaceProvider } from './app/workspace';
 import { Layout } from './components/Layout';
 import { EmptyState } from './components/ui';
 import { Overview } from './pages/Overview';
@@ -38,6 +39,7 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AppProvider>
+          <WorkspaceProvider>
           <Layout>
             <Routes>
               <Route path="/" element={<Overview />} />
@@ -51,6 +53,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Layout>
+          </WorkspaceProvider>
         </AppProvider>
       </HashRouter>
     </ErrorBoundary>

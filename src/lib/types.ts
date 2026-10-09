@@ -44,18 +44,22 @@ export const DOCUMENT_TYPE_LABEL: Record<DocumentType, string> = {
 export type ProcessingStatus =
   | 'uploaded'
   | 'extracting'
+  | 'ocr_running'
   | 'extracted'
   | 'analyzing'
   | 'analyzed'
   | 'needs_attention'
   | 'failed';
 
-export type FileKind = 'pdf' | 'txt' | 'docx';
+export type FileKind = 'pdf' | 'txt' | 'docx' | 'image';
 
-export type ExtractionMethod = 'pdf-text-layer' | 'plain-text' | 'docx-raw-text';
+export type ExtractionMethod = 'pdf-text-layer' | 'pdf-ocr' | 'pdf-text-layer+ocr' | 'image-ocr' | 'plain-text' | 'docx-raw-text';
 
 export const EXTRACTION_METHOD_LABEL: Record<ExtractionMethod, string> = {
-  'pdf-text-layer': 'PDF text layer (pdf.js) — no OCR',
+  'pdf-text-layer': 'PDF text layer (pdf.js)',
+  'pdf-ocr': 'OCR of scanned PDF pages (Tesseract.js)',
+  'pdf-text-layer+ocr': 'PDF text layer + OCR of scanned pages (Tesseract.js)',
+  'image-ocr': 'OCR of image (Tesseract.js)',
   'plain-text': 'Plain-text decoding (UTF-8)',
   'docx-raw-text': 'DOCX paragraph text (mammoth)',
 };
@@ -65,12 +69,27 @@ export interface PageSpan {
   page: number;
   start: number;
   end: number;
+  /** How this page's text was obtained. Absent on records created before OCR support (= text layer). */
+  method?: 'text-layer' | 'ocr';
+  /** Mean word confidence reported by the OCR engine (0-100), when OCR was used. */
+  ocrConfidence?: number | null;
 }
+
+export interface OcrSpan {
+  start: number;
+  end: number;
+  confidence: number;
+  text: string;
+}
+
+export type CaseRole = 'owner' | 'reviewer' | 'viewer';
 
 export interface CaseRecord {
   id: string;
   label: string;
   isDemo: boolean;
+  /** Present when this case is stored in a shared workspace server; the local copy is a cache. */
+  remote?: { serverUrl: string; role: CaseRole; owner: string; syncedAt: string | null };
   createdAt: string;
   updatedAt: string;
   lastAnalyzedAt: string | null;
@@ -95,6 +114,10 @@ export interface DocumentRecord {
   pageSpans: PageSpan[];
   extractionErrors: string[];
   extractionWarnings: string[];
+  /** OCR words whose engine-reported confidence was below the review threshold (character offsets into extractedText). */
+  ocrLowConfidence?: OcrSpan[];
+  /** Character spans of text produced by OCR (whole pages or images). */
+  ocrRegions?: { start: number; end: number; confidence: number | null }[];
   contentHash: string;
   statementCount: number;
   isSeededDemo: boolean;
@@ -136,6 +159,14 @@ export interface ClinicalStatement {
   charEnd: number;
   extractionMethod: 'deterministic-rules';
   extractionConfidence: 'high' | 'moderate' | 'low';
+  /** True when the quoted source text was produced by OCR. */
+  ocrDerived?: boolean;
+  /** Lowest OCR word confidence inside the quote (engine-reported, 0-100); null when not OCR. */
+  ocrMinConfidence?: number | null;
+  /** True when a word in the quote fell below the OCR confidence threshold. */
+  ocrLowConfidence?: boolean;
+  /** True when a value is expected (e.g. a unit is present) but could not be read. */
+  valueUnreadable?: boolean;
 }
 
 export type FindingType =
@@ -194,6 +225,8 @@ export interface EvidenceRef {
   documentTitle: string;
   documentDate: string | null;
   extractionMethod: ExtractionMethod | null;
+  ocrDerived?: boolean;
+  ocrMinConfidence?: number | null;
 }
 
 export interface Finding {
@@ -222,6 +255,10 @@ export interface Finding {
   reviewStatus: ReviewStatus;
   /** True when the latest analysis no longer produced this finding (e.g. a source was removed). */
   stale: boolean;
+  /** Which engine proposed the finding. Absent = deterministic rules. */
+  origin?: 'rules' | 'ai';
+  /** Model identifier for AI-assisted findings. */
+  aiModel?: string;
   isSeededDemo: boolean;
   relevantDates: string[];
   createdAt: string;
@@ -240,7 +277,13 @@ export type EventKind =
   | 'finding_created'
   | 'finding_superseded'
   | 'status_changed'
-  | 'note_added';
+  | 'note_added'
+  | 'ai_analysis_completed'
+  | 'ai_analysis_failed'
+  | 'case_shared'
+  | 'member_added'
+  | 'member_removed'
+  | 'case_synced';
 
 /** Append-only audit / timeline event. Never updated after insert. */
 export interface AuditEvent {

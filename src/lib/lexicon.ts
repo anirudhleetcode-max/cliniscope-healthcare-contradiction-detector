@@ -84,7 +84,7 @@ export interface LabEntry extends LexEntry {
 }
 
 export const LABS: LabEntry[] = [
-  { key: 'hba1c', label: 'HbA1c', terms: ['hemoglobin a1c', 'haemoglobin a1c', 'glycated hemoglobin', 'hba1c', 'a1c'], defaultUnit: '%' },
+  { key: 'hba1c', label: 'HbA1c', terms: ['hemoglobin a1c', 'haemoglobin a1c', 'glycated hemoglobin', 'hba1c', 'a1c', 'hbalc' /* common OCR confusion of 1 and l */], defaultUnit: '%' },
   { key: 'creatinine', label: 'Creatinine', terms: ['serum creatinine', 'creatinine'], defaultUnit: 'mg/dL' },
   { key: 'egfr', label: 'eGFR', terms: ['egfr'], defaultUnit: 'mL/min/1.73m2' },
   { key: 'potassium', label: 'Potassium', terms: ['potassium'], defaultUnit: 'mmol/L' },

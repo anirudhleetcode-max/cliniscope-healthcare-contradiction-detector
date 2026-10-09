@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  Activity, BookOpen, FileStack, FolderKanban, GanttChartSquare, LayoutDashboard, ListChecks, Menu, PlayCircle, ScanSearch, UserRound, X,
+  Activity, BookOpen, Cloud, HardDrive, FileStack, FolderKanban, GanttChartSquare, LayoutDashboard, ListChecks, Menu, PlayCircle, ScanSearch, UserRound, X,
 } from 'lucide-react';
 import { useApp } from '../app/state';
+import { useWorkspace } from '../app/workspace';
 import { cx } from './ui';
 import { DemoGuide, useDemoGuide } from './DemoGuide';
 import { APP_VERSION } from '../lib/version';
@@ -19,6 +20,7 @@ const NAV = [
 
 export function Layout({ children }: { children: ReactNode }) {
   const { currentCase, cases, setCaseId, reviewer, toasts, dismissToast } = useApp();
+  const ws = useWorkspace();
   const [mobileNav, setMobileNav] = useState(false);
   const guide = useDemoGuide();
   const navigate = useNavigate();
@@ -83,8 +85,9 @@ export function Layout({ children }: { children: ReactNode }) {
                 <option value="__new">+ New case…</option>
               </select>
             </div>
-            <div className="ml-auto hidden items-center gap-2 text-xs text-muted md:flex" title="Demo identity — no authentication is implemented">
-              <UserRound size={15} aria-hidden /><span className="max-w-[16rem] truncate">{reviewer}</span>
+            <ModeChip />
+            <div className="ml-auto hidden items-center gap-2 text-xs text-muted md:flex" title={ws.session ? 'Authenticated shared-workspace account' : 'Local demo identity — not authenticated'}>
+              <UserRound size={15} aria-hidden /><span className="max-w-[16rem] truncate" data-testid="current-user">{ws.session ? `${ws.session.user.displayName} (signed in)` : reviewer}</span>
             </div>
             <button className="btn-secondary px-2.5 lg:hidden" onClick={() => guide.start()} aria-label="Run interactive demo"><PlayCircle size={16} /></button>
           </header>
@@ -121,6 +124,26 @@ export function Layout({ children }: { children: ReactNode }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function ModeChip() {
+  const { currentCase } = useApp();
+  const ws = useWorkspace();
+  const remote = currentCase?.remote;
+  if (remote) {
+    const signedIn = !!ws.session && ws.session.serverUrl === remote.serverUrl;
+    return (
+      <NavLink to="/about#workspace" className={cx('chip hidden border px-2.5 py-1 sm:inline-flex', signedIn ? 'border-ok/30 bg-ok-50 text-ok' : 'border-warn/30 bg-warn-50 text-warn')} data-testid="mode-chip"
+        title={signedIn ? `Shared workspace on ${remote.serverUrl}. Last synchronized ${remote.syncedAt ?? 'never'}. Updates are fetched every 15 s.` : 'Shared case — sign in to synchronize'}>
+        <Cloud size={13} aria-hidden />{signedIn ? `Shared workspace · ${remote.role}` : 'Shared case · signed out'}{ws.syncing ? ' · syncing…' : ''}
+      </NavLink>
+    );
+  }
+  return (
+    <NavLink to="/about#workspace" className="chip hidden border border-line bg-soft px-2.5 py-1 text-muted sm:inline-flex" data-testid="mode-chip" title="This case is stored only in this browser (IndexedDB).">
+      <HardDrive size={13} aria-hidden />Local demo mode
+    </NavLink>
   );
 }
 
