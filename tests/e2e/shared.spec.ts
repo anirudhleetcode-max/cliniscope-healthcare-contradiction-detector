@@ -122,7 +122,25 @@ test('a review started while the case is still syncing to a slow server waits fo
 });
 
 test('an outsider cannot open a case they were not invited to; signed-out users cannot act', async ({ browser }) => {
+  // First visit: the Overview offers sign-in, registration and the demo.
+  const visitor = await (await browser.newContext()).newPage();
+  await visitor.goto('#/');
+  await expect(visitor.getByTestId('entry-sign-in')).toBeVisible();
+  await expect(visitor.getByTestId('entry-register')).toBeVisible();
+  await expect(visitor.getByTestId('entry-demo')).toBeVisible();
+  await visitor.close();
+
   const eve = await signUp(browser, 'Eve Outsider', `eve-${run}@example.test`);
+  // Signed in with no cases: the server-backed overview shows an empty state, not demo numbers.
+  await eve.goto('#/');
+  await expect(eve.getByTestId('overview-empty')).toBeVisible({ timeout: 30_000 });
+  // Profile edit is saved on the server and shown in the menu.
+  await eve.goto('#/settings#workspace');
+  await eve.getByTestId('profile-name-input').fill('Eve Renamed');
+  await eve.getByTestId('profile-save').click();
+  await expect(eve.getByTestId('signed-in-as')).toHaveText('Eve Renamed');
+  const tok = await eve.evaluate(() => JSON.parse(sessionStorage.getItem('medguard.session')!).token as string);
+  expect((await (await eve.request.get(`${API}/api/auth/me`, { headers: { Authorization: `Bearer ${tok}` } })).json()).user.displayName).toBe('Eve Renamed');
   await eve.goto('#/cases');
   await expect(eve.getByTestId('shared-cases')).toContainText('No shared cases yet');
   // Direct API probe with Eve's session for a non-existent/unshared case → 404.
@@ -133,7 +151,7 @@ test('an outsider cannot open a case they were not invited to; signed-out users 
   expect(anon.status()).toBe(401);
   // The header menu shows the authenticated profile (from the API) and signs out through the API.
   await eve.getByRole('button', { name: 'User menu' }).click();
-  await expect(eve.getByTestId('profile-name')).toHaveText('Eve Outsider');
+  await expect(eve.getByTestId('profile-name')).toHaveText('Eve Renamed');
   await expect(eve.getByTestId('profile-email')).toHaveText(`eve-${run}@example.test`);
   await eve.getByTestId('menu-sign-out').click();
   await eve.goto('#/settings#workspace');

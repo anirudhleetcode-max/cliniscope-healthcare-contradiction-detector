@@ -200,6 +200,49 @@ describe('shared workspace API: cases, permissions and two-user review', () => {
   });
 });
 
+describe('profile and signed-in overview', () => {
+  it('updates only the caller\'s own display name, with validation; the change persists for later sessions', async () => {
+    const dana = await register('pv-dana@example.test', 'Dana Draft');
+    const erin = await register('pv-erin@example.test', 'Erin Other');
+    expect((await api('/api/auth/me', { method: 'PATCH', body: { displayName: 'X' } })).status).toBe(401);
+    expect((await api('/api/auth/me', { method: 'PATCH', token: dana, body: { displayName: '   ' } })).status).toBe(400);
+    expect((await api('/api/auth/me', { method: 'PATCH', token: dana, body: { displayName: 'x'.repeat(81) } })).status).toBe(400);
+    // Unknown fields (including attempts to change email or target another user) are rejected outright.
+    expect((await api('/api/auth/me', { method: 'PATCH', token: dana, body: { displayName: 'Dana', email: 'pv-erin@example.test' } })).status).toBe(400);
+    expect((await api('/api/auth/me', { method: 'PATCH', token: dana, body: { displayName: 'Dana', id: 'usr_other' } })).status).toBe(400);
+    const r = await api('/api/auth/me', { method: 'PATCH', token: dana, body: { displayName: '  Dana Reviewer  ' } });
+    expect(r.status).toBe(200);
+    expect(r.json.user).toMatchObject({ email: 'pv-dana@example.test', displayName: 'Dana Reviewer' });
+    expect(JSON.stringify(r.json)).not.toMatch(/password|hash|token/i);
+    expect((await api('/api/auth/me', { token: dana })).json.user.displayName).toBe('Dana Reviewer');
+    const again = await api('/api/auth/login', { body: { email: 'pv-dana@example.test', password: 'correct-horse-battery' } });
+    expect(again.json.user.displayName).toBe('Dana Reviewer');
+    expect((await api('/api/auth/me', { token: erin })).json.user.displayName).toBe('Erin Other');
+  });
+
+  it('counts only the caller\'s own and shared cases, once each, and shows only their activity', async () => {
+    const owner = await register('pv-olivia@example.test', 'Olivia Owner');
+    const rev = await register('pv-ravi@example.test', 'Ravi Reviewer');
+    const outsider = await register('pv-omar@example.test', 'Omar Outsider');
+    expect((await api('/api/overview')).status).toBe(401);
+    const empty = await api('/api/overview', { token: rev });
+    expect(empty.json.totals).toEqual({ cases: 0, owned: 0, shared: 0, documents: 0, findings: 0, awaitingReview: 0, reviewed: 0 });
+    expect(empty.json.recentActivity).toEqual([]);
+    const a = (await api('/api/cases', { token: owner, body: { label: 'OVERVIEW-A · synthetic' } })).json.case.id;
+    await api('/api/cases', { token: owner, body: { label: 'OVERVIEW-B · synthetic' } });
+    const c = (await api('/api/cases', { token: rev, body: { label: 'OVERVIEW-C · synthetic' } })).json.case.id;
+    expect((await api(`/api/cases/${a}/members`, { token: owner, body: { email: 'pv-ravi@example.test', role: 'reviewer' } })).status).toBe(200);
+    const o = (await api('/api/overview', { token: owner })).json;
+    expect(o.totals).toMatchObject({ cases: 2, owned: 2, shared: 0 });
+    const r = (await api('/api/overview', { token: rev })).json;
+    expect(r.totals).toMatchObject({ cases: 2, owned: 1, shared: 1 });
+    expect(r.recentActivity.every((e: any) => [a, c].includes(e.caseId))).toBe(true);
+    const x = (await api('/api/overview', { token: outsider })).json;
+    expect(x.totals.cases).toBe(0);
+    expect(x.recentActivity).toEqual([]);
+  });
+});
+
 describe('AI endpoint (mock provider for error paths; real verification logic)', () => {
   let token = '';
   const doc = { id: 'doc_aiabcdef1', caseId: 'case_localabc123', title: 'Note A', documentType: 'clinical_note', documentDate: '2026-03-12', extractedText: 'Allergies: Penicillin allergy documented.', pageSpans: [], fileKind: 'txt', extractionMethod: 'plain-text' };

@@ -9,6 +9,10 @@ const SS_SESSION = 'medguard.session';
 export interface RemoteUser { id: string; email: string; displayName: string }
 export interface RemoteSession { serverUrl: string; token: string; expiresAt: string; user: RemoteUser }
 export interface RemoteHealth { ok: boolean; version: string; ai: { configured: boolean; provider: string | null; model: string | null }; registration: boolean }
+export interface RemoteOverview {
+  totals: { cases: number; owned: number; shared: number; documents: number; findings: number; awaitingReview: number; reviewed: number };
+  recentActivity: AuditEvent[];
+}
 export interface RemoteMember { userId: string; email: string; displayName: string; role: CaseRole }
 export interface RemoteSnapshot {
   case: { id: string; label: string; createdAt: string; updatedAt: string; lastAnalyzedAt: string | null; owner: string };
@@ -80,6 +84,8 @@ export const remoteApi = {
   register: (url: string, email: string, password: string, displayName: string) => apiFetch<{ token: string; expiresAt: string; user: RemoteUser }>(url, '/api/auth/register', { body: { email, password, displayName } }),
   login: (url: string, email: string, password: string) => apiFetch<{ token: string; expiresAt: string; user: RemoteUser }>(url, '/api/auth/login', { body: { email, password } }),
   logout: (s: RemoteSession) => apiFetch(s.serverUrl, '/api/auth/logout', { method: 'POST', token: s.token }),
+  updateProfile: (s: RemoteSession, displayName: string) => apiFetch<{ user: RemoteUser }>(s.serverUrl, '/api/auth/me', { token: s.token, method: 'PATCH', body: { displayName } }),
+  overview: (s: RemoteSession) => apiFetch<RemoteOverview>(s.serverUrl, '/api/overview', { token: s.token }),
   listCases: (s: RemoteSession) => apiFetch<{ cases: RemoteCaseSummary[] }>(s.serverUrl, '/api/cases', { token: s.token }),
   createCase: (s: RemoteSession, id: string | undefined, label: string) => apiFetch<RemoteSnapshot>(s.serverUrl, '/api/cases', { token: s.token, body: { id, label } }),
   getCase: (s: RemoteSession, id: string) => apiFetch<RemoteSnapshot>(s.serverUrl, `/api/cases/${encodeURIComponent(id)}`, { token: s.token }),
