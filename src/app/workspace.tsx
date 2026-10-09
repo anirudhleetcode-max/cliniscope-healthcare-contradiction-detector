@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { db, useApp } from './state';
 import {
-  RemoteError, applySnapshot, defaultServerUrl, loadSession, pullCase, pushCase, remoteApi, saveSession, setServerUrl as persistServerUrl,
+  RemoteError, applySnapshot, defaultServerUrl, loadSession, pullCase, purgeRemoteCache, pushCase, remoteApi, saveSession, setServerUrl as persistServerUrl,
   type RemoteHealth, type RemoteSession,
 } from '../lib/remote';
 import { addReviewerNote, transitionFinding } from '../lib/services';
@@ -49,7 +49,7 @@ async function afterPendingPush(caseId: string) {
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { currentCase, toast } = useApp();
+  const { currentCase, toast, setAccountMode } = useApp();
   const [serverUrl, setUrl] = useState(defaultServerUrl);
   const [session, setSession] = useState<RemoteSession | null>(() => {
     const s = loadSession();
@@ -59,6 +59,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [healthError, setHealthError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
+
+  // Account isolation in this browser: whenever the signed-in account changes (sign-in, switch, sign-out,
+  // expiry), cached shared cases of any other account are deleted, and the demo is hidden while signed in.
+  const activeUserId = session?.user.id ?? null;
+  const activeServer = session?.serverUrl ?? null;
+  useEffect(() => {
+    setAccountMode(!!activeUserId);
+    purgeRemoteCache(db, activeUserId && activeServer ? { serverUrl: activeServer, userId: activeUserId } : null)
+      .catch((e) => toast('error', `Cached shared cases could not be cleared from this browser: ${(e as Error).message}`));
+  }, [activeUserId, activeServer, setAccountMode, toast]);
 
   const refreshHealth = useCallback(async () => {
     if (!serverUrl) { setHealth(null); setHealthError(null); return; }
@@ -184,7 +194,7 @@ export function useReviewActions() {
       const s = requireSession();
       await afterPendingPush(c.id);
       try {
-        await applySnapshot(db, s.serverUrl, await remoteApi.transition(s, f.id, to, reason, f.reviewStatus));
+        await applySnapshot(db, s, await remoteApi.transition(s, f.id, to, reason, f.reviewStatus));
       } catch (e) {
         if (e instanceof RemoteError && e.status === 409) await pullCase(db, s, c.id).catch(() => {});
         throw e;
@@ -206,7 +216,7 @@ export function useReviewActions() {
     if (c?.remote) {
       const s = requireSession();
       await afterPendingPush(c.id);
-      await applySnapshot(db, s.serverUrl, await remoteApi.note(s, f.id, text));
+      await applySnapshot(db, s, await remoteApi.note(s, f.id, text));
       return;
     }
     await addReviewerNote(db, f.id, text, reviewer);

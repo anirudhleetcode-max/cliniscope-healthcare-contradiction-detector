@@ -4,7 +4,7 @@ import { Cloud, FileText, FolderOpen, FolderPlus, Search, Share2, Trash2, Upload
 import { db, useApp, useWorkspaceData } from '../app/state';
 import { useWorkspace } from '../app/workspace';
 import { CaseStateBadge } from '../components/clinical';
-import { DemoControls } from '../components/DemoControls';
+import { DEMO_CASE_COUNT, DEMO_RECORD_COUNT, DemoControls } from '../components/DemoControls';
 import { Badge, ConfirmDialog, EmptyState, FilterChip, Modal, PageHeader, PageSkeleton, ProgressBar, SearchInput, SectionCard, SelectField, cx } from '../components/ui';
 import { formatDateTime } from '../lib/dates';
 import { CASE_STATE_LABEL, summarizeCase, type CaseReviewState, type CaseSummary } from '../lib/metrics';
@@ -18,7 +18,7 @@ const PAGE = 10;
 type Sort = 'updated' | 'findings' | 'id';
 
 export function Cases() {
-  const { setCaseId, toast, reviewer } = useApp();
+  const { setCaseId, toast, reviewer, accountMode } = useApp();
   const { cases, documents, findings, loading } = useWorkspaceData();
   const ws = useWorkspace();
   const navigate = useNavigate();
@@ -29,11 +29,18 @@ export function Cases() {
   const [toDelete, setToDelete] = useState<CaseRecord | null>(null);
   const [sharing, setSharing] = useState<string | null>(null);
   const [shared, setShared] = useState<RemoteCaseSummary[] | null>(null);
+  const [sharedError, setSharedError] = useState<string | null>(null);
+  const [sharedReload, setSharedReload] = useState(0);
   const [page, setPage] = useState(0);
   useEffect(() => {
+    setSharedError(null);
     if (!ws.session) { setShared(null); return; }
-    remoteApi.listCases(ws.session).then((r) => setShared(r.cases)).catch(() => setShared(null));
-  }, [ws.session, cases]);
+    let current = true;
+    // A failed request is reported as an error with a retry, never shown as an empty or endless "loading" list.
+    remoteApi.listCases(ws.session).then((r) => { if (current) setShared(r.cases); })
+      .catch((e) => { if (current) { setShared(null); setSharedError((e as Error).message); } });
+    return () => { current = false; };
+  }, [ws.session, cases, sharedReload]);
 
   const q = params.get('q') ?? '';
   const state = (params.get('state') ?? 'all') as CaseReviewState | 'all';
@@ -76,7 +83,7 @@ export function Cases() {
   const createShared = async () => {
     try {
       const snap = await remoteApi.createCase(ws.requireSession(), undefined, label);
-      await applySnapshot(db, ws.session!.serverUrl, snap);
+      await applySnapshot(db, ws.session!, snap);
       setLabel('');
       setNewOpen(false);
       setCaseId(snap.case.id);
@@ -137,7 +144,9 @@ export function Cases() {
       </div>
 
       {cases!.length === 0 ? (
-        <EmptyState icon={<FolderOpen size={19} />} title="No cases yet" body="Load the synthetic demonstration workspace or create a case for your own synthetic documents." action={<><DemoControls compact /></>} />
+        accountMode
+          ? <EmptyState icon={<FolderOpen size={19} />} title="No cases open in this browser" body="Your server cases are listed below under “Shared workspace cases you can access”. Open one there, or create a new case." />
+          : <EmptyState icon={<FolderOpen size={19} />} title="No cases yet" body="Load the synthetic demonstration workspace or create a case for your own synthetic documents." action={<><DemoControls compact /></>} />
       ) : rows.length === 0 ? (
         <EmptyState icon={<Search size={19} />} title="No cases match these filters" body="Remove a filter or clear the search." action={<button className="btn-secondary" onClick={() => setParams(new URLSearchParams(), { replace: true })}>Clear filters</button>} />
       ) : (
@@ -195,7 +204,7 @@ export function Cases() {
       )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <SectionCard title="Demonstration data" description="Six fictional cases, 16 synthetic records">
+        <SectionCard title="Demonstration data" description={`${DEMO_CASE_COUNT} fictional cases, ${DEMO_RECORD_COUNT} synthetic records`}>
           <p className="mb-3 text-[13.5px] text-muted">Reset removes and recreates <strong>only the synthetic demonstration cases</strong>; cases you created are never touched.</p>
           <DemoControls compact />
         </SectionCard>
@@ -206,7 +215,8 @@ export function Cases() {
 
       {ws.session ? (
         <SectionCard className="mt-6" title="Shared workspace cases you can access" icon={<Cloud size={16} aria-hidden />} description={`From ${ws.session.serverUrl} as ${ws.session.user.displayName}`} bodyClassName="p-0" testId="shared-cases">
-          {!shared ? <p className="px-5 py-4 text-sm text-muted">Loading…</p> : shared.length === 0 ? <p className="px-5 py-4 text-sm text-muted">No shared cases yet.</p> : (
+          {sharedError ? <p className="px-5 py-4 text-sm" role="alert" data-testid="shared-cases-error">The server cases could not be loaded: {sharedError} <button className="ml-1 font-semibold text-brand underline" onClick={() => setSharedReload((n) => n + 1)}>Retry</button></p>
+            : !shared ? <p className="px-5 py-4 text-sm text-muted">Loading…</p> : shared.length === 0 ? <p className="px-5 py-4 text-sm text-muted">No shared cases yet.</p> : (
             <ul className="divide-y divide-line">
               {shared.map((r) => (
                 <li key={r.id} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center">

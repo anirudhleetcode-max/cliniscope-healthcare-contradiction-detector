@@ -99,6 +99,8 @@ export interface CaseRecord {
   /** Present when this case is stored in a shared workspace server; the local copy is a cache. */
   remote?: {
     serverUrl: string; role: CaseRole; owner: string; syncedAt: string | null;
+    /** The signed-in account this cached copy was fetched for; the cache is discarded when the account changes. */
+    userId?: string;
     /** Local changes not yet accepted by the server; background pulls are suspended while set. */
     unsynced?: boolean;
     /** Documents deleted locally whose deletion has not yet been sent to the server. */

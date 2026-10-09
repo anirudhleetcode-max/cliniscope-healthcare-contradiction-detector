@@ -25,8 +25,9 @@ export function CurrentCase() {
 
 export function CaseDetail() {
   const { id } = useParams();
-  const { caseId, setCaseId, seeding } = useApp();
-  const caseRec = useLiveQuery(() => db.cases.get(id ?? '').then((c) => c ?? null), [id]);
+  const { caseId, setCaseId, seeding, accountMode } = useApp();
+  // Signed in, demo cases are not shown, even by direct link.
+  const caseRec = useLiveQuery(() => db.cases.get(id ?? '').then((c) => (c && !(accountMode && c.isDemo) ? c : null)), [id, accountMode]);
   const { documents, findings, statements, events, loading } = useCaseData(id ?? null);
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();

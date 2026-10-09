@@ -2,19 +2,27 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FlaskConical, RotateCcw } from 'lucide-react';
 import { useApp } from '../app/state';
+import { EXTRA_DEMO_CASES } from '../lib/demoWorkspace';
+import { DEMO_MANIFEST } from '../../scripts/demo-content.mjs';
 import { Modal } from './ui';
+
+/** Size of the fictional demo, derived from its definition (the main case plus the additional cases). */
+export const DEMO_CASE_COUNT = 1 + EXTRA_DEMO_CASES.length;
+export const DEMO_RECORD_COUNT = (DEMO_MANIFEST as unknown[]).length + EXTRA_DEMO_CASES.reduce((n, c) => n + c.documents.length, 0);
 
 /** "Load Demonstration Case" and "Reset Demonstration" — affect ONLY the synthetic demo cases. */
 export function DemoControls({ compact }: { compact?: boolean }) {
-  const { cases, setCaseId, resetDemo, seeding, toast } = useApp();
+  const { cases, setCaseId, resetDemo, seeding, toast, accountMode } = useApp();
   const navigate = useNavigate();
   const [confirm, setConfirm] = useState(false);
   const demo = cases?.find((c) => c.demoKey === 'DEMO-0042') ?? cases?.find((c) => c.isDemo);
   const load = async () => {
     if (demo) { setCaseId(demo.id); navigate(`/cases/${demo.id}`); toast('info', 'Demonstration case opened.'); return; }
     const c = await resetDemo();
-    if (c) { navigate(`/cases/${c.id}`); toast('success', 'Demonstration workspace loaded (6 synthetic cases).'); } else toast('error', 'The demonstration case could not be loaded.');
+    if (c) { navigate(`/cases/${c.id}`); toast('success', `Demonstration workspace loaded (${DEMO_CASE_COUNT} synthetic cases).`); } else toast('error', 'The demonstration case could not be loaded.');
   };
+  // Signed in, the fictional demo is kept apart from the account's real records.
+  if (accountMode) return <p className="text-[13.5px] text-muted" data-testid="demo-hidden-note">The fictional demonstration workspace is kept separate from your account and is not shown while you are signed in. Sign out to explore it.</p>;
   return (
     <div className={compact ? 'flex flex-wrap gap-2' : 'flex flex-col gap-2'}>
       <button className="btn-primary" onClick={load} disabled={seeding} data-testid="load-demo"><FlaskConical size={15} />{seeding ? 'Loading…' : 'Load Demonstration Case'}</button>

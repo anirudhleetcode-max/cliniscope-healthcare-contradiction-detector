@@ -108,7 +108,8 @@ export const remoteApi = {
  * If the case has unsynced local changes (and this is not the result of a successful push),
  * local-only documents, statements, files and findings are KEPT and the unsynced flag survives.
  */
-export async function applySnapshot(db: MedguardDB, serverUrl: string, snap: RemoteSnapshot, opts: { afterPush?: boolean } = {}): Promise<CaseRecord> {
+export async function applySnapshot(db: MedguardDB, s: Pick<RemoteSession, 'serverUrl' | 'user'>, snap: RemoteSnapshot, opts: { afterPush?: boolean } = {}): Promise<CaseRecord> {
+  const { serverUrl } = s;
   const caseId = snap.case.id;
   const existing = await db.cases.get(caseId);
   const keepLocal = !opts.afterPush && !!existing?.remote?.unsynced;
@@ -120,7 +121,7 @@ export async function applySnapshot(db: MedguardDB, serverUrl: string, snap: Rem
     updatedAt: snap.case.updatedAt,
     lastAnalyzedAt: snap.case.lastAnalyzedAt,
     remote: {
-      serverUrl, role: snap.role, owner: snap.case.owner, syncedAt: snap.serverTime,
+      serverUrl, userId: s.user.id, role: snap.role, owner: snap.case.owner, syncedAt: snap.serverTime,
       ...(keepLocal ? { unsynced: true, pendingRemovals: existing!.remote!.pendingRemovals ?? [] } : {}),
     },
   };
@@ -174,7 +175,7 @@ export async function pushCase(db: MedguardDB, s: RemoteSession, caseId: string,
     if (f) await remoteApi.uploadFile(s, caseId, d.id, f.blob);
   }
   const fresh = missing.length ? await remoteApi.getCase(s, caseId) : snap;
-  await applySnapshot(db, s.serverUrl, fresh, { afterPush: true }); // only a fully successful push clears the unsynced flag
+  await applySnapshot(db, s, fresh, { afterPush: true }); // only a fully successful push clears the unsynced flag
   return fresh;
 }
 
@@ -191,7 +192,7 @@ export async function pullCase(db: MedguardDB, s: RemoteSession, caseId: string)
   if (await unsynced()) return null;
   const snap = await remoteApi.getCase(s, caseId);
   if (await unsynced()) return null;
-  await applySnapshot(db, s.serverUrl, snap);
+  await applySnapshot(db, s, snap);
   return snap;
 }
 
@@ -218,3 +219,23 @@ export const SAFE_MIME: Record<string, string> = {
   pdf: 'application/pdf', txt: 'text/plain', image: 'image/png',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 };
+
+/**
+ * Removes cached copies of shared cases that do not belong to the active account (all of them when
+ * signed out), so a later user of this browser never sees another account's server records.
+ * Local cases and the demo are untouched. Returns the number of cases removed.
+ */
+export async function purgeRemoteCache(db: MedguardDB, active: { serverUrl: string; userId: string } | null): Promise<number> {
+  const stale = (await db.cases.toArray()).filter((c) => c.remote && !(active && c.remote.serverUrl === active.serverUrl && c.remote.userId === active.userId));
+  if (!stale.length) return 0;
+  const ids = stale.map((c) => c.id);
+  await db.transaction('rw', [db.cases, db.documents, db.statements, db.findings, db.events, db.files], async () => {
+    await db.documents.where('caseId').anyOf(ids).delete();
+    await db.files.where('caseId').anyOf(ids).delete();
+    await db.statements.where('caseId').anyOf(ids).delete();
+    await db.findings.where('caseId').anyOf(ids).delete();
+    await db.events.where('caseId').anyOf(ids).delete();
+    await db.cases.bulkDelete(ids);
+  });
+  return ids.length;
+}

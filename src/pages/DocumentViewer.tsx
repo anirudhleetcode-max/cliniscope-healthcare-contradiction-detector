@@ -16,9 +16,13 @@ export function DocumentViewer() {
   const [params, setParams] = useSearchParams();
   const { toast } = useApp();
   const ws = useWorkspace();
-  const { currentCase } = useApp();
+  const { currentCase, accountMode } = useApp();
   const caseRole = currentCase?.remote?.role;
-  const doc = useLiveQuery(() => db.documents.get(id ?? '').then((d) => d ?? null), [id]);
+  // Signed in, documents of demo cases are not shown, even by direct link.
+  const doc = useLiveQuery(async () => {
+    const d = await db.documents.get(id ?? '');
+    return d && !(accountMode && (await db.cases.get(d.caseId))?.isDemo) ? d : null;
+  }, [id, accountMode]);
   const statements = useLiveQuery(() => db.statements.where('documentId').equals(id ?? '').toArray(), [id]);
   const findings = useLiveQuery(() => (doc ? db.findings.where('caseId').equals(doc.caseId).toArray() : []), [doc?.caseId]);
   const [editing, setEditing] = useState(false);

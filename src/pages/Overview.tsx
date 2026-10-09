@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AccountOverview } from '../components/AccountOverview';
 import { ArrowRight, CheckCircle2, Cloud, Cpu, FileStack, FileUp, FlaskConical, FolderOpen, GitCompareArrows, HardDrive, ListChecks, ScanText } from 'lucide-react';
 import { useApp, useWorkspaceData } from '../app/state';
+import { useWorkspace } from '../app/workspace';
 import { AnalyzeButton } from '../components/AnalyzeButton';
 import { BarList, CHART, Donut, type Datum } from '../components/charts';
 import { AnalysisSummaryList, FindingsTable } from '../components/clinical';
@@ -28,15 +29,18 @@ export const STATUS_COLOR: Record<ReviewStatus, string> = {
  */
 export function Overview() {
   const navigate = useNavigate();
+  const { accountMode } = useApp();
+  // Signed in, the dashboard is the account's server data only; the fictional demo is not shown.
   return (
     <div className="space-y-6">
       <AccountOverview onExploreDemo={() => navigate('/cases')} />
-      <DemoOverview />
+      {accountMode ? null : <DemoOverview />}
     </div>
   );
 }
 
 function DemoOverview() {
+  const ws = useWorkspace();
   const { seeding, seedStage, seedError, resetDemo, storageError } = useApp();
   const { cases, documents, findings, events, loading } = useWorkspaceData();
   const [justRan, setJustRan] = useState<{ caseId: string; summary: AnalysisSummary } | null>(null);
@@ -141,7 +145,8 @@ function DemoOverview() {
               <EnvRow icon={HardDrive} label="Data storage" value="This browser (IndexedDB)" ok />
               <EnvRow icon={Cpu} label="Detection" value="Local deterministic rules" ok />
               <EnvRow icon={ScanText} label="OCR" value="On-device (Tesseract.js)" ok />
-              <EnvRow icon={Cloud} label="Backend / external AI" value="Not configured" />
+              <EnvRow icon={Cloud} label="Shared-workspace server" value={!ws.serverUrl ? 'Not configured' : ws.health ? 'Reachable · sign in to use it' : ws.healthError ? 'Unreachable' : 'Checking…'} ok={!!ws.health} />
+              <EnvRow icon={Cpu} label="External AI (server)" value={!ws.health ? 'Unknown' : ws.health.ai.configured ? `Configured (${ws.health.ai.provider})` : 'Not configured'} ok={!!ws.health?.ai.configured} />
             </ul>
             <Link to="/settings" className="mt-3 inline-flex text-[13px] font-medium text-brand hover:underline">Capabilities &amp; data settings</Link>
           </SectionCard>

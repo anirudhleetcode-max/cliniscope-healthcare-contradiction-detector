@@ -7,7 +7,7 @@ import { loadConfig } from '../../server/config';
 import { openDb } from '../../server/db';
 import { newDatabase } from './testDb';
 import { MedguardDB } from '../../src/lib/db';
-import { applySnapshot, markUnsynced, pullCase, pushCase, remoteApi, type RemoteSession } from '../../src/lib/remote';
+import { applySnapshot, markUnsynced, pullCase, purgeRemoteCache, pushCase, remoteApi, type RemoteSession } from '../../src/lib/remote';
 import { analyzeCase, createCase, deleteDocument, uploadDocument, type Extractor } from '../../src/lib/services';
 import { extractTxt } from '../../src/lib/extract';
 import { findAllDates } from '../../src/lib/dates';
@@ -75,7 +75,7 @@ describe('shared-workspace sync safety', () => {
     await markUnsynced(db, c.id);
     expect(await pullCase(db, alice, c.id)).toBeNull(); // pull suspended
     // A snapshot arriving from another action (e.g. a review transition) merges instead of replacing.
-    await applySnapshot(db, base, await remoteApi.getCase(alice, c.id));
+    await applySnapshot(db, alice, await remoteApi.getCase(alice, c.id));
     expect(await db.documents.get(local.id)).toBeDefined();
     expect(await db.files.get(local.id)).toBeDefined();
     expect((await db.cases.get(c.id))!.remote!.unsynced).toBe(true);
@@ -125,6 +125,35 @@ describe('shared-workspace sync safety', () => {
     await deleteDocument(db, b.id);
     await analyzeCase(db, c.id);
     expect((await db.findings.where('caseId').equals(c.id).first())!.stale).toBe(true);
+  });
+});
+
+describe('account isolation of the browser cache', () => {
+  it('cached shared cases are tagged with their account and removed when another account (or nobody) is signed in', async () => {
+    const alice = await session('alice');
+    const bob = await session('bob');
+    const db = new MedguardDB(`sync-iso-${n}`);
+    const shared = await sharedCaseWithDoc(alice, db, 'ALLERGIES\nPenicillin allergy documented.');
+    const local = await createCase(db, 'Local only');
+    await uploadDocument(db, extractor, local.id, { name: 'l.txt', mime: 'text/plain', bytes: enc('Metformin 500 mg.') });
+    expect((await db.cases.get(shared.id))!.remote).toMatchObject({ serverUrl: base, userId: alice.user.id });
+
+    // The same account keeps its cache.
+    expect(await purgeRemoteCache(db, { serverUrl: base, userId: alice.user.id })).toBe(0);
+    expect(await db.cases.get(shared.id)).toBeDefined();
+
+    // Another account: Alice's server case and everything under it leaves this browser; local data stays.
+    expect(await purgeRemoteCache(db, { serverUrl: base, userId: bob.user.id })).toBe(1);
+    expect(await db.cases.get(shared.id)).toBeUndefined();
+    for (const t of [db.documents, db.statements, db.findings, db.events, db.files]) expect(await t.where('caseId').equals(shared.id).count()).toBe(0);
+    expect(await db.cases.get(local.id)).toBeDefined();
+    expect(await db.documents.where('caseId').equals(local.id).count()).toBe(1);
+
+    // Signed out: no shared case remains cached; the server copy is untouched and Bob still cannot read it.
+    await pullCase(db, alice, shared.id);
+    expect(await purgeRemoteCache(db, null)).toBe(1);
+    expect((await remoteApi.getCase(alice, shared.id)).documents).toHaveLength(1);
+    await expect(remoteApi.getCase(bob, shared.id)).rejects.toMatchObject({ status: 404 });
   });
 });
 

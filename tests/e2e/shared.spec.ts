@@ -206,3 +206,68 @@ test('profile menu: Sign in and Create account open the matching form, even when
   await expect(page.getByTestId('menu-sign-in')).toHaveCount(0);
   await expect(page.getByTestId('menu-sign-out')).toBeVisible();
 });
+
+test('accounts in one browser: no demo while signed in, records persist, and nothing leaks to the next account', async ({ page }) => {
+  test.setTimeout(180000);
+  const register = async (name: string, email: string) => {
+    await page.goto('#/settings#workspace');
+    await page.getByTestId('server-url').fill(API);
+    await page.getByTestId('save-server-url').click();
+    await expect(page.getByTestId('server-health')).toContainText('Reachable', { timeout: 100_000 });
+    await page.getByRole('tab', { name: 'Create account' }).click();
+    await page.getByTestId('ws-name').fill(name);
+    await page.getByTestId('ws-email').fill(email);
+    await page.getByTestId('ws-password').fill(PASSWORD);
+    await page.getByTestId('ws-submit').click();
+    await expect(page.getByTestId('signed-in-as')).toHaveText(name);
+  };
+  // Signed out, the fictional demo is seeded and labelled.
+  await page.goto('#/');
+  await expect(page.getByTestId('local-demo-badge')).toBeVisible({ timeout: 60_000 });
+
+  // Account A, empty: server-backed empty state, no demo cases or demo numbers anywhere.
+  await register('Iso Owner', `iso-a-${run}@example.test`);
+  await page.goto('#/');
+  await expect(page.getByTestId('overview-empty')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('local-demo-badge')).toHaveCount(0);
+  await expect(page.getByTestId('overview-metrics')).toHaveCount(0);
+  await page.goto('#/cases');
+  await expect(page.getByTestId('demo-hidden-note')).toBeVisible();
+  await expect(page.locator('main')).not.toContainText('DEMO-0042');
+
+  // A creates a server case with a record; it is still there after a reload, and counted by the server overview.
+  await page.getByTestId('new-case').click();
+  await page.getByTestId('new-case-label').fill(`ISO-${run} · synthetic`);
+  await page.getByTestId('create-shared-case').click();
+  await expect(page).toHaveURL(/#\/documents/);
+  await page.getByTestId('file-input').setInputFiles([{ name: 'note-2026-03-12.txt', mimeType: 'text/plain', buffer: Buffer.from('MEDICATIONS\nMetformin 500 mg twice daily.') }]);
+  await page.getByTestId('upload-submit').click();
+  await expect(page.getByTestId('upload-summary')).toBeVisible({ timeout: 30_000 });
+  await page.reload();
+  await page.goto('#/cases');
+  await expect(page.getByTestId('shared-cases')).toContainText(`ISO-${run}`, { timeout: 30_000 });
+  await page.goto('#/');
+  await expect(page.getByTestId('ov-cases')).toContainText('1', { timeout: 30_000 });
+  await expect(page.getByTestId('ov-documents')).toContainText('1');
+
+  // Sign out: A's server case leaves this browser; the demo is back.
+  await page.getByRole('button', { name: 'User menu' }).click();
+  await page.getByTestId('menu-sign-out').click();
+  await page.goto('#/cases');
+  await expect(page.locator('main')).toContainText('DEMO-0042', { timeout: 60_000 });
+  await expect(page.locator('main')).not.toContainText(`ISO-${run}`);
+
+  // Account B in the same browser sees none of A's records.
+  await register('Iso Other', `iso-b-${run}@example.test`);
+  await page.goto('#/cases');
+  await expect(page.getByTestId('shared-cases')).toContainText('No shared cases yet', { timeout: 30_000 });
+  await expect(page.locator('main')).not.toContainText(`ISO-${run}`);
+
+  // A failing server list is reported with a retry, not shown as empty or fabricated.
+  await page.route('**/api/cases', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"Simulated failure.","code":"error"}' }));
+  await page.reload();
+  await expect(page.getByTestId('shared-cases-error')).toContainText('could not be loaded', { timeout: 30_000 });
+  await page.unroute('**/api/cases');
+  await page.getByTestId('shared-cases-error').getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByTestId('shared-cases')).toContainText('No shared cases yet');
+});

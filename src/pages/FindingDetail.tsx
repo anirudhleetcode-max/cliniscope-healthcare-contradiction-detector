@@ -13,8 +13,12 @@ import { CATEGORY_LABEL } from '../lib/types';
 export function FindingDetail() {
   const { id } = useParams();
   const location = useLocation();
-  const { caseId, setCaseId } = useApp();
-  const finding = useLiveQuery(() => db.findings.get(id ?? ''), [id]);
+  const { caseId, setCaseId, accountMode } = useApp();
+  // Signed in, findings of demo cases are not shown, even by direct link.
+  const finding = useLiveQuery(async () => {
+    const f = await db.findings.get(id ?? '');
+    return f && accountMode && (await db.cases.get(f.caseId))?.isDemo ? undefined : f;
+  }, [id, accountMode]);
   const caseRec = useLiveQuery(() => (finding ? db.cases.get(finding.caseId) : undefined), [finding?.caseId]);
   const docs = useFindingDocs(finding);
   const events = useFindingEvents(id);

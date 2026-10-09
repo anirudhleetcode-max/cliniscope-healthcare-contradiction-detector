@@ -298,7 +298,7 @@ function UserMenu({ onTour }: { onTour: () => void }) {
             </>}
             <MenuLink to="/settings" icon={Settings} onClick={() => setOpen(false)}>Settings</MenuLink>
             <MenuLink to="/help" icon={BookOpenText} onClick={() => setOpen(false)}>Help &amp; About</MenuLink>
-            <button role="menuitem" className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-[13.5px] text-ink hover:bg-hover" onClick={() => { setOpen(false); onTour(); }}><PlayCircle size={16} className="text-faint" aria-hidden />Run guided demo</button>
+            {user ? null : <button role="menuitem" className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-[13.5px] text-ink hover:bg-hover" onClick={() => { setOpen(false); onTour(); }}><PlayCircle size={16} className="text-faint" aria-hidden />Run guided demo</button>}
             {user ? <button role="menuitem" data-testid="menu-sign-out" className="flex w-full items-center gap-2.5 border-t border-line px-4 py-2 text-left text-[13.5px] text-ink hover:bg-hover" onClick={() => { setOpen(false); void ws.signOut(); }}><LogOut size={16} className="text-faint" aria-hidden />Sign out</button> : null}
           </div>
         </div>
