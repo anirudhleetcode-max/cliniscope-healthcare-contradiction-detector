@@ -90,7 +90,7 @@ export function FindingDetail() {
 
       {finding.stale ? <div className="mb-4"><Callout tone="warn" title="Superseded finding">The latest analysis no longer produces this finding (a source document may have been removed or changed). The original evidence and review history below are preserved.</Callout></div> : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <section className="card overflow-hidden" aria-labelledby="why">
             <div className="border-b border-line bg-soft/50 px-5 py-3">

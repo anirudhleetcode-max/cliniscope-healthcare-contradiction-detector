@@ -46,7 +46,7 @@ export function Cases() {
   return (
     <div className="animate-fade-up">
       <PageHeader eyebrow="Cases" title="Case management" description="Records are only ever compared within a single case. Use pseudonymous labels — do not enter real names, dates of birth or record numbers." />
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="card p-5" aria-label="Create case">
           <h2 className="mb-3 text-base font-semibold">New case</h2>
           <label htmlFor="case-label" className="label">Pseudonymous case label</label>
@@ -111,7 +111,7 @@ export function Cases() {
       <Modal open={confirmReset} onClose={() => setConfirmReset(false)} title="Reset the demo case?" footer={<>
         <button className="btn-secondary" onClick={() => setConfirmReset(false)}>Cancel</button>
         <button className="btn-danger" data-testid="confirm-reset" onClick={async () => { setConfirmReset(false); const c = await resetDemo(); if (c) { toast('success', 'Demo case reset. Run the analysis to regenerate findings.'); navigate('/'); } else toast('error', 'Demo reset failed.'); }}>Reset demo</button>
-      </>}><p className="text-sm">This deletes the synthetic demo case, including its review decisions and audit history, and re-ingests the four fictional documents. Other cases are not affected.</p></Modal>
+      </>}><p className="text-sm">This deletes the synthetic demo case, including its review decisions and audit history, and re-ingests the five fictional documents. Other cases are not affected.</p></Modal>
 
       <Modal open={!!toDelete} onClose={() => setToDelete(null)} title="Delete case?" footer={<>
         <button className="btn-secondary" onClick={() => setToDelete(null)}>Cancel</button>

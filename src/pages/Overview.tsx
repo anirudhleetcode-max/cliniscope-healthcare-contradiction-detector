@@ -17,7 +17,7 @@ export function Overview() {
   if (storageError) {
     return <Callout tone="warn" title="Browser storage unavailable">CLINISCOPE stores data in this browser's IndexedDB, which is unavailable ({storageError}). Private browsing modes or blocked site data can cause this. Try a normal window.</Callout>;
   }
-  if (seeding) return <div className="space-y-4"><Callout title="Preparing the synthetic demo case">Loading four fictional records and extracting their text in your browser…</Callout><PageSkeleton /></div>;
+  if (seeding) return <div className="space-y-4"><Callout title="Preparing the synthetic demo case">Loading five fictional records and extracting their text in your browser (including OCR of a scanned letter)…</Callout><PageSkeleton /></div>;
   if (seedError) return <Callout tone="warn" title="The demo case could not be loaded">{seedError} <button className="btn-secondary ml-2 mt-2" onClick={() => void resetDemo()}>Try again</button></Callout>;
   if (!currentCase || loading) return <PageSkeleton />;
 
@@ -69,7 +69,7 @@ export function Overview() {
         <Stat label="Last analysis" value={<span className="text-base">{currentCase.lastAnalyzedAt ? formatDateTime(currentCase.lastAnalyzedAt) : 'Not run'}</span>} icon={<Timer size={16} />} hint={caseStatus} />
       </section>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="card p-5 lg:col-span-2" aria-label="Findings requiring review">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-semibold">What needs review next</h2>
@@ -116,7 +116,7 @@ export function Overview() {
         </section>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="card p-5" aria-label="Findings by category">
           <h2 className="mb-4 text-base font-semibold">Findings by category</h2>
           {active.length === 0 ? <p className="text-sm text-muted">No findings to chart.</p> : (
@@ -156,7 +156,7 @@ export function Overview() {
         </section>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         {currentCase.remote ? <CollaborationPanel c={currentCase} /> : (
           <section className="card p-5" aria-label="Storage mode" data-testid="local-mode-panel">
             <h2 className="mb-1 text-base font-semibold">Local demo mode</h2>

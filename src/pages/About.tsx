@@ -21,15 +21,16 @@ export function About() {
 
       <div className="mb-6"><WorkspacePanel /></div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Section icon={<ScanSearch size={17} />} title="What it does">
           <ol className="list-decimal space-y-1 pl-5">
-            <li>Ingests PDF, TXT and DOCX records into a case.</li>
-            <li>Extracts the text in the browser (pdf.js text layer, UTF-8 decoding, mammoth for DOCX).</li>
+            <li>Ingests PDF (digital or scanned), PNG/JPEG scans, TXT and DOCX records into a case.</li>
+            <li>Extracts the text in the browser (pdf.js text layer, Tesseract.js OCR for scanned pages, UTF-8 decoding, mammoth for DOCX).</li>
             <li>Identifies clinical statements (allergies, medications, diagnoses, lab results, procedures, smoking status) with deterministic rules.</li>
             <li>Compares statements across documents in the same case, considering negation, hedging, history, documented changes and dates.</li>
             <li>Creates findings only when every quotation can be located again in the source text.</li>
-            <li>Supports a recorded review decision with a required reason, and keeps an append-only audit trail.</li>
+            <li>Optionally asks an AI model (server-side) for additional findings and keeps only those whose quotations verify.</li>
+            <li>Supports a recorded review decision with a required reason, and keeps an append-only audit trail — locally, or on a shared workspace with authenticated collaborators.</li>
           </ol>
         </Section>
         <Section icon={<Cpu size={17} />} title="Methods actually used">

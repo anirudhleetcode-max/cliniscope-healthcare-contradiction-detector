@@ -34,5 +34,18 @@ export default defineConfig({
         CLINISCOPE_ALLOWED_ORIGINS: 'http://localhost:4173', ANTHROPIC_API_KEY: '',
       },
     },
+    // TEST FIXTURE: local fake of the Messages API + a second API server configured to use it (AI pipeline e2e).
+    { command: 'node tests/e2e/fake-anthropic.mjs', port: 8788, reuseExistingServer: false, timeout: 30000 },
+    {
+      command: 'rm -rf tmp/e2e-api-ai && npx tsx server/index.ts',
+      url: 'http://localhost:8789/api/health',
+      reuseExistingServer: false,
+      timeout: 60000,
+      env: {
+        PORT: '8789', HOST: '127.0.0.1', CLINISCOPE_DATA_DIR: 'tmp/e2e-api-ai', CLINISCOPE_ALLOW_REGISTRATION: 'true',
+        CLINISCOPE_ALLOWED_ORIGINS: 'http://localhost:4173', ANTHROPIC_API_KEY: 'sk-fixture-not-real',
+        CLINISCOPE_ANTHROPIC_BASE_URL: 'http://127.0.0.1:8788', CLINISCOPE_AI_FALLBACKS: 'false',
+      },
+    },
   ],
 });

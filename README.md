@@ -3,179 +3,196 @@
 **Evidence-first healthcare record contradiction detection and clinical review.** Built for problem statement **PS-11R3: Healthcare Record Contradiction Detector**.
 
 > **Every flagged discrepancy comes with evidence you can inspect.**
-> From fragmented medical records to traceable, human-verified clinical review.
+> From fragmented medical records, digital or scanned, to traceable, human-verified clinical review.
 
-**Live demo:** https://anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector/
-Every push builds, tests and publishes `dist/` to the `gh-pages` branch. **One-time setup:** a repository admin must enable *Settings → Pages → Deploy from a branch → `gh-pages` / (root)*. The workflow token is not allowed to change that setting. After that, the `verify-production` job runs the full end-to-end suite against the live URL on every deploy.
+**Live demo (static frontend):** https://anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector/
 
-> ⚠️ **Hackathon prototype. Review-support tool, not a diagnostic system.** CLINISCOPE flags *possible* inconsistencies and shows the source evidence for each. It never decides which statement is medically correct. It has no regulatory certification and no compliance attestation (HIPAA or other), and it has no authentication. Use **synthetic data only**.
+> ⚠️ **Hackathon research prototype. Review-support tool, not a diagnostic system.** CLINISCOPE flags *possible* inconsistencies and shows the source evidence for each. It never decides which statement is medically correct. It has no regulatory certification and no compliance attestation (HIPAA or other). Use **fictional demonstration data only**: *not for clinical use*.
 
 ---
 
-## The problem
+## What is implemented (and what is optional)
 
-Clinical information is spread across discharge summaries, intake forms, medication reconciliations, lab reports and notes. These documents can contradict each other, for example *"Penicillin allergy documented"* in one record and *"No known drug allergies"* in another. Reviewers need to find these conflicts, see exactly where each statement came from, understand the dates involved, and record what they decided.
+| Capability | Status | Where it runs |
+|---|---|---|
+| PDF / TXT / DOCX ingestion, validation, provenance | Implemented and tested | Browser |
+| **OCR of scanned PDFs, mixed PDFs and PNG/JPEG scans** (Tesseract.js) | Implemented and tested (unit tests in Node, e2e in Chromium, production e2e via CI) | Browser, assets self-hosted |
+| Deterministic statement extraction and contradiction detection | Implemented and tested | Browser |
+| Evidence verification, source highlighting, original-page comparison | Implemented and tested | Browser |
+| Review workflow (state machine, required reasons, notes, audit) | Implemented and tested | Browser (local) or server (shared) |
+| **Shared workspace**: accounts, case sharing, server-enforced roles, shared review state, append-only audit | Implemented and tested against a real local server (integration and two-browser e2e). **Not deployed publicly**: no hosting account was available | `server/` (Node + SQLite) |
+| **AI-assisted reasoning** with schema validation and quote verification | Pipeline implemented and tested with a local fake provider. **Live model calls have not been tested**: no API key was available | `server/` (key never in the browser) |
 
-## What CLINISCOPE does
+Without a server the app runs in **local demo mode**, and data stays in the browser's IndexedDB. The UI always shows which mode a case is in.
 
-1. **Ingests** PDF (text layer), TXT and DOCX files into a *case*.
-2. **Extracts text** in the browser, keeping page spans (PDF), character offsets and line or paragraph positions.
-3. **Extracts clinical statements** (allergies, medications with dose, frequency and route, diagnoses, lab results with specimen dates, procedures, smoking status) with transparent, deterministic rules. It handles negation ("no history of…"), hedging ("possible…, not verified"), historical language ("resolved", "as a child") and documented changes ("increased from 10 mg").
-4. **Compares statements across documents in the same case only**, considering polarity, normalized values (1 g = 1000 mg), units, document dates and specimen dates.
-5. **Classifies** each difference as an *explicit text conflict*, *potential value discrepancy*, *temporal inconsistency*, *historical/contextual difference* or *insufficient evidence*. Consistent records are not flagged.
-6. **Attaches verified evidence**. A finding is created only if every quotation can be found again at its exact offsets in the extracted text.
-7. **Supports human review**: an explicit state machine with required reasons, reviewer notes, and an append-only audit log.
-8. **Persists everything** in the browser's IndexedDB. It survives page reloads.
+## Workflow
 
-### The five differentiators
+```
+Upload (PDF · scanned PDF · PNG/JPEG · TXT · DOCX)
+  → validate (extension, MIME, magic bytes, size, duplicates)
+  → extract text (pdf.js text layer · OCR for pages without one · mammoth · UTF-8)
+  → extract clinical statements (deterministic rules, exact character offsets)
+  → compare across documents of the SAME case (polarity, values, units, dates, history, documented changes)
+  → [optional] AI-assisted reasoning via the server → schema-validated → quotes re-verified
+  → findings in the Review Queue (explicit conflict · potential discrepancy · historical/contextual · insufficient evidence)
+  → evidence inspection (verbatim quotes, verified pages, OCR confidence, original page)
+  → reviewer decision + reason (+ notes)
+  → persisted locally, or on the shared workspace for authorised collaborators
+  → audit history and case timeline
+```
 
-| | |
-|---|---|
-| Evidence-first detection | Each finding shows verbatim quotes, the document, the document date, a verified page (PDF only), the section heading (only when present) and character offsets. **View in source** highlights the passage in the extracted text. |
-| Context-aware comparison | Dates, specimen dates, historical status and documented dose changes change the classification. For example, HbA1c values from different months are not flagged. |
-| Transparent uncertainty | Every finding has a rules-generated explanation (labelled as interpretation, separate from quoted evidence), the comparison rule used, temporal caveats and alternative explanations. Evidence quality describes extraction reliability, never clinical truth. |
-| Human verification | Begin review → Confirm discrepancy / Resolve / Dismiss. A reason is required to resolve, dismiss or reopen. |
-| Auditable workflow | Append-only events for uploads, extraction, analysis runs, finding creation or supersession, status changes and notes, each with a timestamp and actor. |
+## Feature details
 
-## Application areas
+### OCR for scanned records
+- Each PDF page is first read from its text layer. Pages with fewer than 20 non-space characters are rendered with pdf.js, one page at a time (about 200 DPI, canvas released afterwards), and read by **Tesseract.js 6** (LSTM, English, `eng` best-int model).
+- The worker, WASM core and language data are copied into `public/ocr/` at build time and served from the app's own origin, with no CDN at runtime.
+- Provenance kept for every OCR page: page number, `method: 'ocr'`, the engine's mean confidence, and the character span of every word below **70%** confidence.
+- Uncertainty handling:
+  - OCR quotes are labelled "OCR text" with the lowest word confidence.
+  - Evidence from OCR is never rated above *moderate* availability.
+  - A finding that depends on a low-confidence word is downgraded to **insufficient evidence** ("OCR text requires review").
+  - A medication line with a unit but no readable number (e.g. a smudged dose) is reported as *unable to determine the value reliably*. The value is never guessed.
+- Reviewers can open **Compare OCR text with original**, which renders the stored page next to the text. Low-confidence words are underlined in the text view.
+- Statuses: Uploaded → Extracting → *Running OCR (page n of m)* → Extracted / Needs attention / Failed. Failures, timeouts and blank scans are reported, not hidden.
+- The confidence values are the ones reported by Tesseract. None are invented.
 
-- **Overview**: metrics derived from stored data (documents, statements, findings, awaiting review, closed, last analysis), the last analysis summary (comparisons, consistent, explained by dates), charts by category, type and status, recent activity, and case records.
-- **Review queue**: quick filters (All, Unreviewed, Explicit, Potential, Historical/contextual, Insufficient, Resolved, Dismissed), search over titles, categories and evidence text, category, evidence-quality and date-range filters, and sorting. Filters are kept in the URL.
-- **Finding detail**: the evidence investigation workspace (side A vs side B, provenance, verification state, caveats, alternatives, decision controls, notes, audit history).
-- **Document library**: drag-and-drop upload with per-file metadata (title, type, document date), validation, processing status, statement and finding counts, deletion with confirmation. The document viewer shows extracted text with verified page markers, line numbers and highlighting, the extracted statements, and the original file.
-- **Case timeline**: clinical document dates shown separately from upload, analysis and review timestamps.
-- **Cases**: create pseudonymous cases, switch between them, reset the demo case (other cases are not touched).
-- **About & settings**: methods, limitations, data handling, supported formats, demo reviewer identity.
-- **Run Interactive Demo**: a 12-step guided tour that resumes after a page reload.
+### Deterministic analysis (unchanged core, still the default)
+Rules for allergies (incl. NKDA), medications (dose, unit normalization, frequency, route, discontinuation, documented changes), diagnoses (negation, history, hedging), labs (same-specimen-date comparison only), procedures and smoking status. Family history is excluded. A finding is created only when every quotation re-verifies at its exact offsets.
+
+### AI-assisted reasoning (optional)
+- **Server-side only.** `server/aiProvider.ts` uses the official `@anthropic-ai/sdk` with structured outputs (`betaZodOutputFormat`), model `claude-opus-5-5` by default, adaptive effort `medium`, server-side refusal fallback, a 120 s timeout and one retry. The API key is read from `ANTHROPIC_API_KEY` on the server and never reaches the browser.
+- **The model only proposes.** `src/lib/ai.ts` validates the schema, then:
+  - keeps a quotation only if it is found verbatim in the supplied document text (whitespace-tolerant match is flagged);
+  - takes the quote text from the source, not from the model;
+  - rejects findings with no verifiable quote;
+  - downgrades one-sided conflicts to insufficient evidence;
+  - drops dates that do not appear in the quotes or document dates;
+  - derives page numbers only from verified PDF page spans;
+  - skips "consistent" items and AI findings that merely corroborate a rules finding.
+- The browser re-runs the same verification against its own copy of the text before storing anything.
+- AI findings are labelled **AI-assisted**, their explanation is marked "AI-generated interpretation — not evidence", and they always start *unreviewed*.
+- Errors map to clear messages without exposing secrets: not configured (503), provider rate limit (429), timeout (504), auth failure, refusal, malformed output. The deterministic analysis is always unaffected.
+- A consent dialog explains what is sent and to whom before any text leaves the browser.
+
+### Shared workspace (multi-user)
+- `server/` is a dependency-light Node 22 API on built-in `node:sqlite`:
+  - **Accounts:** scrypt password hashes; opaque bearer tokens stored only as SHA-256 hashes, with expiry (default 8 h).
+  - **Roles:** owner, reviewer and viewer per case, enforced on every request. Non-members get 404, so case IDs can't be probed; insufficient roles get 403.
+  - **Sharing:** the owner adds registered users by email.
+  - **Snapshot sync:** documents, statements and findings are re-verified against the stored text on the server, so tampered evidence is rejected with 422. Review status is never taken from a snapshot.
+  - **Review transitions:** use the same state machine as the browser, with **optimistic concurrency**. A decision made on a stale view returns 409 and the client refreshes.
+  - **Original files:** stored privately on disk under validated IDs (no path traversal) and served only to members.
+  - **Audit log:** append-only, enforced by SQLite triggers that reject `UPDATE`/`DELETE`. Timestamps are generated by the server.
+  - **Hardening:** CORS allow-list, body-size limits, login and AI rate limits, no stack traces in responses, no document contents in logs.
+- The browser treats the server as the source of truth for shared cases. Its IndexedDB copy is a cache, refreshed by **polling every 15 s** and on window focus. This is not real-time push, and background refresh pauses during local uploads and analysis.
 
 ## Architecture
 
 ```
-Browser (single static app: Vite + React + TypeScript + Tailwind)
-│
-├── UI (src/pages, src/components) ── HashRouter, live queries (dexie-react-hooks)
-│
-├── Service layer (src/lib/services.ts)
-│     uploadDocument → validate → SHA-256 dedupe → store original file → extract → statements → audit
-│     analyzeCase    → detect → reconcile findings by fingerprint (keep review state, mark stale) → audit
-│     transitionFinding / addReviewerNote → state machine (src/lib/review.ts) → audit
-│
-├── Extraction (src/lib/extract.ts)         pdf.js text layer | UTF-8 TXT | mammoth DOCX
-├── Statement rules (src/lib/statements.ts, lexicon.ts, dates.ts)
-├── Detection engine (src/lib/detect.ts)    per-case grouping → comparison → classification → evidence verification
-│
-└── Persistence (src/lib/db.ts): IndexedDB via Dexie
-      cases · documents · files (original blobs) · statements · findings · events (append-only)
+┌────────────────────────── Browser (static SPA, GitHub Pages) ───────────────────────────┐
+│ React + TypeScript + Tailwind                                                            │
+│ Ingestion: pdf.js · Tesseract.js OCR (self-hosted) · mammoth · UTF-8                      │
+│ Rules engine (src/lib/statements.ts, detect.ts) · AI verifier (src/lib/ai.ts)             │
+│ IndexedDB (Dexie): local cases + cache of shared cases                                    │
+└───────────────┬─────────────────────────────────────────────────────────────────────────┘
+                │ HTTPS + Bearer token (only when a workspace server is configured)
+┌───────────────▼──────────── server/ (Node 22, node:http, node:sqlite) ──────────────────┐
+│ /api/auth/*  /api/cases/*  /api/findings/*/transition|notes  /api/ai/analyze  /health    │
+│ SQLite: users · sessions · cases · case_members · documents · statements · findings ·     │
+│         audit_events (append-only triggers) · private files dir                           │
+│ AI adapter → Anthropic Messages API (structured outputs), key from env                    │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-There is **no backend**. No hosting credentials or managed database were available in the build environment, so the most reliable public deployment was a static app with in-browser processing and storage. A side effect is that documents never leave the reviewer's machine.
-
-### What uses AI vs deterministic rules
-
-**No AI or LLM model is used anywhere.** Statement extraction, normalization, contradiction detection and explanations are all deterministic rules and templates, and the UI says so. An LLM could be added server-side later for normalization, but evidence would still have to be verified against the source text.
-
-## Evidence provenance design
-
-- `ClinicalStatement.originalText === document.extractedText.slice(charStart, charEnd)` always holds. Unit tests check it, and the detection engine re-verifies it before it creates a finding.
-- **Page numbers** come only from pdf.js page boundaries (`pageSpans`). TXT and DOCX sources show "Not a paged format". A PDF offset outside the verified spans shows "Source location unavailable".
-- **Sections** are recorded only when a heading actually appears in the text.
-- Document date (clinical) and upload time are stored and displayed separately. Upload time is never used as a clinical date.
-- Resolved findings keep their evidence. If a source document is deleted, its findings keep the quotation recorded at analysis time, are marked *superseded* at the next analysis, and show "Source document unavailable".
-
-## Synthetic demo case
-
-`DEMO-0042 · Synthetic Patient SP-0042`. All data is fictional and labelled *DEMO CASE — SYNTHETIC DATA — NOT A REAL PATIENT*. The files in `public/demo/` are real PDF, DOCX and TXT files generated by `npm run demo:generate` from `scripts/demo-content.mjs`. They go through **the same pipeline as user uploads**. Findings are not precomputed.
-
-| Document | Format | Date |
-|---|---|---|
-| Discharge Summary (2 pages) | PDF | 12 Mar 2026 |
-| Medication Reconciliation Record | TXT | 14 Mar 2026 |
-| Patient Intake Form | DOCX | 15 Mar 2026 |
-| Laboratory Report | PDF | 11 Mar 2026 |
-
-Expected results (asserted in tests):
-
-| Scenario | Result |
-|---|---|
-| A: Penicillin allergy (discharge summary p.2, med rec) vs "No known drug allergies" (intake) | Explicit text conflict |
-| B: Metformin 500 mg BID (14 Mar) vs 1000 mg BID (15 Mar) | Potential value discrepancy, does not blame either dose |
-| C: Lisinopril 10 mg → 20 mg with "increased from 10 mg on 13 March" | Historical / contextual difference, low priority |
-| C2: HbA1c 8.2% (Dec 2025) vs 7.4% (11 Mar 2026) | Not flagged (different specimen dates) |
-| D: Atorvastatin 20 mg nightly, hypertension, diabetes, creatinine 1.4 | Consistent, not flagged |
-| E: "Possible reaction to sulfa… patient unsure, not verified" vs NKDA | Insufficient evidence |
-| Extra | CKD documented vs "No history of kidney disease"; potassium 5.4 vs 4.4 mmol/L for the same specimen date; former vs never smoker |
-
-Sample files for trying uploads: `public/demo/sample-follow-up-note-2026-03-20.txt` (adds new findings) and `public/demo/sample-scanned-no-text-layer.pdf` (flagged as *Needs attention*; no OCR is run).
-
-## Two-minute judge demo
-
-1. Open the site. The synthetic demo case loads automatically. Click **Run Interactive Demo** (sidebar), or follow these steps.
-2. **Document library**: four records (PDF, DOCX, TXT) with their extracted text.
-3. Click **Analyze documents**. A summary appears (statements, comparisons, consistent, explained by dates, findings).
-4. **Open Review Queue** → *Penicillin allergy documented in one record, absent in another*.
-5. Compare Source A (Discharge Summary, 12 Mar 2026, **Page 2**, section ALLERGIES) with Source B (Intake Form, 15 Mar 2026). Click **View in source** to see the passage highlighted.
-6. Open the **metformin** finding (500 mg vs 1000 mg), then the **lisinopril** finding (documented dose change, historical/contextual).
-7. On metformin: **Begin review** → add a note → **Mark as resolved** (an empty reason is rejected) → enter a reason.
-8. **Reload the page.** The status, reason and note are still there. Check the **Case timeline**.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the data model, state machine and sync design.
 
 ## Running locally
 
-Requires Node.js 20+ (tested with 22).
+Requires Node.js 22.13 or later (for `node:sqlite`).
 
 ```bash
 npm ci
-npm run dev          # http://localhost:5173
-npm run build        # type-check + production build into dist/
-npm run preview      # serve the production build on :4173
+npm run dev                       # frontend at http://localhost:5173 (local demo mode)
+
+# optional shared workspace + AI
+CLINISCOPE_ALLOW_REGISTRATION=true \
+CLINISCOPE_ALLOWED_ORIGINS=http://localhost:5173 \
+ANTHROPIC_API_KEY=<your key, optional> \
+npm run server                    # API at http://localhost:8787
 ```
 
-### Tests
+Then open **About & settings → Shared workspace**, enter `http://localhost:8787`, click **Connect**, and create an account.
 
-```bash
-npm test             # Vitest unit/integration tests (engine, extraction, services with fake-indexeddb)
-npm run test:e2e     # Playwright end-to-end tests (builds and serves the app automatically)
-BASE_URL=https://anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector/ npm run smoke   # same e2e suite against production
-```
+Other commands:
 
-If Playwright's bundled Chromium isn't installed, set `CHROMIUM_PATH=/path/to/chromium`.
+| Command | Purpose |
+|---|---|
+| `npm run build` | type-check, copy OCR/pdf.js assets, production build to `dist/` |
+| `npm test` | Vitest: engine, extraction, **real OCR**, AI verification, API integration tests |
+| `npm run test:e2e` | Playwright: builds the app and starts two real API servers plus a local fake AI provider |
+| `BASE_URL=<live url> npm run smoke` | e2e suite against a deployed frontend (shared/AI specs skip without an API URL) |
+| `npm run server:build && npm run server:start` | bundled production server (`dist-server/server.mjs`) |
+| `CLINISCOPE_NEW_USER_PASSWORD=… npx tsx server/index.ts create-user alice@example.org "Alice"` | create an account when registration is disabled |
+| `npm run demo:generate` | regenerate synthetic documents, including the rendered scans |
 
 ### Environment variables
+See [`.env.example`](.env.example). It contains placeholders only. Frontend `VITE_*` values are public. Server variables: `PORT`, `CLINISCOPE_DATA_DIR`, `CLINISCOPE_ALLOWED_ORIGINS`, `CLINISCOPE_ALLOW_REGISTRATION`, `CLINISCOPE_SESSION_TTL_HOURS`, `CLINISCOPE_MAX_UPLOAD_MB`, `ANTHROPIC_API_KEY`, `CLINISCOPE_AI_MODEL`, `CLINISCOPE_AI_TIMEOUT_MS`, `CLINISCOPE_AI_FALLBACKS`.
 
-None are required. See `.env.example`: `VITE_BASE_PATH` (default `./`) and `VITE_MAX_UPLOAD_MB` (default 10). There are no secrets.
+### Database and migrations
+The server creates `CLINISCOPE_DATA_DIR/cliniscope.db` and applies versioned migrations at start-up (`server/db.ts`). Mount the data directory on a persistent volume in production.
 
-### Database setup
+## Deployment
 
-None. IndexedDB (`cliniscope` database) is created automatically in the browser. The schema is defined in `src/lib/db.ts` (Dexie versioned schema). **Reset the demo** from *Cases → Reset demo case*. This deletes only the demo case.
+- **Frontend:** `.github/workflows/ci-deploy.yml` runs on every push: type-check, unit tests, build, then the full Playwright suite including OCR, two-user and AI-pipeline tests. It then publishes `dist/` to `gh-pages`, and finally runs the e2e suite against the live GitHub Pages URL (`verify-production`).
+- **API server:** not deployed. No hosting credentials were available, and GitHub Pages cannot run a server. Two ready-to-use options:
+  - `Dockerfile`: `docker build -t cliniscope-api . && docker run -p 8787:8787 -v cliniscope-data:/data -e CLINISCOPE_ALLOWED_ORIGINS=https://anirudhleetcode-max.github.io cliniscope-api`
+  - `render.yaml`: a Render Blueprint (Docker service with a persistent disk). Set `ANTHROPIC_API_KEY` in the dashboard to enable AI.
 
-### Deployment
+  Neither has been executed from this environment. Once deployed, enter its HTTPS URL in the live app (About & settings), or set `VITE_API_BASE_URL` at build time.
 
-`.github/workflows/ci-deploy.yml` runs type-checking, unit tests, the production build and Playwright e2e tests on every push. On the default branch it publishes `dist/` to the `gh-pages` branch, which GitHub Pages serves. The app uses relative asset paths and hash routing, so it works under the `/<repo>/` sub-path and on any static host (Netlify, Vercel, S3, etc.) without configuration.
+## Synthetic demo case
+`DEMO-0042 · Synthetic Patient SP-0042`, labelled *DEMO CASE — SYNTHETIC DATA — NOT A REAL PATIENT* and *Fictional demonstration data. Not for clinical use.* All five files in `public/demo/` go through the real pipeline:
+
+| Document | Format | Date | Notes |
+|---|---|---|---|
+| Discharge Letter (scanned copy) | **image-only PDF → OCR** | 20 Nov 2025 | earlier admission; the atorvastatin dose is deliberately smudged |
+| Laboratory Report | PDF | 11 Mar 2026 | |
+| Discharge Summary (2 pages) | PDF | 12 Mar 2026 | |
+| Medication Reconciliation | TXT | 14 Mar 2026 | |
+| Patient Intake Form | DOCX | 15 Mar 2026 | |
+
+The pipeline produces 8 findings. Each expectation below is asserted in the tests:
+- **Penicillin allergy vs "No known drug allergies":** explicit conflict, with quotes from the discharge summary (page 2), the medication reconciliation and the **OCR'd scan**.
+- **Metformin 500 mg vs 1000 mg:** potential discrepancy; neither dose is called wrong.
+- **Lisinopril 10 → 20 mg with "increased from 10 mg":** historical/contextual difference.
+- **Atorvastatin dose unreadable on the scan:** insufficient evidence. The value is not guessed.
+- **Sulfa reaction "possible… not verified":** insufficient evidence.
+- **Chronic kidney disease documented vs "No history of kidney disease":** explicit conflict.
+- **Potassium 5.4 vs 4.4 mmol/L on the same specimen date:** potential discrepancy. The potassium 4.2 from Nov 2025 and HbA1c values from different dates are **not** flagged.
+- **Former vs never smoker:** explicit conflict.
+- Diabetes, hypertension, creatinine and the typed atorvastatin entries agree and are not flagged.
+
+Extra samples for uploads: `sample-follow-up-note-2026-03-20.txt`, `sample-mixed-text-and-scan-2026-03-22.pdf` (page 1 digital, page 2 scanned), `scanned-discharge-letter-2025-11-20.png`, `sample-scanned-no-text-layer.pdf` (blank scan).
+
+## Judge demo
+See [`docs/JUDGE_DEMO.md`](docs/JUDGE_DEMO.md) for the three-minute script.
 
 ## Security & privacy
+- Uploaded content is untrusted and rendered only as text, never as HTML. The Content-Security-Policy is strict; `connect-src` permits HTTPS API servers and localhost.
+- In local mode, original files never leave the browser and get only temporary object URLs. In shared mode they are stored privately on the server and served only to case members.
+- The AI key is server-only. Documents are sent to the external provider only after explicit consent, and only synthetic data should be used. Provider data retention depends on the operator's account and is not verified by CLINISCOPE.
+- **Limitations:**
+  - no SSO, MFA, password reset or email verification;
+  - bearer tokens are kept in `sessionStorage`, which is vulnerable to XSS on the same origin (mitigated by the CSP);
+  - no encryption at rest beyond the host's disk;
+  - the audit log is append-only at the database level but not cryptographically tamper-evident;
+  - rate limiting is in memory, per process.
 
-- Uploaded content is untrusted. It is rendered only as React text nodes, never as HTML, and never executed. A strict Content-Security-Policy is set in `index.html`.
-- Uploads are validated by extension, MIME type, magic bytes (`%PDF`, ZIP header), size limit and emptiness. Duplicates (SHA-256) are rejected. Filenames are sanitized against path traversal and control characters.
-- pdf.js runs with `isEvalSupported: false`. Extraction has a timeout.
-- Original files are stored as blobs in IndexedDB and opened only through temporary local object URLs. There are **no public file URLs**.
-- Every query is scoped to a case, and the detection engine ignores statements and documents from other cases (tested).
-- **Limitations:** no authentication (the reviewer name is a self-declared demo identity), no encryption at rest beyond the browser profile, no server-side backup, and data is per-browser and per-device. Clearing site data deletes it. This is not suitable for real patient data.
+  Not suitable for real patient data.
 
-## Known detection limitations
-
-- The vocabulary is limited (about 25 drugs, 14 allergens, 14 diagnoses, 10 lab tests, 7 procedures, smoking status). Anything else is not extracted.
-- Negation and hedging rules are pattern-based. Multi-column or tabular PDFs can lose line order. Scanned PDFs are detected but not OCR'd.
-- Type 1 and type 2 diabetes share one concept. Formulations (e.g. ER vs IR) are not distinguished. DD/MM vs MM/DD numeric dates are deliberately not parsed.
-
-## Project structure
-
-```
-src/lib/        extraction, statement rules, detection engine, review state machine, services, persistence
-src/pages/      Overview, Queue, FindingDetail, Documents, DocumentViewer, Timeline, Cases, About
-src/components/ layout, demo guide, UI primitives
-scripts/        synthetic demo content + document generator
-public/demo/    generated synthetic PDF/DOCX/TXT records
-tests/unit/     Vitest tests;  tests/e2e/  Playwright tests
-docs/           architecture notes
-```
+## Known limitations
+- Rules vocabulary is limited (about 25 drugs, 14 allergens, 14 diagnoses, 10 lab tests). OCR is English only, with no handwriting, and takes a few seconds per page in the browser.
+- AI-assisted reasoning has not been validated against a live model in this build, so its real-world precision is unknown.
+- Shared state refreshes by polling, not real-time push. The API server is not publicly deployed.
 
 License: MIT.

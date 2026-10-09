@@ -70,7 +70,7 @@ export function DocumentViewer() {
   return (
     <div className="animate-fade-up">
       <Link to="/documents" className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-brand"><ArrowLeft size={15} />Document library</Link>
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <aside className="order-2 space-y-4 lg:order-2">
           <section className="card p-5">
             <div className="mb-3 flex items-start justify-between gap-2">
