@@ -6,10 +6,10 @@
 
 | Component | Hosting / runtime | Build command | Start command | Configuration | Status |
 |---|---|---|---|---|---|
-| Frontend (static SPA) | **GitHub Pages**, served from the `gh-pages` branch | `npm ci && npm run build` (= `copy-pdf-worker` → `tsc --noEmit` → `vite build`) → `dist/` | none (static files) | `vite.config.ts` `base: process.env.VITE_BASE_PATH \|\| './'`; `HashRouter`; `dist/.nojekyll` | **VERIFIED via CI:** run #30 (`a77a427`) deployed `gh-pages` commit `d89580f`; "pages build and deployment" #16 succeeded; `verify-production` passed. Direct access from the audit sandbox was blocked by its egress proxy, so the live site was **not opened by the auditor** |
-| API server (optional) | Docker container (`node:22-slim`) | `docker build -t medguard-api .` (inside: `npm ci --ignore-scripts` → `npm run server:build`, esbuild bundle) | `node server.mjs` (container CMD). Locally: `npm run server` or `npm run server:start` | `Dockerfile` (non-root `node` user, `VOLUME /data`, `EXPOSE 8787`, `HEALTHCHECK` on `/api/health`) | **Built and health-checked in CI** (`docker-api` job succeeded on `a77a427`). **Not published to any registry. Not deployed** |
-| API on Render | Render web service `medguard-api` (Docker runtime, `starter` plan, 1 GB disk at `/data`, `healthCheckPath: /api/health`) | Render builds the Dockerfile | Container CMD | `render.yaml` | **CONFIGURED BUT NOT VERIFIED.** The README states the blueprint has never been run. No Render URL appears anywhere in the repo |
-| Database (optional) | SQLite file inside the API container volume (`/data/medguard.db`) | n/a | Created and migrated on server start | `MEDGUARD_DATA_DIR` | Exists only where the API runs. **No managed or external database** |
+| Frontend (static SPA) | **GitHub Pages**, served from the `gh-pages` branch | `npm ci && npm run build` (= `copy-pdf-worker` → `tsc --noEmit` → `vite build`) → `dist/` | none (static files) | `vite.config.ts` `base: process.env.VITE_BASE_PATH \|\| './'`; `HashRouter`; `dist/.nojekyll` | **VERIFIED via CI:** run #46 (`38e3a54`, the PR #3 merge) deployed `gh-pages` commit `320e2e2`; "pages build and deployment" #18 succeeded; `verify-production` ✓ (21 passed, 3 skipped: the shared-workspace and AI specs need an API URL). Direct access from the audit sandbox was blocked by its egress proxy, so the live site was **not opened by the auditor** |
+| API server (optional, v1.2) | Docker container (`node:22-slim`) | `docker build -t medguard-api .` (inside: `npm ci --ignore-scripts` → `npm run server:build`, esbuild bundle) | `node server.mjs` (container CMD). Locally: `npm run server` or `npm run server:start` | `Dockerfile` (non-root `node` user, `VOLUME /data`, `EXPOSE 8787`, `HEALTHCHECK` on `/api/ready`) | **Built and checked in CI** (`docker-api` on `38e3a54`: `/api/health`, then `/api/ready` → `{"ok":true,"database":{"reachable":true,"schemaVersion":2}}` before and after `docker restart`). **Not published to any registry. Not deployed:** no hosting-provider credentials are available |
+| API on Render | Render web service `medguard-api` (Docker runtime, `starter` plan, 1 GB disk at `/data`, `healthCheckPath: /api/ready`) | Render builds the Dockerfile | Container CMD | `render.yaml` (`MEDGUARD_ALLOWED_ORIGINS` is `sync: false`, set in the dashboard) | **CONFIGURED BUT NOT VERIFIED.** The README states the blueprint has never been run. No Render URL appears anywhere in the repo |
+| Database (optional) | SQLite file inside the API container volume (`/data/medguard.db`), WAL mode, schema v2 | n/a | Created and migrated on server start | `MEDGUARD_DATA_DIR` | Exists only where the API runs. **No managed or external database.** Persistence across a real process restart was verified locally on `38e3a54` (see §6) |
 | External AI (optional) | Anthropic Messages API | n/a | n/a | `ANTHROPIC_API_KEY`, `MEDGUARD_AI_MODEL` (default `claude-opus-5-5`) | **Not configured in any deployment. Live calls never verified.** CI tests use a local fake (`tests/e2e/fake-anthropic.mjs`) and a dummy key `sk-fixture-not-real` |
 
 **Live URL:** `https://<owner>.github.io/<repository>/` (the GitHub Pages pattern used by the workflow; the repository keeps its original name).
@@ -44,11 +44,11 @@ In the production run, the shared-workspace and AI e2e specs **skip themselves**
 
 1. A developer changes code and pushes any branch (or opens a PR).
 2. `test` and `docker-api` run in parallel.
-3. Inside `test`: the type check, 88 unit tests, the production build and 24 Playwright tests run.
+3. Inside `test`: the type check, the unit tests (100 since backend v1.2), the production build and 24 Playwright tests run.
 4. The frontend `dist/` is built once in `test` and passed on as an artifact.
 5. On the default branch only, `deploy` publishes `dist/` to `gh-pages`. GitHub's own "pages build and deployment" workflow then serves it.
 6. The backend is **not** deployed by any workflow.
-7. Health checks: the container's `/api/health` is checked in `docker-api` (CI only). The live frontend is checked by HTML polling.
+7. Health checks: the container's `/api/health` and `/api/ready` (database reachable and migrated, also after a restart) are checked in `docker-api` (CI only). The live frontend is checked by HTML polling.
 8. Browser tests run against the deployed site in `verify-production`.
 
 There is no staging environment, no release tagging, no manual approval gate, no rollback automation, no secret scanning or SAST step, and no dependency audit step.
@@ -57,6 +57,8 @@ There is no staging environment, no release tagging, no manual approval gate, no
 
 | Run | Commit | Jobs | Conclusion |
 |---|---|---|---|
+| CI and deploy #46 | `38e3a54` "Merge PR #3: backend v1.2 …" | test ✓ (24/24 e2e), docker-api ✓, deploy ✓, verify-production ✓ (21 passed, 3 skipped: the shared-workspace and AI specs need an API URL) | success |
+| pages build and deployment #18 | `gh-pages` `320e2e2` ("deploy: 38e3a54…") | n/a | success |
 | CI and deploy #30 | `a77a427` "Rename MEDGAURD to MEDGUARD" | test ✓, docker-api ✓, deploy ✓, verify-production ✓ | success |
 | pages build and deployment #16 | `gh-pages` `d89580f` ("deploy: a77a427…") | n/a | success |
 | CI and deploy #29 | `fd824f0` | n/a | success |
@@ -112,7 +114,9 @@ MEDGUARD_ALLOW_REGISTRATION=true MEDGUARD_ALLOWED_ORIGINS=http://localhost:5173 
 | `dist/index.html` uses relative asset paths | VERIFIED |
 | Local e2e against `vite preview` + local API servers | VERIFIED (24/24) |
 | GitHub Actions for `a77a427` | VERIFIED via the Actions API (all jobs succeeded) |
+| GitHub Actions for `38e3a54` (PR #3 merge) | test, docker-api and deploy succeeded; verify-production ✓ (21 passed, 3 skipped: the shared-workspace and AI specs need an API URL) |
+| Backend persistence (local, `38e3a54`) | VERIFIED: a real server process received 4 synthetic demo documents (37 statements, 9 findings), one finding moved `unreviewed → in_review → needs_info` with a reason, a note was added and the case renamed. The process was stopped (HTTP 000) and restarted; `/api/ready` reported schema v2, and the case label, documents, statements, findings, the `needs_info` status, 4 history entries and 19 activity events all read back |
 | Live GitHub Pages site reachable | Verified by CI's `verify-production`. **Not reachable from the audit sandbox** (egress proxy returned 403) |
-| API deployed anywhere public | NOT DEPLOYED |
+| API deployed anywhere public | NOT DEPLOYED. Blocker: no hosting-provider account or credentials (Render, Fly.io, Railway or similar) are available to this project's automation |
 | Render blueprint | CONFIGURED BUT NOT VERIFIED |
 | Live Anthropic integration | NOT VERIFIED |

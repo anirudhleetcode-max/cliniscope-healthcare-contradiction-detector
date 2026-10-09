@@ -125,13 +125,13 @@ The system does not diagnose and does not decide which record is correct.
 5. **Render** blueprint behaviour, cost and plan are unverified.
 6. **Clinical accuracy** on real data is unknown.
 7. **Vercel.** A `medguard` Vercel project deploys this repository (production: `16ebafa`, `success`; previews on PRs). Its production domain and settings are not in the code.
-8. **Pending backend changes.** PR #3 (`claude/medguard-backend`, not yet merged) extends the API; see §7.
+8. **Backend v1.2.** PR #3 was merged into the default branch as `38e3a54`. It extends the API; see §7.
 
-## 7. Pending: backend v1.2 (PR #3, not yet merged)
+## 7. Backend v1.2 (PR #3, merged as `38e3a54`)
 
-Everything above describes the **default branch**, which has API v1.1: 16 routes, 88 unit tests and a five-status server state machine.
+Sections 1–6 were audited against API v1.1: 16 routes, 88 unit tests and a five-status server state machine.
 
-Draft PR #3 (`claude/medguard-backend`) extends the optional server. **None of this is on the default branch until PR #3 is merged:**
+PR #3 (`claude/medguard-backend`), merged into the default branch as `38e3a54`, extends the optional server. Where the sections above give v1.1 figures, these supersede them:
 
 | Change | Detail |
 |---|---|
@@ -141,7 +141,7 @@ Draft PR #3 (`claude/medguard-backend`) extends the optional server. **None of t
 | Review outcomes | The server accepts all **eight** outcomes; the database CHECK is widened by migration v2, which preserves existing rows |
 | Route count | 29 routes in total |
 | Tests | 12 backend tests added (100 in total): migrations, constraints, persistence across a restart, authorization. Docker CI also checks `/api/ready` before and after a container restart |
-| Docs | Operator docs in `docs/backend/` on that branch |
+| Docs | Operator docs in `docs/backend/` |
 
-After PR #3 merges, update the route count, test counts and status tables in these documents.
+The backend is still **not hosted** anywhere: no hosting-provider credentials are available to this project's automation. See `DEPLOYMENT_AND_CI_CD.md`.
 

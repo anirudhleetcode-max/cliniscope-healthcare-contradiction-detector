@@ -3,7 +3,7 @@
 > Source of truth: `server/app.ts` (route table, lines 119-366) and `src/lib/remote.ts` (browser client, `remoteApi`, lines 77-95).
 > API version constant: `API_VERSION = '1.1.0'` (`server/app.ts:15`).
 >
-> **Pending:** draft PR #3 (`claude/medguard-backend`) raises the API to v1.2 with 29 routes: readiness, OpenAPI, read endpoints for documents, findings, evidence, history and activity, case rename/archive, and the eight-outcome review machine. This page documents the default branch; see [README_TECHNICAL_OVERVIEW.md §7](README_TECHNICAL_OVERVIEW.md#7-pending-backend-v12-pr-3-not-yet-merged).
+> **v1.2 is merged:** PR #3 (`38e3a54`) raises the API to v1.2 with 29 routes: readiness, OpenAPI, read endpoints for documents, findings, evidence, history and activity, case rename/archive, and the eight-outcome review machine. The table below covers the v1.1 routes. The full v1.2 list is in [`docs/backend/API_REFERENCE.md`](../backend/API_REFERENCE.md) and at `GET /api/openapi.json`. See also [README_TECHNICAL_OVERVIEW.md §7](README_TECHNICAL_OVERVIEW.md#7-backend-v12-pr-3-merged-as-38e3a54).
 
 ## 0. When this API is used
 

@@ -9,6 +9,8 @@
 
 **Live demo (static frontend):** deployed automatically from this repository by the CI workflow (static hosting; no backend required).
 
+**Deployment status:** the static frontend is published to GitHub Pages by the CI workflow on the default branch, and the full browser suite then runs against the live URL (`verify-production`). It runs in local demo mode (browser storage). The optional shared-workspace API and its SQLite database are built and checked in CI but are **not hosted**; see [Deployment](#deployment).
+
 
 > ⚠️ **Hackathon research prototype. Review-support tool, not a diagnostic system.** MEDGUARD flags *possible* inconsistencies and shows the source evidence for each. It never decides which statement is medically correct. It has no regulatory certification and no compliance attestation (HIPAA or other). Use **fictional demonstration data only**: *not for clinical use*.
 
