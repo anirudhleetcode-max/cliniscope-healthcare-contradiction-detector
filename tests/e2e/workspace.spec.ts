@@ -106,3 +106,15 @@ test('needs-more-information keeps a finding pending and is offered from the con
   await page.getByTestId('confirm-decision').click();
   await expect(drawer.getByTestId('status-badge').first()).toHaveText('Confirmed discrepancy');
 });
+
+test('the sign-in card is shown once, outside the header buttons, and stays put when the demo finishes loading', async ({ page }) => {
+  await page.goto('#/');
+  const signIn = page.getByTestId('entry-sign-in');
+  await expect(signIn).toBeVisible();
+  await expect(page.getByTestId('open-demo-case')).toBeVisible(); // demo finished loading
+  await expect(page.getByTestId('entry-choices')).toHaveCount(1);
+  await expect(page.getByTestId('open-demo-case').getByTestId('entry-choices')).toHaveCount(0);
+  // Its buttons do what they say (no surrounding link hijacks the click).
+  await signIn.click();
+  await expect(page).toHaveURL(/#\/settings/);
+});
