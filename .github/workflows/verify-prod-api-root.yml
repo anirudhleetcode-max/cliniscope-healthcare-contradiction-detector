@@ -1,0 +1,55 @@
+name: Verify production API root (temporary)
+on:
+  push:
+    branches: ['verify/prod-api-root']
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API: https://medguard-api-duti.onrender.com
+      SITE: https://medguard-sigma.vercel.app
+    steps:
+      - name: Wait for the deploy that serves GET /
+        run: |
+          for i in $(seq 1 40); do
+            c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$API/" || true); echo "attempt $i: GET / -> $c"
+            [ "$c" = 200 ] && exit 0; sleep 15
+          done; exit 1
+      - name: Backend endpoints
+        if: always()
+        run: |
+          for p in / /api/health /api/ready /nope; do
+            c=$(curl -s -o body.json -w '%{http_code}' --max-time 30 "$API$p"); echo "== GET $p -> HTTP $c"; cat body.json; echo
+          done
+      - name: Frontend uses the production API, CORS, auth, overview, sign-out, Google start
+        if: always()
+        run: |
+          set -u
+          html=$(curl -s --max-time 30 "$SITE/"); echo "$html" | grep -o '<title>[^<]*' || true
+          for js in $(echo "$html" | grep -o 'assets/[^"]*\.js' | sort -u); do
+            curl -s --max-time 30 "$SITE/$js" | grep -o 'https://medguard-api[a-z0-9.-]*onrender\.com' | sort -u | sed "s#^#bundle $js -> #"
+          done
+          echo "== CORS preflight from $SITE"
+          curl -s -o /dev/null -D - -X OPTIONS "$API/api/overview" -H "Origin: $SITE" -H 'Access-Control-Request-Method: GET' -H 'Access-Control-Request-Headers: authorization' | grep -iE '^HTTP|^access-control-allow-origin'
+          echo "== CORS from a foreign origin (expect no allow-origin)"
+          curl -s -o /dev/null -D - -X OPTIONS "$API/api/overview" -H 'Origin: https://evil.example' -H 'Access-Control-Request-Method: GET' | grep -iE '^HTTP|^access-control-allow-origin' || true
+          echo "== /api/overview without a session: $(curl -s -o /dev/null -w '%{http_code}' "$API/api/overview")"
+          pw=$(openssl rand -hex 16); echo "::add-mask::$pw"; email="probe-root-$(date +%s)@example.test"
+          reg=$(curl -s -w '\n%{http_code}' -X POST "$API/api/auth/register" -H 'content-type: application/json' -H "Origin: $SITE" -d "{\"email\":\"$email\",\"password\":\"$pw\",\"displayName\":\"Synthetic Probe\"}")
+          echo "== register synthetic account: HTTP $(echo "$reg" | tail -1)"
+          tok=$(echo "$reg" | head -1 | jq -r .token); echo "::add-mask::$tok"
+          ov=$(curl -s -w '\n%{http_code}' "$API/api/overview" -H "authorization: Bearer $tok" -H "Origin: $SITE")
+          echo "== authenticated /api/overview: HTTP $(echo "$ov" | tail -1); keys: $(echo "$ov" | head -1 | jq -c 'keys')"
+          echo "== /api/cases: HTTP $(curl -s -o /dev/null -w '%{http_code}' "$API/api/cases" -H "authorization: Bearer $tok")"
+          echo "== logout: HTTP $(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/auth/logout" -H "authorization: Bearer $tok" -H 'content-type: application/json' -d '{}')"
+          echo "== /api/overview after logout: HTTP $(curl -s -o /dev/null -w '%{http_code}' "$API/api/overview" -H "authorization: Bearer $tok")"
+          g=$(curl -s -w '\n%{http_code}' -X POST "$API/api/auth/google/start" -H 'content-type: application/json' -H "Origin: $SITE" -d "{\"returnTo\":\"$SITE/\"}")
+          echo "== Google start: HTTP $(echo "$g" | tail -1)"
+          echo "$g" | head -1 | jq -r '.url // empty' | python3 -c 'import sys,urllib.parse as u
+          s=sys.stdin.read().strip()
+          if s:
+              p=u.urlsplit(s); q=u.parse_qs(p.query)
+              print("authorize host:", p.netloc, "| redirect_uri:", q.get("redirect_uri"), "| pkce:", q.get("code_challenge_method"), "| state/nonce present:", "state" in q and "nonce" in q)'
