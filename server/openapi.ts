@@ -33,7 +33,11 @@ export const OPENAPI = {
     '/api/auth/register': { post: { summary: 'Create an account (only when MEDGUARD_ALLOW_REGISTRATION=true)', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['email', 'password', 'displayName'], properties: { email: { type: 'string', format: 'email' }, password: { type: 'string', minLength: 10 }, displayName: { type: 'string', maxLength: 80 } } } } } }, responses: { 200: ok('Session and user'), 400: err, 403: err, 409: err } } },
     '/api/auth/login': { post: { summary: 'Sign in', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['email', 'password'], properties: { email: { type: 'string' }, password: { type: 'string' } } } } } }, responses: { 200: ok('Session and user'), 400: err, 401: err, 429: err } } },
     '/api/auth/logout': { post: { summary: 'Revoke the current session', security: auth, responses: { 200: ok('Signed out'), 401: err } } },
-    '/api/auth/me': { get: { summary: 'Current user', security: auth, responses: { 200: ok('User'), 401: err } } },
+    '/api/auth/me': {
+      get: { summary: 'Current user', security: auth, responses: { 200: ok('User'), 401: err } },
+      patch: { summary: 'Update your own display name (the only editable field; any other field is rejected)', security: auth, requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['displayName'], additionalProperties: false, properties: { displayName: { type: 'string', minLength: 1, maxLength: 80 } } } } } }, responses: { 200: ok('{user}'), 400: err, 401: err } },
+    },
+    '/api/overview': { get: { summary: 'Totals over your own and shared (non-archived) cases, plus the latest 8 events from those cases', security: auth, responses: { 200: ok('{totals: {cases, owned, shared, documents, findings, awaitingReview, reviewed}, recentActivity}'), 401: err } } },
 
     '/api/cases': {
       get: { summary: 'List cases you are a member of', security: auth, parameters: [q('limit', '1–100, default 50', { type: 'integer' }), q('offset', 'default 0', { type: 'integer' }), q('q', 'Label contains'), q('includeArchived', 'true to include archived cases', { type: 'boolean' })], responses: { 200: ok('{cases, total, limit, offset}'), 400: err, 401: err } },
