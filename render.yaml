@@ -2,18 +2,18 @@
 # The static frontend stays on GitHub Pages; point it at this service's URL in About & settings.
 services:
   - type: web
-    name: cliniscope-api
+    name: medguard-api
     runtime: docker
     plan: starter
     healthCheckPath: /api/health
     disk:
-      name: cliniscope-data
+      name: medguard-data
       mountPath: /data
       sizeGB: 1
     envVars:
-      - key: CLINISCOPE_ALLOWED_ORIGINS
+      - key: MEDGUARD_ALLOWED_ORIGINS
         value: https://anirudhleetcode-max.github.io
-      - key: CLINISCOPE_ALLOW_REGISTRATION
+      - key: MEDGUARD_ALLOW_REGISTRATION
         value: "true"
       - key: ANTHROPIC_API_KEY
         sync: false

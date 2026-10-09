@@ -9,9 +9,9 @@ import type { AuditEvent, CaseRecord, ClinicalStatement, DocumentRecord, Finding
 export const db = getDb();
 export const extractor = browserExtractor;
 
-const LS_CASE = 'cliniscope.currentCase';
-const LS_REVIEWER = 'cliniscope.reviewer';
-const LS_PREFS = 'cliniscope.prefs';
+const LS_CASE = 'medguard.currentCase';
+const LS_REVIEWER = 'medguard.reviewer';
+const LS_PREFS = 'medguard.prefs';
 
 export interface Prefs { sidebarCompact: boolean; reduceMotion: boolean }
 const DEFAULT_PREFS: Prefs = { sidebarCompact: false, reduceMotion: false };

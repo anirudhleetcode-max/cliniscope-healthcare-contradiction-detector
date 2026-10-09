@@ -31,13 +31,13 @@ export function StatusPanel() {
       try {
         // Real write/read/delete round-trip in a separate throw-away database.
         await new Promise<void>((resolve, reject) => {
-          const req = indexedDB.open('cliniscope-probe', 1);
+          const req = indexedDB.open('medguard-probe', 1);
           req.onupgradeneeded = () => req.result.createObjectStore('p');
           req.onerror = () => reject(req.error);
           req.onsuccess = () => {
             const tx = req.result.transaction('p', 'readwrite');
             tx.objectStore('p').put('ok', 'k');
-            tx.oncomplete = () => { req.result.close(); indexedDB.deleteDatabase('cliniscope-probe'); resolve(); };
+            tx.oncomplete = () => { req.result.close(); indexedDB.deleteDatabase('medguard-probe'); resolve(); };
             tx.onerror = () => reject(tx.error);
           };
         });

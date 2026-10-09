@@ -8,7 +8,7 @@ export interface StoredFile {
   blob: Blob;
 }
 
-export class CliniscopeDB extends Dexie {
+export class MedguardDB extends Dexie {
   cases!: Table<CaseRecord, string>;
   documents!: Table<DocumentRecord, string>;
   files!: Table<StoredFile, string>;
@@ -16,7 +16,7 @@ export class CliniscopeDB extends Dexie {
   findings!: Table<Finding, string>;
   events!: Table<AuditEvent, string>;
 
-  constructor(name = 'cliniscope') {
+  constructor(name = 'medguard') {
     super(name);
     this.version(1).stores({
       cases: 'id, createdAt',
@@ -29,8 +29,8 @@ export class CliniscopeDB extends Dexie {
   }
 }
 
-let instance: CliniscopeDB | null = null;
-export function getDb(): CliniscopeDB {
-  if (!instance) instance = new CliniscopeDB();
+let instance: MedguardDB | null = null;
+export function getDb(): MedguardDB {
+  if (!instance) instance = new MedguardDB();
   return instance;
 }

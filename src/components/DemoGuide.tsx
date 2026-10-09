@@ -5,7 +5,7 @@ import { useApp, useCaseData } from '../app/state';
 import { cx } from './ui';
 import type { AuditEvent, CaseRecord, Finding } from '../lib/types';
 
-const LS_KEY = 'cliniscope.demoGuide';
+const LS_KEY = 'medguard.demoGuide';
 
 interface GuideState { open: boolean; step: number }
 

@@ -97,7 +97,7 @@ test('works offline after the app has loaded, including a reload while disconnec
   // Wait until the service worker controls the page and has cached the app shell.
   await page.waitForFunction(() => !!navigator.serviceWorker?.controller, null, { timeout: 30000 }).catch(() => {});
   await page.reload();
-  await page.waitForFunction(async () => (await caches.keys()).length > 0 && (await (await caches.open('cliniscope-v1')).keys()).length > 5, null, { timeout: 30000 });
+  await page.waitForFunction(async () => (await caches.keys()).length > 0 && (await (await caches.open('medguard-v1')).keys()).length > 5, null, { timeout: 30000 });
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByTestId('overview-metrics')).toBeVisible({ timeout: 30000 });

@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CliniscopeDB } from '../../src/lib/db';
+import { MedguardDB } from '../../src/lib/db';
 import { BackupError, buildBackup, buildCaseReport, buildFindingsCsv, restoreBackup } from '../../src/lib/exportCase';
 import { addReviewerNote, analyzeCase, createCase, seedDemoCase, transitionFinding, uploadDocument, type Extractor } from '../../src/lib/services';
 import { demoPath, extractFile } from './helpers';
@@ -13,7 +13,7 @@ const extractor: Extractor = (kind, bytes) => extractFile(`x.${kind}`, bytes);
 let n = 0;
 
 async function reviewedDemo() {
-  const db = new CliniscopeDB(`export-${++n}`);
+  const db = new MedguardDB(`export-${++n}`);
   const { DEMO_MANIFEST } = await import('../../scripts/demo-content.mjs');
   const c = await seedDemoCase(db, extractor, DEMO_MANIFEST.map((meta: any) => ({ meta, bytes: new Uint8Array(readFileSync(demoPath(meta.file))) })));
   await analyzeCase(db, c.id);
@@ -29,7 +29,7 @@ describe('local exports', () => {
   it('JSON case report contains findings, evidence, decisions, notes, history, mode and classification', async () => {
     const { db, c, pen } = await reviewedDemo();
     const r = await buildCaseReport(db, c.id);
-    expect(r.format).toBe('cliniscope-case-report');
+    expect(r.format).toBe('medguard-case-report');
     expect(r.dataClassification).toMatch(/SYNTHETIC DEMONSTRATION DATA/);
     expect(r.mode.kind).toBe('local-demo-mode');
     expect(r.documents).toHaveLength(5);
@@ -95,7 +95,7 @@ describe('backup and restore', () => {
   }, 60000);
 
   it('round-trips a user case with a TXT upload', async () => {
-    const db = new CliniscopeDB(`export-txt-${++n}`);
+    const db = new MedguardDB(`export-txt-${++n}`);
     const c = await createCase(db, 'User case');
     await uploadDocument(db, extractor, c.id, { name: 'a.txt', mime: 'text/plain', bytes: new TextEncoder().encode('Hypertension.') });
     const r = await restoreBackup(db, JSON.parse(JSON.stringify(await buildBackup(db, c.id))));

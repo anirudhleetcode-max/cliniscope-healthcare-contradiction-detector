@@ -1,7 +1,7 @@
 # MEDGUARD shared-workspace API server.
-# Build: docker build -t cliniscope-api .
-# Run:   docker run -p 8787:8787 -v cliniscope-data:/data \
-#          -e CLINISCOPE_ALLOWED_ORIGINS=https://anirudhleetcode-max.github.io cliniscope-api
+# Build: docker build -t medguard-api .
+# Run:   docker run -p 8787:8787 -v medguard-data:/data \
+#          -e MEDGUARD_ALLOWED_ORIGINS=https://anirudhleetcode-max.github.io medguard-api
 # The server is bundled into ONE self-contained file, so the runtime image has no node_modules.
 FROM node:22-slim AS build
 WORKDIR /app
@@ -13,7 +13,7 @@ RUN npm run server:build
 
 FROM node:22-slim
 WORKDIR /app
-ENV NODE_ENV=production CLINISCOPE_DATA_DIR=/data PORT=8787 HOST=0.0.0.0
+ENV NODE_ENV=production MEDGUARD_DATA_DIR=/data PORT=8787 HOST=0.0.0.0
 COPY --from=build /app/dist-server/server.mjs ./server.mjs
 RUN mkdir -p /data && chown node:node /data
 USER node

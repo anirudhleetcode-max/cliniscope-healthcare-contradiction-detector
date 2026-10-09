@@ -7,9 +7,8 @@
 > **Every flagged discrepancy comes with evidence you can inspect.**
 > From fragmented medical records, digital or scanned, to traceable, human-verified clinical review.
 
-**Live demo (static frontend):** https://anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector/
+**Live demo (static frontend):** deployed automatically from this repository by the CI workflow (static hosting; no backend required).
 
-> **Naming note.** The project was renamed from CLINISCOPE to **MEDGUARD**. The GitHub repository and Pages URL keep their original `cliniscope-healthcare-contradiction-detector` path. Technical identifiers also keep the old name for compatibility: `CLINISCOPE_*` server environment variables, the browser database and storage keys (renaming them would orphan existing local data), the `cliniscope-backup` / `cliniscope-case-report` file formats (so older backups still restore), the offline cache name, and Docker / volume / SQLite file names.
 
 > ⚠️ **Hackathon research prototype. Review-support tool, not a diagnostic system.** MEDGUARD flags *possible* inconsistencies and shows the source evidence for each. It never decides which statement is medically correct. It has no regulatory certification and no compliance attestation (HIPAA or other). Use **fictional demonstration data only**: *not for clinical use*.
 
@@ -160,8 +159,8 @@ npm test                          # unit + integration tests (Vitest)
 npm run test:e2e                  # browser tests (Playwright; builds the app first)
 
 # optional shared workspace + AI
-CLINISCOPE_ALLOW_REGISTRATION=true \
-CLINISCOPE_ALLOWED_ORIGINS=http://localhost:5173 \
+MEDGUARD_ALLOW_REGISTRATION=true \
+MEDGUARD_ALLOWED_ORIGINS=http://localhost:5173 \
 ANTHROPIC_API_KEY=<your key, optional> \
 npm run server                    # API at http://localhost:8787
 ```
@@ -177,20 +176,20 @@ Other commands:
 | `npm run test:e2e` | Playwright: builds the app and starts two real API servers plus a local fake AI provider |
 | `BASE_URL=<live url> npm run smoke` | e2e suite against a deployed frontend (shared/AI specs skip without an API URL) |
 | `npm run server:build && npm run server:start` | self-contained production server bundle (`dist-server/server.mjs`, no node_modules needed) |
-| `CLINISCOPE_NEW_USER_PASSWORD=… npx tsx server/index.ts create-user alice@example.org "Alice"` | create an account when registration is disabled |
+| `MEDGUARD_NEW_USER_PASSWORD=… npx tsx server/index.ts create-user alice@example.org "Alice"` | create an account when registration is disabled |
 | `npm run demo:generate` | regenerate synthetic documents, including the rendered scans |
 
 ### Environment variables
-See [`.env.example`](.env.example). It contains placeholders only. Frontend `VITE_*` values are public. Server variables: `PORT`, `CLINISCOPE_DATA_DIR`, `CLINISCOPE_ALLOWED_ORIGINS`, `CLINISCOPE_ALLOW_REGISTRATION`, `CLINISCOPE_SESSION_TTL_HOURS`, `CLINISCOPE_MAX_UPLOAD_MB`, `ANTHROPIC_API_KEY`, `CLINISCOPE_AI_MODEL`, `CLINISCOPE_AI_TIMEOUT_MS`, `CLINISCOPE_AI_FALLBACKS`.
+See [`.env.example`](.env.example). It contains placeholders only. Frontend `VITE_*` values are public. Server variables: `PORT`, `MEDGUARD_DATA_DIR`, `MEDGUARD_ALLOWED_ORIGINS`, `MEDGUARD_ALLOW_REGISTRATION`, `MEDGUARD_SESSION_TTL_HOURS`, `MEDGUARD_MAX_UPLOAD_MB`, `ANTHROPIC_API_KEY`, `MEDGUARD_AI_MODEL`, `MEDGUARD_AI_TIMEOUT_MS`, `MEDGUARD_AI_FALLBACKS`.
 
 ### Database and migrations
-The server creates `CLINISCOPE_DATA_DIR/cliniscope.db` and applies versioned migrations at start-up (`server/db.ts`). Mount the data directory on a persistent volume in production.
+The server creates `MEDGUARD_DATA_DIR/medguard.db` and applies versioned migrations at start-up (`server/db.ts`). Mount the data directory on a persistent volume in production.
 
 ## Deployment
 
 - **Frontend:** `.github/workflows/ci-deploy.yml` runs on every push: type-check, unit tests, build, then the full Playwright suite including OCR, two-user and AI-pipeline tests. It then publishes `dist/` to `gh-pages`, and finally runs the e2e suite against the live GitHub Pages URL (`verify-production`).
 - **API server:** not deployed. No hosting credentials were available, and GitHub Pages cannot run a server. Two ready-to-use options:
-  - `Dockerfile`: `docker build -t cliniscope-api . && docker run -p 8787:8787 -v cliniscope-data:/data -e CLINISCOPE_ALLOWED_ORIGINS=https://anirudhleetcode-max.github.io cliniscope-api`
+  - `Dockerfile`: `docker build -t medguard-api . && docker run -p 8787:8787 -v medguard-data:/data -e MEDGUARD_ALLOWED_ORIGINS=https://anirudhleetcode-max.github.io medguard-api`
   - `render.yaml`: a Render Blueprint (Docker service with a persistent disk). Set `ANTHROPIC_API_KEY` in the dashboard to enable AI.
 
   The self-contained bundle (`npm run server:build`) was verified to start and serve `/api/health` without `node_modules`. The Docker image is built and its container health-checked in CI on every push (`docker-api` job). The Render blueprint has not been run. Once deployed, enter its HTTPS URL in the live app (About & settings), or set `VITE_API_BASE_URL` at build time.

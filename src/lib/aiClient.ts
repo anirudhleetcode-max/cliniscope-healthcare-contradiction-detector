@@ -2,14 +2,14 @@
 // configured MEDGUARD server (which holds the provider key), then
 // re-verifies the returned structured output against the LOCAL copy of the
 // documents before anything is stored.
-import type { CliniscopeDB } from './db';
+import type { MedguardDB } from './db';
 import { corroborates, verifyAiOutput } from './ai';
 import { remoteApi, type RemoteSession } from './remote';
 import { addAiFindings, logAiFailure } from './services';
 
 export interface AiRunSummary { model: string; created: number; retained: number; corroborated: string[]; rejected: { title: string; reason: string }[]; downgraded: number; consistent: number }
 
-export async function runAiAnalysis(db: CliniscopeDB, session: RemoteSession, caseId: string, actor: string): Promise<AiRunSummary> {
+export async function runAiAnalysis(db: MedguardDB, session: RemoteSession, caseId: string, actor: string): Promise<AiRunSummary> {
   const docs = (await db.documents.where('caseId').equals(caseId).toArray()).filter((d) => d.extractedText && d.status !== 'failed');
   if (!docs.length) throw new Error('There are no documents with extracted text to analyse.');
   const existing = (await db.findings.where('caseId').equals(caseId).toArray()).filter((f) => !f.stale);
