@@ -22,10 +22,23 @@ export const STATUS_COLOR: Record<ReviewStatus, string> = {
   expected_change: 'rgb(94 170 140)', resolved: CHART.ok, dismissed: CHART.slate,
 };
 
+/**
+ * The account card (sign-in choices, or the signed-in user's server data) is rendered once, outside the
+ * demo's loading/loaded branches, so the demo finishing to load never unmounts, re-animates or moves it.
+ */
 export function Overview() {
+  const navigate = useNavigate();
+  return (
+    <div className="space-y-6">
+      <AccountOverview onExploreDemo={() => navigate('/cases')} />
+      <DemoOverview />
+    </div>
+  );
+}
+
+function DemoOverview() {
   const { seeding, seedStage, seedError, resetDemo, storageError } = useApp();
   const { cases, documents, findings, events, loading } = useWorkspaceData();
-  const navigate = useNavigate();
   const [justRan, setJustRan] = useState<{ caseId: string; summary: AnalysisSummary } | null>(null);
   const metrics = useMemo(() => (loading ? null : workspaceMetrics(cases!, documents!, findings!)), [loading, cases, documents, findings]);
 
@@ -34,8 +47,6 @@ export function Overview() {
   if (seeding || loading || !metrics) {
     return (
       <div className="space-y-5">
-        {/* Account choices and server data do not depend on the local demo, so they show while it loads. */}
-        <AccountOverview onExploreDemo={() => navigate('/cases')} />
         {seeding ? <Callout title="Preparing the synthetic demonstration workspace">Ingesting fictional records and extracting their text in your browser (including OCR of a scanned letter). Nothing is uploaded.<div className="mt-1 font-medium" role="status" data-testid="seed-stage">{seedStage ?? 'Starting…'}</div></Callout> : null}
         <PageSkeleton />
       </div>
@@ -61,8 +72,7 @@ export function Overview() {
         meta={<Badge tone="warn" icon={<FlaskConical size={12} aria-hidden />} testId="local-demo-badge">LOCAL DEMO</Badge>}
         description="Identify conflicting statements across clinical records and organize them for human review."
         actions={<>
-          {primary ? <Link to={`/cases/${primary.id}`} className="btn-primary" data-testid="open-demo-case"><FolderOpen size={16} aria-hidden />
-      <div className="mb-6"><AccountOverview onExploreDemo={() => navigate(primary ? `/cases/${primary.id}` : '/cases')} /></div>Open Demo Case</Link> : null}
+          {primary ? <Link to={`/cases/${primary.id}`} className="btn-primary" data-testid="open-demo-case"><FolderOpen size={16} aria-hidden />Open Demo Case</Link> : null}
           <Link to="/documents#import" className="btn-secondary"><FileUp size={16} aria-hidden />Import Documents</Link>
         </>}
       />
