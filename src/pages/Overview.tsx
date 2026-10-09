@@ -27,7 +27,7 @@ export function Overview() {
   const [justRan, setJustRan] = useState<{ caseId: string; summary: AnalysisSummary } | null>(null);
   const metrics = useMemo(() => (loading ? null : workspaceMetrics(cases!, documents!, findings!)), [loading, cases, documents, findings]);
 
-  if (storageError) return <Callout tone="warn" title="Browser storage unavailable">CLINISCOPE stores data in this browser's IndexedDB, which is unavailable ({storageError}). Private browsing modes or blocked site data can cause this. Try a normal browser window.</Callout>;
+  if (storageError) return <Callout tone="warn" title="Browser storage unavailable">MEDGAURD stores data in this browser's IndexedDB, which is unavailable ({storageError}). Private browsing modes or blocked site data can cause this. Try a normal browser window.</Callout>;
   if (seedError) return <Callout tone="warn" title="The demonstration workspace could not be loaded" action={<button className="btn-secondary" onClick={() => void resetDemo()}>Try again</button>}>{seedError}</Callout>;
   if (seeding || loading || !metrics) {
     return (

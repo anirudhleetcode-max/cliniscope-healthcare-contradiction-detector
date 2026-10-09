@@ -143,7 +143,7 @@ export class BackupError extends Error {}
  */
 export async function restoreBackup(db: CliniscopeDB, raw: unknown): Promise<CaseRecord> {
   const parsed = BackupSchema.safeParse(raw);
-  if (!parsed.success) throw new BackupError('This file is not a valid CLINISCOPE backup (format or required fields do not match).');
+  if (!parsed.success) throw new BackupError('This file is not a valid MEDGAURD backup (format or required fields do not match).');
   const b = parsed.data;
   const docs = b.documents as unknown as DocumentRecord[];
   const byId = new Map(docs.map((d) => [d.id, d]));
@@ -193,7 +193,7 @@ export async function restoreBackup(db: CliniscopeDB, raw: unknown): Promise<Cas
     ...(e.findingId ? { findingId: fdMap.get(e.findingId) ?? e.findingId } : {}),
     ...(e.documentId ? { documentId: mapDoc(e.documentId) } : {}),
   }));
-  newEvents.push({ id: uid('ev'), caseId, kind: 'case_created', at: now, actor: 'Local restore', detail: `Restored from a CLINISCOPE backup exported ${String((raw as { exportedAt?: string }).exportedAt ?? 'unknown')} (${docs.length} documents, ${b.findings.length} findings, ${b.events.length} history events). Identifiers were reassigned.` });
+  newEvents.push({ id: uid('ev'), caseId, kind: 'case_created', at: now, actor: 'Local restore', detail: `Restored from a MEDGAURD backup exported ${String((raw as { exportedAt?: string }).exportedAt ?? 'unknown')} (${docs.length} documents, ${b.findings.length} findings, ${b.events.length} history events). Identifiers were reassigned.` });
 
   await db.transaction('rw', [db.cases, db.documents, db.files, db.statements, db.findings, db.events], async () => {
     await db.cases.add(c);
@@ -223,5 +223,5 @@ export function downloadText(filename: string, content: string, type: string): v
 
 export function exportFilename(c: CaseRecord, kind: string, ext: string): string {
   const slug = c.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'case';
-  return `cliniscope-${slug}-${kind}-${new Date().toISOString().slice(0, 10)}${c.isDemo ? '-SYNTHETIC' : ''}.${ext}`;
+  return `medgaurd-${slug}-${kind}-${new Date().toISOString().slice(0, 10)}${c.isDemo ? '-SYNTHETIC' : ''}.${ext}`;
 }

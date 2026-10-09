@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 /*
- * CLINISCOPE design tokens — single source of truth.
+ * MEDGAURD design tokens — single source of truth.
  * Values are RGB channels so Tailwind opacity modifiers work (bg-brand/10).
  * See docs/FIGMA_DESIGN_SYSTEM.md for the rationale behind each token.
  */

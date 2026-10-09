@@ -1,4 +1,4 @@
-# CLINISCOPE shared-workspace API server.
+# MEDGAURD shared-workspace API server.
 # Build: docker build -t cliniscope-api .
 # Run:   docker run -p 8787:8787 -v cliniscope-data:/data \
 #          -e CLINISCOPE_ALLOWED_ORIGINS=https://anirudhleetcode-max.github.io cliniscope-api

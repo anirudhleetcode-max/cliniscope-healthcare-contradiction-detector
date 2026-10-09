@@ -1,4 +1,4 @@
-// Core domain types for CLINISCOPE. These are shared by the extraction
+// Core domain types for MEDGAURD. These are shared by the extraction
 // pipeline, the detection engine, the persistence layer and the UI.
 
 export type Category =

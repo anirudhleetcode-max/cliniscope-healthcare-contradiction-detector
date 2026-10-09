@@ -24,7 +24,7 @@ if (cmd === 'create-user') {
 
 const { server } = createApp({ config: cfg });
 server.listen(cfg.port, cfg.host, () => {
-  console.log(`CLINISCOPE API listening on http://${cfg.host}:${cfg.port}`);
+  console.log(`MEDGAURD API listening on http://${cfg.host}:${cfg.port}`);
   console.log(`  allowed origins: ${cfg.allowedOrigins.join(', ') || '(none)'}`);
   console.log(`  registration: ${cfg.allowRegistration ? 'open' : 'disabled'}; AI: ${cfg.anthropicApiKey ? `configured (${cfg.aiModel})` : 'not configured'}`);
 });

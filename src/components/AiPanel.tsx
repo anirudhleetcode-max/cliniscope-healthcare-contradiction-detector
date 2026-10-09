@@ -42,9 +42,9 @@ export function AiPanel({ disabled }: { disabled?: boolean }) {
   return (
     <section className="card p-5" aria-label="AI-assisted analysis" data-testid="ai-panel">
       <h2 className="mb-1 flex items-center gap-2 text-base font-semibold"><Bot size={17} className="text-brand" aria-hidden />AI-assisted reasoning <span className="chip bg-soft text-muted">optional</span></h2>
-      <p className="mb-3 text-xs text-muted">Complements the deterministic rules. A language model proposes findings; CLINISCOPE keeps only those whose quotations are found verbatim in the extracted text, and never lets the model change review status.</p>
+      <p className="mb-3 text-xs text-muted">Complements the deterministic rules. A language model proposes findings; MEDGAURD keeps only those whose quotations are found verbatim in the extracted text, and never lets the model change review status.</p>
       <p className="mb-3 text-sm" data-testid="ai-availability">
-        Status: {!ws.serverUrl ? <strong>not available — no CLINISCOPE server configured</strong>
+        Status: {!ws.serverUrl ? <strong>not available — no MEDGAURD server configured</strong>
           : !ws.health ? <strong>server unreachable</strong>
           : !configured ? <strong>not configured on the server (no provider API key)</strong>
           : !ws.session ? <strong>available after sign-in</strong>
@@ -67,7 +67,7 @@ export function AiPanel({ disabled }: { disabled?: boolean }) {
       </>}>
         <div className="space-y-2 text-sm">
           <p>The extracted text of every document in this case will be sent to <strong>{ws.serverUrl}</strong>, which forwards it to the configured external provider ({ws.health?.ai.provider}, model {ws.health?.ai.model}).</p>
-          <p>Only use synthetic or properly de-identified data. The provider's data retention depends on the server operator's account configuration, which CLINISCOPE cannot verify.</p>
+          <p>Only use synthetic or properly de-identified data. The provider's data retention depends on the server operator's account configuration, which MEDGAURD cannot verify.</p>
           <p className="text-muted">AI output is treated as a proposal: every quotation is re-checked against the source text in this browser, and unsupported findings are rejected or downgraded.</p>
         </div>
       </Modal>

@@ -1,4 +1,4 @@
-# CLINISCOPE — three-minute demonstration script
+# MEDGAURD — three-minute demonstration script
 
 Everything runs in the browser with **synthetic data only**: no backend, login, API key or AI service.
 
@@ -8,7 +8,7 @@ Everything runs in the browser with **synthetic data only**: no backend, login, 
 3. If anything goes wrong during the demo, run **Reset Demonstration** again. It rebuilds only the six synthetic cases.
 
 ## 0:00 – 0:20 · The problem
-"Patient records disagree: discharge summaries, intake forms, pharmacy lists, lab reports and scanned letters. Finding those disagreements by hand is slow. CLINISCOPE flags *potential* contradictions, links each one to the exact source sentence, and leaves the decision to a human reviewer. Everything you see is synthetic data."
+"Patient records disagree: discharge summaries, intake forms, pharmacy lists, lab reports and scanned letters. Finding those disagreements by hand is slow. MEDGAURD flags *potential* contradictions, links each one to the exact source sentence, and leaves the decision to a human reviewer. Everything you see is synthetic data."
 
 ## 0:20 – 0:45 · Dashboard
 1. **Clinical Overview**: point at the **LOCAL DEMO** badge and the four metrics (cases reviewed, open contradictions, pending reviews, documents processed). Every number is counted from the stored records.
@@ -38,4 +38,4 @@ Everything runs in the browser with **synthetic data only**: no backend, login, 
 4. Reload the page: the decision is still there (IndexedDB).
 
 ## 2:40 – 3:00 · Scope and next steps
-"This is the frontend demonstration build: deterministic rules, on-device OCR, and local browser storage. The data layer sits behind a service boundary, and an optional shared-workspace server and an AI-assisted pass already exist in the repository but are not used here. Next steps are connecting that backend for multi-user review and validating the rules on real, consented data. CLINISCOPE is not clinically validated and is not for clinical use."
+"This is the frontend demonstration build: deterministic rules, on-device OCR, and local browser storage. The data layer sits behind a service boundary, and an optional shared-workspace server and an AI-assisted pass already exist in the repository but are not used here. Next steps are connecting that backend for multi-user review and validating the rules on real, consented data. MEDGAURD is not clinically validated and is not for clinical use."

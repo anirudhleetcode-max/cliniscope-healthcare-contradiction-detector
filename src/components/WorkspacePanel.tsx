@@ -4,7 +4,7 @@ import { useApp } from '../app/state';
 import { useWorkspace } from '../app/workspace';
 import { Callout, cx } from './ui';
 
-/** Shared-workspace connection: server URL, health, and genuine sign-in against the CLINISCOPE API. */
+/** Shared-workspace connection: server URL, health, and genuine sign-in against the MEDGAURD API. */
 export function WorkspacePanel() {
   const ws = useWorkspace();
   const { toast } = useApp();
@@ -34,10 +34,10 @@ export function WorkspacePanel() {
   return (
     <section id="workspace" className="card scroll-mt-20 p-5 text-sm" aria-labelledby="ws-h" data-testid="workspace-panel">
       <h2 id="ws-h" className="mb-1 flex items-center gap-2 text-base font-semibold"><Cloud size={17} className="text-brand" aria-hidden />Shared workspace</h2>
-      <p className="mb-4 text-xs text-muted">Optional. Connect to a CLINISCOPE API server to share cases with other authenticated reviewers and to use AI-assisted analysis. Without it, the app runs in <strong>local demo mode</strong> and data stays in this browser.</p>
+      <p className="mb-4 text-xs text-muted">Optional. Connect to a MEDGAURD API server to share cases with other authenticated reviewers and to use AI-assisted analysis. Without it, the app runs in <strong>local demo mode</strong> and data stays in this browser.</p>
       <label htmlFor="ws-url" className="label">Server URL</label>
       <div className="flex gap-2">
-        <input id="ws-url" className="input" placeholder="https://cliniscope-api.example.org" value={url} onChange={(e) => setUrl(e.target.value)} data-testid="server-url" />
+        <input id="ws-url" className="input" placeholder="https://medgaurd-api.example.org" value={url} onChange={(e) => setUrl(e.target.value)} data-testid="server-url" />
         <button className="btn-secondary" onClick={() => { ws.setServerUrl(url); }} data-testid="save-server-url">Connect</button>
       </div>
       <div className="mt-3" data-testid="server-health">
