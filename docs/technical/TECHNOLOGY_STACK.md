@@ -73,7 +73,7 @@ State management uses React Context (`AppProvider`, `WorkspaceProvider`) plus De
 |---|---|---|---|
 | CI/CD | GitHub Actions, workflow "CI and deploy" | VERIFIED (run 30 for `a77a427`: all 4 jobs succeeded) | `.github/workflows/ci-deploy.yml` |
 | Frontend hosting | GitHub Pages (from the `gh-pages` branch, via `peaceiris/actions-gh-pages@v4`) | VERIFIED by CI (`verify-production` job passed for `a77a427`). Not directly reachable from the audit sandbox | workflow `deploy` and `verify-production` jobs |
-| Frontend previews | Vercel (project `medguard`, via the Vercel GitHub app) | Observed building a preview for PR #2. No Vercel config in the repo; settings UNKNOWN | PR #2 bot comment |
+| Frontend hosting (second) | Vercel (project `medguard`, via the Vercel GitHub app) | Production deployment of `16ebafa` recorded as `success`; previews on PRs. No Vercel config in the repo; domain and settings UNKNOWN | GitHub Deployments API, PR bot comments |
 | API container | Docker (`node:22-slim`, multi-stage) | Image built and health-checked in CI. **Not pushed to any registry, not deployed** | `Dockerfile`, workflow `docker-api` job |
 | API hosting | Render Blueprint | CONFIGURED BUT NOT VERIFIED (never run, per README) | `render.yaml` |
 | External AI | Anthropic Messages API, default model id `claude-opus-5-5` | Integration tested only against a local fake (`tests/e2e/fake-anthropic.mjs`). **Live calls not verified** | `server/aiProvider.ts`, `server/config.ts` |

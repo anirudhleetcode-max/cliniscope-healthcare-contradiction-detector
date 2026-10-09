@@ -56,7 +56,7 @@ The system does not diagnose and does not decide which record is correct.
 | Backend (optional) | Node.js 22, `node:http` (no framework), `node:sqlite`, `node:crypto` scrypt | IMPLEMENTED and tested locally; **NOT DEPLOYED** |
 | Database | Browser: IndexedDB. Optional server: SQLite file. No PostgreSQL, MongoDB or managed DB | IMPLEMENTED |
 | Frontend hosting | GitHub Pages (`gh-pages` branch) | VERIFIED via CI `verify-production` |
-| Frontend previews | Vercel project `medguard` (GitHub app, configured outside the repo; no `vercel.json`) | Observed: a preview was built for PR #2. Settings UNKNOWN |
+| Frontend hosting (second) | Vercel project `medguard` (GitHub app, configured outside the repo; no `vercel.json`) | Production deployment of `16ebafa` recorded as `success`; previews on PRs. Domain and settings UNKNOWN |
 | API hosting | Dockerfile (built and health-checked in CI); `render.yaml` | CONFIGURED BUT NOT VERIFIED |
 | CI/CD | GitHub Actions "CI and deploy": test, docker-api, deploy, verify-production | VERIFIED (run #30 green) |
 | Testing | Vitest 2.1.8 (88 tests), Playwright 1.56.1 (24 tests) | VERIFIED in this audit |
@@ -124,4 +124,24 @@ The system does not diagnose and does not decide which record is correct.
 4. **Provider data retention** for the AI path is UNKNOWN.
 5. **Render** blueprint behaviour, cost and plan are unverified.
 6. **Clinical accuracy** on real data is unknown.
-7. **Vercel.** A `medguard` Vercel project builds previews from this repository. Its production URL and settings are not in the code.
+7. **Vercel.** A `medguard` Vercel project deploys this repository (production: `16ebafa`, `success`; previews on PRs). Its production domain and settings are not in the code.
+8. **Pending backend changes.** PR #3 (`claude/medguard-backend`, not yet merged) extends the API; see §7.
+
+## 7. Pending: backend v1.2 (PR #3, not yet merged)
+
+Everything above describes the **default branch**, which has API v1.1: 16 routes, 88 unit tests and a five-status server state machine.
+
+Draft PR #3 (`claude/medguard-backend`) extends the optional server. **None of this is on the default branch until PR #3 is merged:**
+
+| Change | Detail |
+|---|---|
+| Readiness and API description | `GET /api/ready` (503 unless the database is reachable and migrated); `/health` and `/ready` aliases; `GET /api/openapi.json`, which a test checks against the registered routes |
+| New read endpoints | Document metadata, findings with filters, one finding, evidence (each quote re-verified), decision history, case and cross-case activity |
+| Case management | `PATCH /api/cases/:id` to rename, archive or restore; archived cases are read-only (409); paginated and searchable case list |
+| Review outcomes | The server accepts all **eight** outcomes; the database CHECK is widened by migration v2, which preserves existing rows |
+| Route count | 29 routes in total |
+| Tests | 12 backend tests added (100 in total): migrations, constraints, persistence across a restart, authorization. Docker CI also checks `/api/ready` before and after a container restart |
+| Docs | Operator docs in `docs/backend/` on that branch |
+
+After PR #3 merges, update the route count, test counts and status tables in these documents.
+

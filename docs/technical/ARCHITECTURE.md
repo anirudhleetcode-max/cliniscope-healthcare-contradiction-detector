@@ -206,7 +206,7 @@ flowchart TD
     T -->|"needs: test"| DP
     DP -->|"needs: deploy"| VP
     DP --> GHP["gh-pages branch"]
-    GHP --> PAGES["GitHub Pages<br/>anirudhleetcode-max.github.io/<br/>cliniscope-healthcare-contradiction-detector/"]
+    GHP --> PAGES["GitHub Pages<br/>(owner).github.io/(repository)/"]
     VP -->|"HTTPS"| PAGES
 
     PAGES --> BROWSER["User browser<br/>static SPA, HashRouter,<br/>relative asset paths"]
