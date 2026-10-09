@@ -1,0 +1,18 @@
+name: Verify production UI (temporary)
+on:
+  push:
+    branches: ['verify/prod-welcome-card']
+permissions:
+  contents: read
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Welcome card regression + navigation + mobile, against the live Vercel site (real Chromium)
+        run: BASE_URL=https://medguard-sigma.vercel.app/ npx playwright test tests/e2e/workspace.spec.ts tests/e2e/mobile.spec.ts --project=desktop --project=mobile
