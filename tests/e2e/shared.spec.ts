@@ -139,6 +139,7 @@ test('an outsider cannot open a case they were not invited to; signed-out users 
   await olga.getByTestId('new-case-label').fill(`REMOVE-${run} · synthetic`);
   await olga.getByTestId('create-shared-case').click();
   await expect(olga).toHaveURL(/#\/documents/);
+  await expect(olga.getByTestId('mode-chip')).toContainText('Shared workspace · owner');
   await olga.goto('#/case');
   await olga.getByTestId('member-email').fill(`eve-${run}@example.test`);
   await olga.getByTestId('add-member').click();
