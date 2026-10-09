@@ -1,4 +1,7 @@
-// Live verification of a deployed MEDGUARD API, with synthetic data only.
+// Write-capable verification of a MEDGUARD API, with synthetic data only.
+// It registers accounts, creates a case, uploads documents and records reviews, so it runs ONLY against
+// an isolated test server: tests/support/targets.ts refuses production and any unapproved remote API
+// (exit code 3) before a single request is sent. For production use tests/live/smoke-readonly.mts.
 //   node --import tsx tests/live/verify-api.mts write <apiUrl> <frontendOrigin>
 //   node --import tsx tests/live/verify-api.mts read  <apiUrl>
 // "write" creates two synthetic @example.test accounts and one synthetic case through the real
@@ -11,6 +14,7 @@ import { randomBytes } from 'node:crypto';
 import { extractFile, makeDoc, demoPath } from '../unit/helpers';
 import { extractStatements } from '../../src/lib/statements';
 import { detectContradictions } from '../../src/lib/detect';
+import { assertWritableApi } from '../support/targets';
 
 const [phase, rawApi, origin = ''] = process.argv.slice(2);
 const API = (rawApi ?? '').replace(/\/$/, '');
@@ -36,7 +40,9 @@ async function call(method: string, path: string, opts: { token?: string; body?:
   return { status: r.status, json, buf, headers: r.headers, ms: Date.now() - started };
 }
 
-if (!/^(https:\/\/|http:\/\/(127\.0\.0\.1|localhost)[:/])/.test(API) || !['write', 'read'].includes(phase)) { console.error('usage: write|read <https-api-url> [frontend-origin]'); process.exit(2); }
+if (!['write', 'read'].includes(phase)) { console.error('usage: write|read <test-api-url> [frontend-origin]'); process.exit(2); }
+// Fail closed before any request: both phases write (registration, sessions, records).
+try { assertWritableApi(API); } catch (e) { console.error(`REFUSED  ${(e as Error).message}`); process.exit(3); }
 
 if (phase === 'write') {
   const health = await call('GET', '/api/health', { timeoutMs: 180_000 });

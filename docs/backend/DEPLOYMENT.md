@@ -3,9 +3,14 @@
 **Status (verified 2026-10-09):** the API is **deployed** at `https://medguard-api-duti.onrender.com` on a Render free web service, with its data in a Neon free PostgreSQL database. The live GitHub Pages frontend works with it. The run that verified this is described in [Live verification](#live-verification) below.
 
 ## Live verification
-The workflow **Verify live deployment** (`.github/workflows/verify-live.yml`, script `tests/live/verify-api.mts`) runs on GitHub's runners with synthetic `@example.test` data only. It runs on pull requests that change it, and on demand via **Actions → Verify live deployment → Run workflow**.
+The workflow **Verify live deployment** (`.github/workflows/verify-live.yml`) has two jobs, and **neither writes test data to production**:
 
-Run of 2026-10-09 against the deployed API (commit `bb83038`), all steps passed:
+- **`isolated`** (every pull request): the write-capable checks (`tests/live/verify-api.mts`: registration, sign-in, cases, documents, detection, reviews, notes, files, isolation, persistence across a restart) and the two-user browser tests (`tests/e2e/shared.spec.ts`) run against a throw-away API on `127.0.0.1`, backed by a PostgreSQL service container that exists only for that job. The job uses no repository secrets or variables.
+- **`production-smoke`** (on demand: **Actions → Verify live deployment → Run workflow**): read-only checks of the deployed frontend and API (`tests/live/smoke-readonly.mts`). It can send only GET/HEAD/OPTIONS requests (enforced in code) and creates no accounts, sessions or records.
+
+`tests/support/targets.ts` makes every write-capable script and spec fail closed. They refuse the production origins in any spelling and with no override, and refuse a missing target instead of falling back to a deployed API. Any other remote API is refused unless `MEDGUARD_APPROVED_TEST_API` names exactly that origin, which is reserved for a dedicated, isolated test deployment. `tests/unit/ci-safety.test.ts` checks all of this, including the workflow files themselves.
+
+Historical run of 2026-10-09 against the deployed API (commit `bb83038`; write checks against production are no longer run), all steps passed:
 
 | Check | Evidence |
 |---|---|
@@ -27,7 +32,7 @@ Run of 2026-10-09 against the deployed API (commit `bb83038`), all steps passed:
 - AI analysis: no `ANTHROPIC_API_KEY` is configured, so it is off.
 - Free-plan status of the two dashboards: only the account owner can check those (see step 7).
 
-**Test data left behind:** each run creates two synthetic accounts (`live-owner-…@example.test`, `live-outsider-…@example.test`) and cases labelled `SYNTHETIC live check …` / `SYNTHETIC outsider …`. The two-user browser test also creates `alice-…`/`bob-…@example.test` accounts and a `SHARED-… · synthetic` case. The API has no delete route for cases or accounts by design (cases are archived), so they stay. They are small (kilobytes per run) and contain only synthetic text.
+**Test data left behind (before the change above):** each run created two synthetic accounts (`live-owner-…@example.test`, `live-outsider-…@example.test`) and cases labelled `SYNTHETIC live check …` / `SYNTHETIC outsider …`. The two-user browser test also creates `alice-…`/`bob-…@example.test` accounts and a `SHARED-… · synthetic` case. The API has no delete route for cases or accounts by design (cases are archived), so they stay. They are small (kilobytes per run) and contain only synthetic text.
 
 **Latency:** with the API and the database in different regions, every database round trip costs about 180 ms. A case action took 2–3 s, and the first sync of a 4-document case took 11.5 s. Creating the Render service in the same region as the Neon project (for example both in Singapore) removes most of this. Case snapshots now issue their reads in parallel (API 1.3.1).
 
@@ -128,10 +133,9 @@ The URL is stored in that browser only. Local demo mode stays the default for ev
 2. Run the analysis and open a finding. Its evidence quotes are highlighted in the source text.
 3. **Review** the finding: set *Needs more information*, add a note, then reload the page. The status and note must still be there.
 
-Optionally, let CI run the shared-workspace browser tests against the deployed API on every deployment:
+Optionally, let CI run read-only checks of the deployed API after every deployment:
 - In GitHub: **Settings → Secrets and variables → Actions → Variables → New repository variable**, name `MEDGUARD_API_URL`, value = the backend URL. This is not a secret.
-- The `verify-production` job then wakes the API and runs the two shared-workspace e2e tests against it. They use synthetic `@example.test` accounts.
-- The AI e2e test stays skipped unless an AI key is configured.
+- The `verify-production` job then runs `tests/live/smoke-readonly.mts` against it: health, readiness, schema, CORS, and 401 for protected routes. It sends only GET/HEAD/OPTIONS requests. The browser tests in that job never receive an API URL, so the shared-workspace and AI tests stay skipped there; they run against isolated test servers in pull requests instead.
 
 ### 6. Verify persistence
 1. Note the case from step 5.
