@@ -58,9 +58,9 @@ put(s, "TextBox 11", "Healthcare  •  PS-11R3     |     Vishnu Institute of Tec
 # ---------------------------------------------------------------- 2 Problem
 s = slides[1]
 put(s, "TextBox 3", "PS-11R3: Healthcare Record Contradiction Detector. The framing below is the team's interpretation.")
-put(s, "TextBox 10", "Patient information is spread across many documents. Allergies, "
-                     "doses, diagnoses and lab results can differ, and spotting "
-                     "that by hand is slow.")
+put(s, "TextBox 10", "Patient information is spread across digital and scanned documents. "
+                     "Allergies, doses, diagnoses and lab results can differ, and "
+                     "spotting that by hand is slow.")
 put(s, "TextBox 14", "Intended users: clinicians reviewing records, medical-records "
                      "(HIM) teams, clinical quality and patient-safety reviewers, and "
                      "authorized staff reconciling records.")
@@ -77,84 +77,85 @@ put(s, "TextBox 24", FOOTER)
 # ---------------------------------------------------------------- 3 Solution
 s = slides[2]
 put(s, "TextBox 3", "An evidence-first review prototype: documents in, traceable findings out, decisions made by people.")
-put(s, "TextBox 10", "CLINISCOPE extracts text from PDF, TXT and DOCX records, finds "
-                     "allergy, medication, diagnosis and lab statements with rules, "
-                     "compares them across a case and flags potential conflicts "
-                     "with verified source quotes for human review.")
-put(s, "TextBox 14", "Every finding is traceable to an exact source quote. Dated or "
-                     "documented changes are separated from true conflicts, and "
+put(s, "TextBox 10", "CLINISCOPE reads PDF, scanned, image, TXT and DOCX records (OCR "
+                     "for scans), finds clinical statements with rules, compares them "
+                     "across a case and flags potential conflicts with verified "
+                     "source quotes for human review.")
+put(s, "TextBox 14", "Every finding links to an exact source quote, with OCR "
+                     "confidence shown. AI suggestions must verify too, and "
                      "people make the final call.")
 put(s, "TextBox 17", "01  DOCUMENT INGESTION")
-put(s, "TextBox 18", "PDF (text layer), TXT and DOCX are validated and extracted in the browser.")
+put(s, "TextBox 18", "PDF, scans (on-device OCR), images, TXT and DOCX, read in the browser.")
 put(s, "TextBox 21", "02  EVIDENCE DETECTION")
-put(s, "TextBox 22", "Rule-based comparison flags potential conflicts with source quotes.")
+put(s, "TextBox 22", "Rules flag conflicts with quotes; optional AI ideas are quote-checked.")
 put(s, "TextBox 25", "03  REVIEW & AUDIT")
-put(s, "TextBox 26", "Decisions need a reason; every action is kept in an audit log.")
+put(s, "TextBox 26", "Reasons required, audit log, optional shared cases with roles.")
 put(s, "TextBox 27", "EXPECTED BENEFIT:  Conflicts become easier to find and investigate, with evidence and human judgment kept.")
 put(s, "TextBox 28", FOOTER)
 
 # ---------------------------------------------------------------- 4 Architecture
 s = slides[3]
-put(s, "TextBox 3", "Everything runs in the reviewer's browser: no backend server, no AI/LLM and no OCR in the current build.")
-put(s, "TextBox 9", "PDF · TXT · DOCX")
+put(s, "TextBox 3", "Browser app with on-device OCR. An optional Node API adds shared cases and AI (not yet publicly hosted).")
+put(s, "TextBox 9", "PDF · scans · DOCX")
 put(s, "TextBox 13", "React + TypeScript")
-put(s, "TextBox 16", "CLIENT SERVICES")
-put(s, "TextBox 17", "IndexedDB (Dexie)")
-put(s, "TextBox 21", "Rule-based engine")
+put(s, "TextBox 16", "OPTIONAL API")
+put(s, "TextBox 17", "Node + SQLite")
+put(s, "TextBox 21", "OCR · rules · AI")
 put(s, "TextBox 25", "Evidence findings")
-put(s, "TextBox 29", "Extraction (pdf.js, mammoth) → statement rules → "
-                     "contradiction detection → evidence check → review "
-                     "workflow, stored with Dexie.")
-put(s, "TextBox 33", "Uploads are type- and size-checked. A finding is kept only if "
-                     "its quotes match the source text; dates can reclassify it.")
-put(s, "TextBox 34", "ARCHITECTURE NOTE:  Extraction, detection and review are separate, unit-tested modules.")
+put(s, "TextBox 29", "OCR (Tesseract.js), pdf.js, mammoth → statement rules "
+                     "→ detection → optional AI → quote check → review, "
+                     "stored in IndexedDB or SQLite.")
+put(s, "TextBox 33", "Uploads are type- and size-checked. Any finding, AI included, "
+                     "is kept only if its quotes match the source; low OCR "
+                     "confidence lowers evidence.")
+put(s, "TextBox 34", "ARCHITECTURE NOTE:  Works fully in the browser; the server and AI are optional, separately tested add-ons.")
 put(s, "TextBox 35", FOOTER)
 
 # ---------------------------------------------------------------- 5 Tech stack
 s = slides[4]
 put(s, "TextBox 3", "Technologies verified in package.json and the CI workflow, and the role each one plays.")
 put(s, "TextBox 10", "React 18, TypeScript, Vite and Tailwind CSS for the review UI.")
-put(s, "TextBox 14", "None: a browser-side TypeScript service layer runs the workflow.")
-put(s, "TextBox 18", "IndexedDB via Dexie: cases, files, findings and audit events.")
-put(s, "TextBox 22", "No AI/LLM: deterministic TypeScript rules for detection.")
-put(s, "TextBox 26", "No external APIs. pdfjs-dist (PDF) and mammoth (DOCX) run locally.")
-put(s, "TextBox 30", "Git, GitHub Actions (Vitest, Playwright) and GitHub Pages.")
-put(s, "TextBox 31", "WHY THIS STACK?  A light, testable static web app: records are processed and stored in the "
-                     "browser, so no server is needed. OCR, AI or a backend would be added only when required.")
+put(s, "TextBox 14", "Optional Node 22 API for accounts, roles and case sharing.")
+put(s, "TextBox 18", "IndexedDB (Dexie) in the browser; SQLite on the server.")
+put(s, "TextBox 22", "Deterministic rules; optional Anthropic API, quote-verified.")
+put(s, "TextBox 26", "Tesseract.js OCR, pdf.js and mammoth run on-device.")
+put(s, "TextBox 30", "GitHub Actions CI, GitHub Pages; Docker/Render for the API.")
+put(s, "TextBox 31", "WHY THIS STACK?  The browser app works on its own, so the demo needs no server. The API and AI "
+                     "layer are optional and add sharing and AI only where configured.")
 put(s, "TextBox 32", FOOTER)
 
 # ---------------------------------------------------------------- 6 Feasibility
 s = slides[5]
 put(s, "TextBox 3", "A working, tested prototype today, with a staged and cautious path toward real-world use.")
 put(s, "TextBox 13",
-    "• Required tools and skills: React, TypeScript, rule design, pdf.js, mammoth, Vitest, Playwright.", "",
-    "• Data / infrastructure: synthetic records and browser storage only; no real patient data.", "",
-    "• Prototype status: deployed; 34 unit and 8 end-to-end tests pass. No OCR or login yet.", "",
-    "• Risk + mitigation: false positives → verified quotes, uncertainty labels, human review.")
+    "• Required tools and skills: React, TypeScript, Node, SQLite, Tesseract.js, Vitest, Playwright.", "",
+    "• Data / infrastructure: synthetic records only. Frontend is live; the API is not hosted yet.", "",
+    "• Prototype status: 68 unit and 12 end-to-end tests pass. AI not yet tried on a live model.", "",
+    "• Risk + mitigation: OCR or AI errors → quote checks, confidence labels, human review.")
 put(s, "TextBox 14",
     "• Target users and value: authorized reviewers who need evidence, not just alerts.", "",
     "• Adoption plan: synthetic prototype → test set → clinician feedback → approved pilot.", "",
-    "• Cost and maintenance: hosting, processing, future storage or AI APIs, testing.", "",
+    "• Cost and maintenance: API hosting, storage, AI usage per analysis, testing.", "",
     "• Revenue (future only): institutional licensing or integration. No partners today.")
 put(s, "TextBox 16", "KEY TAKEAWAY:  A working prototype with a practical, validation-first path to evidence-based review.")
 put(s, "TextBox 17", FOOTER)
 
 # ---------------------------------------------------------------- 7 Sustainability
 s = slides[6]
-put(s, "TextBox 3", "Scalability items are planned, not built. Impact is a goal to be measured in evaluation.")
-put(s, "TextBox 10", "Modular engine, regression tests in CI, versioned schema, and "
-                     "unsupported files flagged openly rather than guessed.")
-put(s, "TextBox 14", "Planned: OCR for scans, more formats, evidence-checked AI help, "
-                     "secure backend with login and multi-user review.")
+put(s, "TextBox 3", "Scalability items are planned next steps. Impact is a goal to be measured in evaluation.")
+put(s, "TextBox 10", "Modular engine, regression tests in CI, versioned migrations, "
+                     "and low-confidence OCR flagged, never guessed.")
+put(s, "TextBox 14", "Planned: host the API, test AI on a live model, more formats "
+                     "and vocabulary, record-system integration.")
 put(s, "TextBox 18", "Aims to reduce manual searching, make investigations traceable "
                      "and record review decisions consistently.")
-put(s, "TextBox 29", "SUCCESS METRIC:  Precision/recall on labelled records, % findings with evidence, reviewer agreement.")
+put(s, "TextBox 29", "SUCCESS METRIC:  Precision/recall, OCR error rate on labelled scans, % findings with evidence.")
 put(s, "TextBox 30", FOOTER)
 
 # ---------------------------------------------------------------- 8 Conclusion
 s = slides[7]
 put(s, "TextBox 4", "CLINISCOPE helps reviewers find potential conflicts across "
-                    "healthcare records, trace each one to source evidence, and "
+                    "digital and scanned healthcare records, trace each one to source evidence, and "
                     "record decisions with human oversight.")
 put(s, "TextBox 6", "Find the conflict. Trace the evidence. Keep humans in control.")
 put(s, "TextBox 8", "[Add team email]  •  github.com/anirudhleetcode-max/cliniscope-healthcare-contradiction-detector",
