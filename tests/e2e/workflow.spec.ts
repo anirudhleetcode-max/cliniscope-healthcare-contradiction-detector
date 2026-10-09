@@ -8,7 +8,7 @@ async function freshDemo(page: Page) {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  await page.goto('./');
+  await page.goto('#/');
   await expect(page.getByText('Documents are ready for analysis')).toBeVisible({ timeout: 30000 });
   await expect(page.getByTestId('demo-banner')).toContainText('synthetic data');
   return errors;
@@ -31,7 +31,7 @@ test('TEST 20: app loads, demo case is seeded and analysis produces evidence-bac
 test('TEST 9/7/8: open a finding, inspect evidence, view the highlighted source passage', async ({ page }) => {
   await freshDemo(page);
   await analyze(page);
-  await page.goto('./#/queue');
+  await page.goto('#/queue');
   await page.getByRole('link', { name: /Penicillin allergy documented in one record/ }).click();
   await expect(page.getByTestId('finding-title')).toContainText('Penicillin allergy');
   const a = page.getByTestId('evidence-side-A');
@@ -50,7 +50,7 @@ test('TEST 9/7/8: open a finding, inspect evidence, view the highlighted source 
 test('TEST 10-13: review decision requires a reason, is audited and survives a refresh', async ({ page }) => {
   await freshDemo(page);
   await analyze(page);
-  await page.goto('./#/queue?q=metformin');
+  await page.goto('#/queue?q=metformin');
   await page.getByTestId('finding-link').first().click();
   await page.getByRole('button', { name: 'Begin review' }).click();
   await expect(page.getByTestId('finding-detail').getByTestId('status-badge').first()).toHaveText(/In review/);
@@ -69,14 +69,14 @@ test('TEST 10-13: review decision requires a reason, is audited and survives a r
   await expect(audit).toContainText('In review → Resolved by reviewer');
   await expect(audit).toContainText('Prescriber confirmed 1000 mg');
   await expect(audit).toContainText('Called prescriber');
-  await page.goto('./#/timeline');
+  await page.goto('#/timeline');
   await expect(page.getByTestId('timeline-events')).toContainText('Prescriber confirmed 1000 mg');
 });
 
 test('TEST 18: search and filters operate on real data', async ({ page }) => {
   await freshDemo(page);
   await analyze(page);
-  await page.goto('./#/queue');
+  await page.goto('#/queue');
   const rows = page.getByTestId('queue-table').getByTestId('finding-link');
   await page.getByTestId('queue-search').fill('no known drug allergies');
   await expect(rows).toHaveCount(2);
@@ -93,7 +93,7 @@ test('TEST 18: search and filters operate on real data', async ({ page }) => {
 test('TEST 14/16/17: upload TXT (new findings), reject unsupported and empty files, flag scanned PDF', async ({ page }) => {
   await freshDemo(page);
   await analyze(page);
-  await page.goto('./#/documents');
+  await page.goto('#/documents');
   await page.getByTestId('file-input').setInputFiles([
     file('sample-follow-up-note-2026-03-20.txt', 'text/plain'),
     { name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from('PNG') },
@@ -109,13 +109,13 @@ test('TEST 14/16/17: upload TXT (new findings), reject unsupported and empty fil
   await expect(staged).toContainText('OCR is not available');
   await expect(page.getByTestId('upload-summary')).toContainText('new');
   // never vs current, never vs former (existing), former vs current
-  await page.goto('./#/queue?q=smoking');
+  await page.goto('#/queue?q=smoking');
   await expect(page.getByTestId('queue-table').getByTestId('finding-link')).toHaveCount(3);
 });
 
 test('TEST 15: a readable PDF can be uploaded into a new case and analyzed', async ({ page }) => {
   await freshDemo(page);
-  await page.goto('./#/cases');
+  await page.goto('#/cases');
   await page.getByTestId('new-case-label').fill('CASE-E2E · PDF test');
   await page.getByTestId('create-case').click();
   await expect(page).toHaveURL(/#\/documents/);
@@ -125,7 +125,7 @@ test('TEST 15: a readable PDF can be uploaded into a new case and analyzed', asy
   ]);
   await page.getByTestId('upload-submit').click();
   await expect(page.getByTestId('upload-summary')).toContainText('2 documents', { timeout: 30000 });
-  await page.goto('./#/queue');
+  await page.goto('#/queue');
   const rows = page.getByTestId('queue-table').getByTestId('finding-link');
   await expect(rows).toHaveCount(2);
   // Case separation: the demo case's intake form is not compared with this case.
