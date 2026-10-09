@@ -51,6 +51,7 @@ test('two authenticated reviewers share a case: decisions and audit history are 
   await alice.getByTestId('member-email').fill(`bob-${run}@example.test`);
   await alice.getByTestId('add-member').click();
   await expect(alice.getByTestId('member-list')).toContainText('Bob Reviewer');
+  await expect(alice.getByRole('status').filter({ hasText: 'can now access this case as reviewer' })).toBeVisible();
 
   // Alice reviews the allergy conflict: reason required, decision saved on the server.
   await alice.goto('#/contradictions?case=current&q=penicillin');
@@ -131,6 +132,25 @@ test('an outsider cannot open a case they were not invited to; signed-out users 
   await visitor.close();
 
   const eve = await signUp(browser, 'Eve Outsider', `eve-${run}@example.test`);
+  // An owner removes a member: confirmation first, then feedback only after the server confirms.
+  const olga = await signUp(browser, 'Olga Owner', `olga-${run}@example.test`);
+  await olga.goto('#/cases');
+  await olga.getByTestId('new-case').click();
+  await olga.getByTestId('new-case-label').fill(`REMOVE-${run} · synthetic`);
+  await olga.getByTestId('create-shared-case').click();
+  await expect(olga).toHaveURL(/#\/documents/);
+  await expect(olga.getByTestId('mode-chip')).toContainText('Shared workspace · owner');
+  await olga.goto('#/case');
+  await olga.getByTestId('member-email').fill(`eve-${run}@example.test`);
+  await olga.getByTestId('add-member').click();
+  await expect(olga.getByTestId('member-list')).toContainText('Eve Outsider');
+  await olga.getByTestId('remove-member').click();
+  await olga.getByRole('button', { name: 'Cancel' }).click();
+  await expect(olga.getByTestId('member-list')).toContainText('Eve Outsider');
+  await olga.getByTestId('remove-member').click();
+  await olga.getByTestId('confirm-remove-member').click();
+  await expect(olga.getByRole('status').filter({ hasText: 'no longer has access to this case' })).toBeVisible();
+  await expect(olga.getByTestId('member-list')).not.toContainText('Eve Outsider');
   // Signed in with no cases: the server-backed overview shows an empty state, not demo numbers.
   await eve.goto('#/');
   await expect(eve.getByTestId('overview-empty')).toBeVisible({ timeout: 30_000 });
