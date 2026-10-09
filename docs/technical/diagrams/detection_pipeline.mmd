@@ -1,0 +1,29 @@
+%% MEDGUARD contradiction-detection pipeline (src/lib/extract.ts, statements.ts, detect.ts, services.ts).
+flowchart TD
+    A["File chosen in Documents page<br/>(PDF, TXT, DOCX, PNG, JPEG)"] --> B["validateUpload()<br/>extension, MIME, size, magic bytes"]
+    B -->|"invalid"| BX["UploadValidationError shown to user<br/>nothing stored"]
+    B -->|"valid"| C["sha256Hex() duplicate check<br/>per case"]
+    C --> D["Store DocumentRecord + original Blob<br/>event: document_uploaded"]
+    D --> E{"File kind"}
+    E -->|"txt"| E1["extractTxt()<br/>strict UTF-8 decode"]
+    E -->|"docx"| E2["extractDocx()<br/>mammoth.extractRawText"]
+    E -->|"pdf"| E3["extractPdf()<br/>pdf.js text layer per page"]
+    E -->|"image"| E4["extractImage()<br/>Tesseract.js OCR"]
+    E3 -->|"page with fewer than 20 chars"| E5["OCR that page<br/>Tesseract.js, words below 70% flagged"]
+    E1 --> F["normalizeText()<br/>newlines, control characters"]
+    E2 --> F
+    E3 --> F
+    E4 --> F
+    E5 --> F
+    F --> G["extractStatements()<br/>segment() into sentences + section headings"]
+    G --> H["Lexicon matching + regex rules<br/>allergy, medication, diagnosis, lab,<br/>procedure, smoking status, date of birth"]
+    H --> I["ClinicalStatement<br/>concept, polarity, value, unit, temporality,<br/>status, charStart..charEnd, OCR provenance"]
+    I --> J["Reviewer clicks Analyze<br/>analyzeCase()"]
+    J --> K["detectContradictions(caseId)<br/>group by normalized concept, same case only"]
+    K --> L["Category comparators<br/>compareAllergies, compareMedications,<br/>comparePolarityConcept, compareLabs,<br/>compareSmoking, compareProcedures,<br/>compareDemographic"]
+    L --> M["emit(): re-verify every quote at its offsets,<br/>require two different documents,<br/>downgrade low-confidence OCR"]
+    M -->|"quote not found"| MX["No finding created"]
+    M --> N["DraftFinding<br/>findingType, evidenceQuality, reviewPriority,<br/>explanation, caveats, alternatives"]
+    N --> O["Reconcile by fingerprint<br/>new: unreviewed; existing: keep status;<br/>missing: mark stale"]
+    O --> P[("IndexedDB findings + events")]
+    P --> Q["Review Queue / Contradictions / Finding detail<br/>human decision with required reason"]
