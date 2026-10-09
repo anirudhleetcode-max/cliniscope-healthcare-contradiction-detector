@@ -149,7 +149,7 @@ The server creates `CLINISCOPE_DATA_DIR/cliniscope.db` and applies versioned mig
   - `Dockerfile`: `docker build -t cliniscope-api . && docker run -p 8787:8787 -v cliniscope-data:/data -e CLINISCOPE_ALLOWED_ORIGINS=https://anirudhleetcode-max.github.io cliniscope-api`
   - `render.yaml`: a Render Blueprint (Docker service with a persistent disk). Set `ANTHROPIC_API_KEY` in the dashboard to enable AI.
 
-  The self-contained bundle (`npm run server:build`) was verified to start and serve `/api/health` without `node_modules`. The Docker image itself could not be built here (container registry rate limit and no container network egress); neither the image nor the Render blueprint has been run. Once deployed, enter its HTTPS URL in the live app (About & settings), or set `VITE_API_BASE_URL` at build time.
+  The self-contained bundle (`npm run server:build`) was verified to start and serve `/api/health` without `node_modules`. The Docker image is built and its container health-checked in CI on every push (`docker-api` job). The Render blueprint has not been run. Once deployed, enter its HTTPS URL in the live app (About & settings), or set `VITE_API_BASE_URL` at build time.
 
 ## Synthetic demo case
 `DEMO-0042 · Synthetic Patient SP-0042`, labelled *DEMO CASE — SYNTHETIC DATA — NOT A REAL PATIENT* and *Fictional demonstration data. Not for clinical use.* All five files in `public/demo/` go through the real pipeline:
