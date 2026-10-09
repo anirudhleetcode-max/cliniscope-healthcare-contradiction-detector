@@ -7,6 +7,8 @@ import { formatDate, formatDateTime } from '../lib/dates';
 import type { AnalysisSummary, Category, FindingType, ReviewStatus } from '../lib/types';
 import { CATEGORY_LABEL, FINDING_TYPE_LABEL, REVIEW_STATUS_LABEL } from '../lib/types';
 import { describeEvent } from './Timeline';
+import { AiPanel } from '../components/AiPanel';
+import { CollaborationPanel } from '../components/CollaborationPanel';
 
 export function Overview() {
   const { currentCase, caseId, seeding, seedError, resetDemo, storageError } = useApp();
@@ -152,6 +154,16 @@ export function Overview() {
             </ol>
           )}
         </section>
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        {currentCase.remote ? <CollaborationPanel c={currentCase} /> : (
+          <section className="card p-5" aria-label="Storage mode" data-testid="local-mode-panel">
+            <h2 className="mb-1 text-base font-semibold">Local demo mode</h2>
+            <p className="text-sm text-muted">This case is stored only in this browser (IndexedDB). To review it with colleagues, sign in to a shared workspace and publish it from <Link className="text-brand hover:underline" to="/cases">Cases</Link>.</p>
+          </section>
+        )}
+        <AiPanel disabled={documents!.length === 0} />
       </div>
 
       <section className="card mt-6 p-5" aria-label="Document processing status">

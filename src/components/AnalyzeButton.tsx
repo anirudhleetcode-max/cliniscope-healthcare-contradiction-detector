@@ -2,17 +2,26 @@ import { useState } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 import { db, useApp } from '../app/state';
 import { analyzeCase } from '../lib/services';
+import { withLocalWork } from '../lib/remote';
+import { useWorkspace } from '../app/workspace';
 import type { AnalysisSummary } from '../lib/types';
 
 export function AnalyzeButton({ variant = 'primary', onDone, disabled }: { variant?: 'primary' | 'secondary'; onDone?: (s: AnalysisSummary) => void; disabled?: boolean }) {
-  const { caseId, reviewer, toast } = useApp();
+  const { caseId, reviewer, toast, currentCase } = useApp();
+  const ws = useWorkspace();
   const [busy, setBusy] = useState(false);
   const run = async () => {
     if (!caseId || busy) return;
     setBusy(true);
     try {
-      const s = await analyzeCase(db, caseId, reviewer);
-      toast('success', `Analysis complete: ${s.statementsExtracted} statements, ${s.comparisonsEvaluated} comparisons, ${s.findingsTotalActive} finding(s) (${s.findingsCreated} new).`);
+      const remote = !!currentCase?.remote;
+      if (remote) ws.requireSession();
+      const s = await withLocalWork(async () => {
+        const sum = await analyzeCase(db, caseId, ws.session?.user.displayName ?? reviewer);
+        if (remote) await ws.push(caseId, { analyzed: true, detail: `Rules analysis: ${sum.comparisonsEvaluated} comparisons, ${sum.findingsTotalActive} findings` });
+        return sum;
+      });
+      toast('success', `Analysis complete: ${s.statementsExtracted} statements, ${s.comparisonsEvaluated} comparisons, ${s.findingsTotalActive} finding(s) (${s.findingsCreated} new)${remote ? ' — synchronized to the shared workspace' : ''}.`);
       onDone?.(s);
     } catch (e) {
       toast('error', `Analysis failed: ${e instanceof Error ? e.message : 'unknown error'}`);

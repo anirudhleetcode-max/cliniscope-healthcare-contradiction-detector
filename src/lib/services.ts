@@ -256,6 +256,8 @@ async function runAnalysis(db: CliniscopeDB, caseId: string, actor: string): Pro
         }
       }
       for (const f of existing) {
+        // AI-assisted findings are not produced by the rules engine, so a rules re-run never supersedes them.
+        if (f.origin === 'ai') continue;
         if (!produced.has(f.fingerprint) && !f.stale) {
           superseded++;
           await db.findings.put({ ...f, stale: true, updatedAt: ts });
@@ -360,4 +362,42 @@ export async function seedDemoCase(
     }, { actor: 'System (demo seed)' });
   }
   return c;
+}
+
+// ---------------------------------------------------------------- AI findings
+/**
+ * Stores evidence-verified AI-assisted findings (see lib/ai.ts verifyAiOutput).
+ * Reconciled by fingerprint; existing findings keep their review state.
+ */
+export async function addAiFindings(
+  db: CliniscopeDB,
+  caseId: string,
+  drafts: import('./detect').DraftFinding[],
+  info: { model: string; actor: string; rejected: number; corroborated: string[]; consistent: number; downgraded: number },
+): Promise<{ created: number; retained: number }> {
+  const c = await requireCase(db, caseId);
+  let created = 0;
+  let retained = 0;
+  await db.transaction('rw', [db.findings, db.events, db.cases], async () => {
+    const ts = now();
+    for (const d of drafts) {
+      if (d.caseId !== caseId) continue;
+      const prior = await db.findings.where('[caseId+fingerprint]').equals([caseId, d.fingerprint]).first();
+      if (prior) { retained++; continue; }
+      const f: Finding = { ...d, id: uid('fd'), reviewStatus: 'unreviewed', stale: false, createdAt: ts, updatedAt: ts, isSeededDemo: c.isDemo };
+      await db.findings.add(f);
+      created++;
+      await logEvent(db, { caseId, findingId: f.id, kind: 'finding_created', actor: `AI-assisted analysis (${info.model})`, detail: `${f.displayId}: ${f.title}` });
+    }
+    await logEvent(db, {
+      caseId, kind: 'ai_analysis_completed', actor: info.actor,
+      detail: `Model ${info.model}: ${created} new finding(s), ${retained} already present, ${info.corroborated.length} corroborating existing rules findings${info.corroborated.length ? ` (${info.corroborated.join(', ')})` : ''}, ${info.downgraded} downgraded, ${info.rejected} rejected for unverifiable evidence, ${info.consistent} consistency note(s).`,
+    });
+    await touchCase(db, caseId);
+  });
+  return { created, retained };
+}
+
+export async function logAiFailure(db: CliniscopeDB, caseId: string, actor: string, message: string): Promise<void> {
+  await logEvent(db, { caseId, kind: 'ai_analysis_failed', actor, detail: message });
 }

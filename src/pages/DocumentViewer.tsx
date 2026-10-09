@@ -6,6 +6,8 @@ import { db, useApp } from '../app/state';
 import { Callout, EmptyState, Modal, PageSkeleton, ProcessingBadge, StatusBadge, cx } from '../components/ui';
 import { formatDate, formatDateTime, isValidIsoDate } from '../lib/dates';
 import { updateDocumentMeta } from '../lib/services';
+import { getOriginalBlob, type RemoteSession } from '../lib/remote';
+import { useWorkspace } from '../app/workspace';
 import type { DocumentType, OcrSpan, PageSpan } from '../lib/types';
 import { CATEGORY_LABEL, DOCUMENT_TYPE_LABEL, EXTRACTION_METHOD_LABEL } from '../lib/types';
 
@@ -13,6 +15,7 @@ export function DocumentViewer() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const { toast } = useApp();
+  const ws = useWorkspace();
   const doc = useLiveQuery(() => db.documents.get(id ?? '').then((d) => d ?? null), [id]);
   const statements = useLiveQuery(() => db.statements.where('documentId').equals(id ?? '').toArray(), [id]);
   const findings = useLiveQuery(() => (doc ? db.findings.where('caseId').equals(doc.caseId).toArray() : []), [doc?.caseId]);
@@ -45,10 +48,10 @@ export function DocumentViewer() {
   const related = findings.filter((f) => f.sourceDocumentIds.includes(doc.id) && !f.stale);
 
   const openOriginal = async () => {
-    const f = await db.files.get(doc.id);
-    if (!f) { toast('error', 'The original file is not available.'); return; }
+    const blob = await getOriginalBlob(db, doc.id, ws.session);
+    if (!blob) { toast('error', 'The original file is not available (not stored locally or on the shared workspace).'); return; }
     // Object URL is local to this browser session; there is no public URL.
-    const url = URL.createObjectURL(f.blob);
+    const url = URL.createObjectURL(blob);
     if (doc.fileKind === 'pdf') window.open(url, '_blank', 'noopener');
     else { const a = document.createElement('a'); a.href = url; a.download = doc.originalFilename; a.click(); }
     setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -139,7 +142,7 @@ export function DocumentViewer() {
           )}
         </section>
       </div>
-      {previewPage != null ? <OriginalPreview docId={doc.id} fileKind={doc.fileKind} page={previewPage} onClose={() => setPreviewPage(null)} /> : null}
+      {previewPage != null ? <OriginalPreview docId={doc.id} fileKind={doc.fileKind} page={previewPage} session={ws.session} onClose={() => setPreviewPage(null)} /> : null}
     </div>
   );
 }
@@ -207,7 +210,7 @@ function ExtractedText({ text, pageSpans, lowConf, hl, markRef, onPreview }: {
 }
 
 /** Renders the original page (PDF) or image so OCR text can be compared with the source. */
-function OriginalPreview({ docId, fileKind, page, onClose }: { docId: string; fileKind: string; page: number; onClose: () => void }) {
+function OriginalPreview({ docId, fileKind, page, onClose, session }: { docId: string; fileKind: string; page: number; onClose: () => void; session: RemoteSession | null }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -215,12 +218,12 @@ function OriginalPreview({ docId, fileKind, page, onClose }: { docId: string; fi
     let url: string | null = null;
     let cancelled = false;
     (async () => {
-      const f = await db.files.get(docId);
-      if (!f) { setError('The original file is not available.'); return; }
-      if (fileKind === 'image') { url = URL.createObjectURL(f.blob); setImgUrl(url); return; }
+      const blob = await getOriginalBlob(db, docId, session);
+      if (!blob) { setError('The original file is not available.'); return; }
+      if (fileKind === 'image') { url = URL.createObjectURL(blob); setImgUrl(url); return; }
       const pdfjs = await import('pdfjs-dist');
       pdfjs.GlobalWorkerOptions.workerSrc = new URL('./pdf.worker.min.js', document.baseURI).href;
-      const pdf = await pdfjs.getDocument({ data: new Uint8Array(await f.blob.arrayBuffer()), isEvalSupported: false }).promise;
+      const pdf = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false }).promise;
       const pg = await pdf.getPage(page);
       const vp = pg.getViewport({ scale: 1.4 });
       const c = ref.current;
@@ -230,7 +233,7 @@ function OriginalPreview({ docId, fileKind, page, onClose }: { docId: string; fi
       await pdf.destroy();
     })().catch(() => setError('The original page could not be rendered.'));
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
-  }, [docId, fileKind, page]);
+  }, [docId, fileKind, page, session]);
   return (
     <Modal open onClose={onClose} title={fileKind === 'image' ? 'Original image' : `Original page ${page}`} wide>
       {error ? <p className="text-sm text-crit">{error}</p> : null}
