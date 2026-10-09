@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { @apply bg-canvas text-ink font-sans antialiased; font-feature-settings: 'cv11', 'ss01'; }
+  :focus-visible { outline: 2px solid #315EFB; outline-offset: 2px; border-radius: 4px; }
+  mark.evidence-hl { background: #FFF1B8; color: inherit; border-bottom: 2px solid #B7791F; padding: 1px 0; scroll-margin: 120px; }
+  mark.evidence-hl.active { animation: pulseHl 1.6s ease-out 1; }
+  @keyframes pulseHl { 0% { background: #FFD666; } 100% { background: #FFF1B8; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+}
+
+@layer components {
+  .card { @apply bg-white border border-line rounded-xl shadow-card; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap; }
+  .btn-primary { @apply btn bg-brand text-white hover:bg-brand-600 active:bg-brand-700; }
+  .btn-secondary { @apply btn bg-white text-ink border border-line hover:bg-soft; }
+  .btn-ghost { @apply btn text-muted hover:bg-soft hover:text-ink; }
+  .btn-danger { @apply btn bg-crit text-white hover:opacity-90; }
+  .input { @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20; }
+  .label { @apply block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap; }
+  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted; }
+}

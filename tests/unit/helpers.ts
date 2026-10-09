@@ -56,7 +56,7 @@ export async function loadDemoDocs(caseId = 'case_demo') {
     docs.push(makeDoc(caseId, r.text, {
       id: `demo_${m.documentType}`,
       title: m.title,
-      documentType: m.documentType,
+      documentType: m.documentType as DocumentType,
       documentDate: m.documentDate,
       fileKind: m.file.split('.').pop() as FileKind,
       extractionMethod: r.method,

@@ -74,8 +74,8 @@ export function segment(text: string): Segment[] {
     }
 
     // Inline heading: "Allergies: No known drug allergies."
-    let segSection = section;
-    let segHint = hint;
+    let segSection: string | null = section;
+    let segHint: SectionHint = hint;
     let bodyOffset = 0;
     const inline = /^\s*([A-Za-z][A-Za-z /&()-]{2,40}):\s+(?=\S)/.exec(line);
     if (inline) {

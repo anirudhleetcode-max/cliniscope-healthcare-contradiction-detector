@@ -116,8 +116,11 @@ interface Spec {
 function emit(ctx: Ctx, spec: Spec): void {
   // Enforce case separation and evidence verification.
   const ok = (s: ClinicalStatement) => s.caseId === ctx.caseId && verifyStatement(s, ctx.docs.get(s.documentId));
-  const A = spec.sideA.filter(ok);
-  const B = spec.sideB.filter(ok);
+  // Stable evidence order: chronological by document date, then by position.
+  const order = (x: ClinicalStatement, y: ClinicalStatement) =>
+    (docDate(ctx, x) ?? '9999').localeCompare(docDate(ctx, y) ?? '9999') || x.documentId.localeCompare(y.documentId) || x.charStart - y.charStart;
+  const A = spec.sideA.filter(ok).sort(order);
+  const B = spec.sideB.filter(ok).sort(order);
   if (!A.length || !B.length) return;
   const docIdsA = new Set(A.map((s) => s.documentId));
   const docIdsB = new Set(B.map((s) => s.documentId));

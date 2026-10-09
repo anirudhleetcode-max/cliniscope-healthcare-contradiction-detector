@@ -17,6 +17,7 @@
   "license": "MIT",
   "dependencies": {
     "dexie": "^4.0.10",
+    "dexie-react-hooks": "^1.1.7",
     "lucide-react": "^0.460.0",
     "mammoth": "^1.8.0",
     "pdfjs-dist": "^4.10.38",

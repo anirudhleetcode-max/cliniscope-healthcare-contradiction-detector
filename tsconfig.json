@@ -10,9 +10,11 @@
     "noUnusedParameters": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "allowJs": true,
+    "checkJs": false,
     "isolatedModules": true,
     "noEmit": true,
     "types": ["vite/client", "node"]
   },
-  "include": ["src", "tests", "vite.config.ts", "playwright.config.ts"]
+  "include": ["src", "tests", "scripts/demo-content.mjs", "vite.config.ts", "playwright.config.ts"]
 }

@@ -184,7 +184,7 @@ export async function updateDocumentMeta(
 export async function deleteDocument(db: CliniscopeDB, documentId: string, actor = DEMO_REVIEWER): Promise<void> {
   const doc = await db.documents.get(documentId);
   if (!doc) throw new ServiceError('Document not found.');
-  await db.transaction('rw', db.documents, db.files, db.statements, db.events, db.cases, async () => {
+  await db.transaction('rw', [db.documents, db.files, db.statements, db.events, db.cases], async () => {
     await db.documents.delete(documentId);
     await db.files.delete(documentId);
     await db.statements.where('documentId').equals(documentId).delete();
