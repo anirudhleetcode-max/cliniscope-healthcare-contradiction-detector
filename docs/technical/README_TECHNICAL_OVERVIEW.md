@@ -56,6 +56,7 @@ The system does not diagnose and does not decide which record is correct.
 | Backend (optional) | Node.js 22, `node:http` (no framework), `node:sqlite`, `node:crypto` scrypt | IMPLEMENTED and tested locally; **NOT DEPLOYED** |
 | Database | Browser: IndexedDB. Optional server: SQLite file. No PostgreSQL, MongoDB or managed DB | IMPLEMENTED |
 | Frontend hosting | GitHub Pages (`gh-pages` branch) | VERIFIED via CI `verify-production` |
+| Frontend previews | Vercel project `medguard` (GitHub app, configured outside the repo; no `vercel.json`) | Observed: a preview was built for PR #2. Settings UNKNOWN |
 | API hosting | Dockerfile (built and health-checked in CI); `render.yaml` | CONFIGURED BUT NOT VERIFIED |
 | CI/CD | GitHub Actions "CI and deploy": test, docker-api, deploy, verify-production | VERIFIED (run #30 green) |
 | Testing | Vitest 2.1.8 (88 tests), Playwright 1.56.1 (24 tests) | VERIFIED in this audit |
@@ -123,3 +124,4 @@ The system does not diagnose and does not decide which record is correct.
 4. **Provider data retention** for the AI path is UNKNOWN.
 5. **Render** blueprint behaviour, cost and plan are unverified.
 6. **Clinical accuracy** on real data is unknown.
+7. **Vercel.** A `medguard` Vercel project builds previews from this repository. Its production URL and settings are not in the code.

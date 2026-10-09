@@ -14,6 +14,8 @@
 
 **Live URL:** `https://anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector/`.
 
+**Vercel (configured outside the repository).** The Vercel GitHub app is connected to this repository: a Vercel project named `medguard` posted a preview deployment, with status "Ready", on PR #2 (preview `medguard-git-claude-optimistic-tesla-466st5-anirudh-ed2c.vercel.app`). The repository contains no `vercel.json` or other Vercel configuration, so Vercel's build settings, production branch and production URL are **UNKNOWN** from the code. The auditor did not open the preview. Because the app uses relative asset paths and hash routing, it is expected to work at a Vercel root URL as well. **This is an inference; it has not been verified.**
+
 The URL is built in the workflow as `https://<owner>.github.io/<repo>/`. It keeps the original repository name: the repository has **not** been renamed. The MEDGUARD rebrand changed only user-facing names.
 
 ## 2. Base path and asset paths (GitHub Pages sub-path)
