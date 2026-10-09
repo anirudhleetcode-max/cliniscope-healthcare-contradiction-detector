@@ -1,0 +1,55 @@
+name: Verify live deployment
+
+# Checks the deployed API and the live GitHub Pages frontend together, with synthetic data only.
+# Runs on demand (Actions → Verify live deployment → Run workflow) and on pull requests that change it.
+# It writes synthetic @example.test accounts and cases to the deployed database.
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: Public URL of the deployed API (defaults to the MEDGUARD_API_URL repository variable)
+        required: false
+      idle_minutes:
+        description: Minutes without traffic before re-reading (a free instance stops after 15)
+        required: false
+        default: '17'
+  pull_request:
+    paths: ['.github/workflows/verify-live.yml', 'tests/live/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      API_URL: ${{ inputs.api_url || vars.MEDGUARD_API_URL || 'https://medguard-api-duti.onrender.com' }}
+      SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+      SITE_ORIGIN: https://${{ github.repository_owner }}.github.io
+      IDLE_MINUTES: ${{ inputs.idle_minutes || '17' }}
+      MEDGUARD_LIVE_STATE: live-state.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Wake the API (a free instance may take about a minute)
+        run: |
+          for i in $(seq 1 18); do curl -sf --max-time 30 "$API_URL/api/health" >/dev/null && echo "awake" && exit 0; echo "attempt $i"; sleep 10; done
+          echo "::error::$API_URL did not answer"; exit 1
+      - name: API checks (health, readiness, PostgreSQL, CORS, auth, records, detection, review, notes, files, isolation)
+        run: node --import tsx tests/live/verify-api.mts write "$API_URL" "$SITE_ORIGIN"
+      - run: npx playwright install --with-deps chromium
+      - name: Live GitHub Pages frontend against the live API (two-user shared-workspace browser tests)
+        run: BASE_URL="$SITE_URL" API_URL="$API_URL" npx playwright test tests/e2e/shared.spec.ts --project=desktop
+      - name: Stay idle so the free instance stops
+        run: sleep $(( IDLE_MINUTES * 60 ))
+      - name: Persistence after the idle period (instance restart)
+        run: node --import tsx tests/live/verify-api.mts read "$API_URL"
