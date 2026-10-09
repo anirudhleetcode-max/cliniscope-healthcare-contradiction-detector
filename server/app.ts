@@ -91,9 +91,15 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
     documents: z.array(z.record(z.string(), z.unknown())).max(200),
     statements: z.array(z.record(z.string(), z.unknown())).max(20000),
     findings: z.array(z.record(z.string(), z.unknown())).max(2000),
+    /** Documents to delete. Absence from `documents` never deletes anything (snapshots merge, they do not replace). */
+    removedDocumentIds: z.array(z.string().max(60)).max(200).optional(),
     analyzed: z.boolean().optional(),
     detail: z.string().max(2000).optional(),
   });
+  const MIME_BY_KIND: Record<string, string> = {
+    pdf: 'application/pdf', txt: 'text/plain', image: 'image/png',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  };
   const AiDoc = z.object({
     id: z.string().max(60), caseId: z.string().max(60), title: z.string().max(200), documentType: z.string().max(60),
     documentDate: z.string().max(20).nullable(), extractedText: z.string().max(400_000),
@@ -200,9 +206,18 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
     const docMap = new Map<string, DocumentRecord>();
     for (const d of docs) {
       if (!ID_RE.test(String(d.id)) || d.caseId !== caseId || typeof d.extractedText !== 'string' || typeof d.title !== 'string') throw new HttpError(422, 'A document in the snapshot is invalid or belongs to another case.');
+      if (!(String(d.fileKind) in MIME_BY_KIND)) throw new HttpError(422, 'A document has an unsupported file kind.');
       if (d.extractedText.length > 2_000_000) throw new HttpError(413, 'A document text is too large.');
       docMap.set(d.id, d);
     }
+    const removed = new Set((b.removedDocumentIds ?? []).filter((id) => ID_RE.test(id) && !docMap.has(id)));
+    // Documents already on the server (and not being removed) remain valid evidence sources.
+    const storedDoc = (id: string): DocumentRecord | undefined => {
+      if (docMap.has(id)) return docMap.get(id);
+      if (removed.has(id)) return undefined;
+      const r = db.prepare('SELECT data_json FROM documents WHERE id = ? AND case_id = ?').get(id, caseId) as { data_json: string } | undefined;
+      return r ? (JSON.parse(r.data_json) as DocumentRecord) : undefined;
+    };
     const statements = b.statements as unknown as ClinicalStatement[];
     for (const s of statements) {
       const d = docMap.get(s.documentId);
@@ -211,11 +226,17 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
     const findings = b.findings as unknown as Finding[];
     for (const f of findings) {
       if (f.caseId !== caseId || typeof f.fingerprint !== 'string' || !Array.isArray(f.evidence) || !f.evidence.length) throw new HttpError(422, 'A finding in the snapshot is invalid.');
+      const prior = db.prepare('SELECT data_json FROM findings WHERE case_id = ? AND fingerprint = ?').get(caseId, f.fingerprint) as { data_json: string } | undefined;
+      const priorEvidence = prior ? (JSON.parse(prior.data_json) as Finding).evidence : [];
       for (const e of f.evidence) {
-        const d = docMap.get(e.documentId);
-        // Findings whose source document was removed keep their recorded quotes, but every quote for a present document must verify.
-        if (d && d.extractedText.slice(e.charStart, e.charEnd) !== e.quote) throw new HttpError(422, `Evidence for "${String(f.title).slice(0, 80)}" does not match the source text.`);
-        if (!d && !db.prepare('SELECT 1 FROM findings WHERE case_id = ? AND fingerprint = ?').get(caseId, f.fingerprint)) throw new HttpError(422, 'A new finding cites a document that is not in the case.');
+        const d = storedDoc(e.documentId);
+        if (d) {
+          if (d.extractedText.slice(e.charStart, e.charEnd) !== e.quote) throw new HttpError(422, `Evidence for "${String(f.title).slice(0, 80)}" does not match the source text.`);
+        } else {
+          // Source document no longer exists: only the evidence already recorded on the server may be kept, unchanged.
+          const same = priorEvidence.some((p) => p.documentId === e.documentId && p.charStart === e.charStart && p.charEnd === e.charEnd && p.quote === e.quote);
+          if (!same) throw new HttpError(422, 'A finding cites a document that is not in the case.');
+        }
       }
     }
     const counts = { added: 0, removed: 0, created: 0, superseded: 0 };
@@ -223,40 +244,40 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
       const existingDocs = new Set((db.prepare('SELECT id FROM documents WHERE case_id = ?').all(caseId) as { id: string }[]).map((r) => r.id));
       for (const d of docs) {
         if (!existingDocs.has(d.id) && db.prepare('SELECT 1 FROM documents WHERE id = ?').get(d.id)) throw new HttpError(409, 'Document identifier conflict.');
-        const clean: DocumentRecord = { ...d, caseId };
+        // The MIME type is derived from the validated file kind, never trusted from the client.
+        const clean: DocumentRecord = { ...d, caseId, mimeType: MIME_BY_KIND[d.fileKind] };
         db.prepare(`INSERT INTO documents (id, case_id, data_json, updated_at) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET data_json = excluded.data_json, updated_at = excluded.updated_at`).run(d.id, caseId, JSON.stringify(clean), now());
         if (!existingDocs.has(d.id)) { counts.added++; audit({ caseId, actor: c.user, kind: 'document_uploaded', documentId: d.id, detail: `${d.title} added to the shared case (${String(d.fileKind).toUpperCase()}, ${d.extractionMethod ?? 'no text'})` }); }
       }
-      for (const id of existingDocs) {
-        if (docMap.has(id)) continue;
+      for (const id of removed) {
+        if (!existingDocs.has(id)) continue;
         const row = db.prepare('SELECT data_json, file_path FROM documents WHERE id = ?').get(id) as { data_json: string; file_path: string | null };
         db.prepare('DELETE FROM documents WHERE id = ?').run(id);
+        db.prepare('DELETE FROM statements WHERE document_id = ? AND case_id = ?').run(id, caseId);
         if (row.file_path) rmSync(join(filesDir, row.file_path), { force: true });
         counts.removed++;
         audit({ caseId, actor: c.user, kind: 'document_deleted', documentId: id, detail: `${JSON.parse(row.data_json).title} removed from the shared case` });
       }
-      db.prepare('DELETE FROM statements WHERE case_id = ?').run(caseId);
-      const insS = db.prepare('INSERT INTO statements (id, case_id, document_id, data_json) VALUES (?,?,?,?)');
+      // Statements are replaced only for the documents included in this snapshot.
+      const delS = db.prepare('DELETE FROM statements WHERE document_id = ? AND case_id = ?');
+      for (const d of docs) delS.run(d.id, caseId);
+      const insS = db.prepare('INSERT OR REPLACE INTO statements (id, case_id, document_id, data_json) VALUES (?,?,?,?)');
       for (const s of statements) insS.run(s.id, caseId, s.documentId, JSON.stringify(s));
-      const seen = new Set<string>();
       for (const f of findings) {
-        seen.add(f.fingerprint);
         const prior = db.prepare('SELECT id, stale FROM findings WHERE case_id = ? AND fingerprint = ?').get(caseId, f.fingerprint) as { id: string; stale: number } | undefined;
         const data = { ...f, caseId, reviewStatus: undefined, stale: undefined };
         if (prior) {
           db.prepare('UPDATE findings SET data_json = ?, stale = ?, updated_at = CASE WHEN stale != ? THEN ? ELSE updated_at END WHERE id = ?').run(JSON.stringify({ ...data, id: prior.id }), f.stale ? 1 : 0, f.stale ? 1 : 0, now(), prior.id);
+          if (f.stale && !prior.stale) {
+            counts.superseded++;
+            audit({ caseId, actor: null, kind: 'finding_superseded', findingId: prior.id, detail: `${f.displayId} is no longer produced by the current documents; its evidence and review history are preserved.` });
+          }
         } else {
           const id = ID_RE.test(String(f.id)) && !db.prepare('SELECT 1 FROM findings WHERE id = ?').get(f.id) ? f.id : newId('fd');
           db.prepare("INSERT INTO findings (id, case_id, fingerprint, review_status, stale, data_json) VALUES (?,?,?, 'unreviewed', ?, ?)").run(id, caseId, f.fingerprint, f.stale ? 1 : 0, JSON.stringify({ ...data, id }));
           counts.created++;
           audit({ caseId, actor: c.user, actorName: f.origin === 'ai' ? `AI-assisted analysis (${f.aiModel ?? 'model'}) via ${c.user!.displayName}` : 'System (rules engine)', kind: 'finding_created', findingId: id, detail: `${f.displayId}: ${f.title}` });
         }
-      }
-      for (const r of db.prepare('SELECT id, fingerprint, data_json FROM findings WHERE case_id = ? AND stale = 0').all(caseId) as { id: string; fingerprint: string; data_json: string }[]) {
-        if (seen.has(r.fingerprint)) continue;
-        db.prepare('UPDATE findings SET stale = 1, updated_at = ? WHERE id = ?').run(now(), r.id);
-        counts.superseded++;
-        audit({ caseId, actor: null, kind: 'finding_superseded', findingId: r.id, detail: `${JSON.parse(r.data_json).displayId} is no longer produced by the current documents; its evidence and review history are preserved.` });
       }
       audit({ caseId, actor: c.user, kind: b.analyzed ? 'analysis_completed' : 'case_synced', detail: b.detail ?? `Synchronized ${docs.length} document(s), ${statements.length} statement(s), ${findings.length} finding(s): ${counts.created} new, ${counts.superseded} superseded` });
       touch(caseId, !!b.analyzed);
@@ -323,8 +344,8 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
     const b = AiRequest.parse(await c.body());
     if (b.documents.reduce((n, d) => n + d.extractedText.length, 0) > 600_000) throw new HttpError(413, 'The case text is too large for one AI request.');
     if (b.documents.some((d) => d.caseId !== b.caseId)) throw new HttpError(422, 'All documents must belong to the same case.');
-    // For a shared case, the caller must be a member; local-mode cases are analysed from the supplied text only.
-    if (db.prepare('SELECT 1 FROM cases WHERE id = ?').get(b.caseId)) requireRole(c.user!, b.caseId, 'reviewer');
+    // Analysis uses only the text supplied by the caller and persists nothing, so no case lookup is needed
+    // (a lookup here would let any user probe which case IDs exist).
     const started = Date.now();
     let raw: unknown;
     try {

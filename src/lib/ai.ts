@@ -7,7 +7,7 @@
 // otherwise it is discarded, and findings without verifiable support are
 // rejected or downgraded to "insufficient evidence".
 import { z } from 'zod';
-import { findDate } from './dates';
+import { findAllDates } from './dates';
 import { lineForOffset, pageForOffset, paragraphForOffset } from './extract';
 import { hashId } from './statements';
 import type { DraftFinding } from './detect';
@@ -133,7 +133,7 @@ export function verifyAiOutput(caseId: string, raw: unknown, docs: DocLike[], mo
       const loc = locateQuote(doc.extractedText, ev.quote);
       if (!loc) { problems.push(`a quotation attributed to "${doc.title}" was not found in its text`); continue; }
       if (!loc.exact) inexact = true;
-      const region = (doc.ocrRegions ?? []).find((r) => loc.start >= r.start && loc.start <= r.end);
+      const region = (doc.ocrRegions ?? []).find((r) => r.start < loc.end && r.end > loc.start); // any overlap with OCR text
       const low = (doc.ocrLowConfidence ?? []).filter((w) => w.start < loc.end && w.end > loc.start);
       evidence.push({
         statementId: 'ai_' + hashId(`${doc.id}|${loc.start}|${loc.end}`),
@@ -184,8 +184,7 @@ export function verifyAiOutput(caseId: string, raw: unknown, docs: DocLike[], mo
     const allowed = new Set<string>();
     for (const e of uniq) {
       if (e.documentDate) allowed.add(e.documentDate);
-      const d = findDate(e.quote);
-      if (d) allowed.add(d);
+      for (const d of findAllDates(e.quote)) allowed.add(d);
     }
     const dates = f.relevant_dates.slice(0, AI_LIMITS.dates).map((d) => d.trim()).filter((d) => allowed.has(d));
     for (const e of uniq) if (e.documentDate && !dates.includes(e.documentDate)) dates.push(e.documentDate);

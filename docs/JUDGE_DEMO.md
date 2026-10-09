@@ -2,7 +2,7 @@
 
 **Before the session:**
 - Open the live app once so the demo case is seeded; OCR of the scanned letter takes a few seconds on first load.
-- For the collaboration segment you need a running API server (see README → Running locally). Open two browser profiles, A and B, each signed in as a different account, with B added to a shared case by A.
+- For the collaboration segment you need a running API server (see README → Running locally). Open two **separate browser profiles** (or one normal window and one private window), A and B, each signed in as a different account, with B added to a shared case by A. Two tabs of the same profile share one local cache, so don't use them.
 - Skip the collaboration segment if no server is running. Never present local mode as multi-user.
 
 ## 0:00 – 0:20 · The problem

@@ -33,6 +33,12 @@ export function CollaborationPanel({ c }: { c: CaseRecord }) {
         {signedIn ? <button className="btn-ghost px-2 py-1 text-xs" disabled={busy} onClick={() => act(async () => { await ws.pull(c.id); toast('info', 'Refreshed from the shared workspace.'); })}><RefreshCw size={13} />Refresh now</button> : null}
       </div>
       <p className="mb-3 text-xs text-muted">Owner: <span className="font-medium text-ink">{c.remote?.owner}</span> · your role: <span className="font-medium text-ink">{c.remote?.role}</span> · last synchronized {formatDateTime(c.remote?.syncedAt)} · updates are fetched every 15 s while this case is open.</p>
+      {c.remote?.unsynced ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warn/30 bg-warn-50 px-3 py-2 text-sm text-warn" role="status" data-testid="unsynced-banner">
+          <span>Local changes have not been accepted by the shared workspace yet. Automatic refresh is paused so they are not overwritten.</span>
+          {signedIn ? <button className="btn-secondary py-1" disabled={busy} onClick={() => act(async () => { await ws.push(c.id, { detail: 'Retry of a failed synchronization' }); toast('success', 'Local changes synchronized.'); })} data-testid="retry-sync">Retry sync</button> : null}
+        </div>
+      ) : null}
       {!signedIn ? <p className="text-sm text-warn">Sign in to the shared workspace (About &amp; settings) to see collaborators and synchronize.</p> : !members ? <p className="text-sm text-muted">Loading collaborators…</p> : (
         <ul className="divide-y divide-line text-sm" data-testid="member-list">
           {members.map((m) => (

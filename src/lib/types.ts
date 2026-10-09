@@ -89,7 +89,13 @@ export interface CaseRecord {
   label: string;
   isDemo: boolean;
   /** Present when this case is stored in a shared workspace server; the local copy is a cache. */
-  remote?: { serverUrl: string; role: CaseRole; owner: string; syncedAt: string | null };
+  remote?: {
+    serverUrl: string; role: CaseRole; owner: string; syncedAt: string | null;
+    /** Local changes not yet accepted by the server; background pulls are suspended while set. */
+    unsynced?: boolean;
+    /** Documents deleted locally whose deletion has not yet been sent to the server. */
+    pendingRemovals?: string[];
+  };
   createdAt: string;
   updatedAt: string;
   lastAnalyzedAt: string | null;

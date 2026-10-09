@@ -90,3 +90,20 @@ export function formatDateTime(iso: string | null | undefined): string {
     day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
   });
 }
+
+/** Every unambiguous date in the text (YYYY-MM-DD or YYYY-MM), in order of appearance, de-duplicated. */
+export function findAllDates(text: string): string[] {
+  const hits: { idx: number; val: string }[] = [];
+  for (const p of PATTERNS) {
+    p.re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = p.re.exec(text))) {
+      const v = p.parse(m);
+      if (v) hits.push({ idx: m.index, val: v });
+    }
+  }
+  // Drop month-precision matches that are part of a full date found at the same position.
+  const full = hits.filter((h) => h.val.length === 10);
+  const kept = hits.filter((h) => h.val.length === 10 || !full.some((f) => f.val.startsWith(h.val) && Math.abs(f.idx - h.idx) < 12));
+  return [...new Set(kept.sort((a, b) => a.idx - b.idx).map((h) => h.val))];
+}

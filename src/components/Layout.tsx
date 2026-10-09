@@ -136,7 +136,7 @@ function ModeChip() {
     return (
       <NavLink to="/about#workspace" className={cx('chip hidden border px-2.5 py-1 sm:inline-flex', signedIn ? 'border-ok/30 bg-ok-50 text-ok' : 'border-warn/30 bg-warn-50 text-warn')} data-testid="mode-chip"
         title={signedIn ? `Shared workspace on ${remote.serverUrl}. Last synchronized ${remote.syncedAt ?? 'never'}. Updates are fetched every 15 s.` : 'Shared case — sign in to synchronize'}>
-        <Cloud size={13} aria-hidden />{signedIn ? `Shared workspace · ${remote.role}` : 'Shared case · signed out'}{ws.syncing ? ' · syncing…' : ''}
+        <Cloud size={13} aria-hidden />{signedIn ? `Shared workspace · ${remote.role}` : 'Shared case · signed out'}{ws.syncing ? ' · syncing…' : remote.unsynced ? ' · unsynced changes' : ''}
       </NavLink>
     );
   }
