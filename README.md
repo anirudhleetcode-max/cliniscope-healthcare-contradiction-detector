@@ -10,13 +10,13 @@
 > **Every flagged discrepancy comes with evidence you can inspect.**
 > From fragmented medical records, digital or scanned, to traceable, human-verified clinical review.
 
-**Live demo (static frontend):** deployed automatically from this repository by the CI workflow (static hosting; no backend required).
+**Live demo:** https://medguard-sigma.vercel.app/ (static frontend on Vercel; no backend required for local demo mode). The same build is also published to GitHub Pages by the CI workflow.
 
 **Deployment status (verified 2026-10-09):**
-- **Frontend:** published to GitHub Pages by the CI workflow; the full browser suite then runs against the live URL.
+- **Frontend:** canonical URL `https://medguard-sigma.vercel.app/` (Vercel production deployment of the default branch). GitHub Pages remains as a second copy, published by the CI workflow, which then runs the full browser suite against it.
 - **Backend:** the optional shared-workspace API is deployed at `https://medguard-api-duti.onrender.com` (Render free) with a **Neon free PostgreSQL** database.
 - **Live verification:** health, readiness, CORS, auth, detection, review, notes, files, case isolation, the live-site browser tests and persistence across a free-instance restart all passed. See [`docs/backend/DEPLOYMENT.md`](docs/backend/DEPLOYMENT.md#live-verification).
-- **Default mode:** the site still opens in local demo mode. Connect the API under **Settings → Shared workspace**.
+- **Default mode:** the site opens in local demo mode (no account needed). On the Vercel site the API URL is preconfigured (`VITE_API_BASE_URL`), so a reviewer only signs in under **Settings → Shared workspace**; on GitHub Pages paste the API URL there first.
 
 
 > ⚠️ **Hackathon research prototype. Review-support tool, not a diagnostic system.** MEDGUARD flags *possible* inconsistencies and shows the source evidence for each. It never decides which statement is medically correct. It has no regulatory certification and no compliance attestation (HIPAA or other). Use **fictional demonstration data only**: *not for clinical use*.

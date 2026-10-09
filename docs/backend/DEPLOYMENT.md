@@ -35,7 +35,7 @@ Run of 2026-10-09 against the deployed API (commit `bb83038`), all steps passed:
 
 | Part | Where it runs | Plan | Why |
 |---|---|---|---|
-| Frontend (static) | GitHub Pages, unchanged: `https://<your-github-username>.github.io/<repository>/` | Free | Already deployed by CI |
+| Frontend (static) | **Vercel** (Hobby): `https://medguard-sigma.vercel.app/`, production deployment of the default branch. Also on GitHub Pages: `https://<your-github-username>.github.io/<repository>/` | Free | Public URL without the account name; Pages is deployed by CI |
 | API (`server/`, Docker) | **Render** web service, from this repository's `Dockerfile` / `render.yaml` | **Free** instance | Runs the existing Node server unchanged. Free instances have **no persistent disk**, so nothing is stored on the instance |
 | Database | **Neon** serverless PostgreSQL, reached through `DATABASE_URL` | **Free** plan | All persistent data, including original uploaded files (`document_files`), lives here and survives every restart and redeploy of the API |
 
@@ -99,7 +99,7 @@ These were checked against provider pages and 2026 sources on 2026-10-09. They c
    | Variable | Value |
    |---|---|
    | `DATABASE_URL` | The Neon connection string from step 1.3 |
-   | `MEDGUARD_ALLOWED_ORIGINS` | `https://<your-github-username>.github.io`: scheme and host only, **no path and no trailing slash** |
+   | `MEDGUARD_ALLOWED_ORIGINS` | Every frontend origin, comma-separated: `https://medguard-sigma.vercel.app,https://<your-github-username>.github.io`. Scheme and host only, **no path and no trailing slash** |
    | `ANTHROPIC_API_KEY` | Leave **empty**. AI-assisted analysis stays off and costs nothing |
 
    `MEDGUARD_REQUIRE_DATABASE_URL=true` and `MEDGUARD_ALLOW_REGISTRATION=true` are set by the blueprint.
@@ -121,7 +121,7 @@ curl -s $API/api/ready     # → {"ok":true,"database":{"reachable":true,"engine
 2. Paste the backend URL and choose **Connect**. "Connecting…" can last up to a minute while the server wakes; then it shows **Reachable · API v1.3.1** (or later).
 3. **Create account** with a made-up name and an `@example.test` address. Use synthetic data only.
 
-The URL is stored in that browser only. Local demo mode stays the default for every other visitor.
+The URL is stored in that browser only. Local demo mode stays the default for every other visitor. On Vercel the production build sets `VITE_API_BASE_URL=https://medguard-api-duti.onrender.com` (a public URL, not a secret), so step 2 is already filled in there.
 
 ### 5. Test a synthetic case end to end
 1. Signed in: **Clinical Cases → New case → Create shared case**. Upload two or more of the synthetic demo files (from `public/demo/` in the repository).
@@ -172,6 +172,8 @@ Do not enter one if your requirement is "no payment method at all". Stop there; 
 - **Not tested:** Render and Neon themselves. Nothing has been deployed to either provider from this repository yet.
 
 ## Repository and URL
+**Canonical frontend URL:** `https://medguard-sigma.vercel.app/`. It is the production domain of the Vercel project `medguard`, which deploys the default branch (`medguard.vercel.app` belongs to another Vercel account and cannot be used). The build needs no Vercel-specific configuration: Vite is auto-detected, assets use relative paths and routing uses the URL hash, so refreshes never hit the server. Vercel Authentication protects only the team's generated deployment URLs, not this domain. If the frontend moves to another hostname, add that origin to `MEDGUARD_ALLOWED_ORIGINS` on Render and pass it to **Verify live deployment** as `site_url` (or set the `MEDGUARD_SITE_URL` repository variable).
+
 The public site is served by GitHub Pages at `https://<owner>.github.io/<repository>/`, so its path is the repository name. To publish it at `https://<owner>.github.io/medguard/`:
 
 1. **Rename the repository** to `medguard`. This needs the owner's account: on GitHub open the repository, then **Settings → General → Repository name**, enter `medguard`, and choose **Rename**.

@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   Activity, Bell, BookOpenText, ChevronRight, ChevronsLeft, ChevronsRight, Cloud, FileStack, FlaskConical, FolderOpen, GitCompareArrows,
-  HardDrive, LayoutDashboard, ListChecks, Menu, PlayCircle, Search, Settings, UserRound, X,
+  HardDrive, LayoutDashboard, ListChecks, LogIn, LogOut, Menu, PlayCircle, Search, Settings, UserRound, X,
 } from 'lucide-react';
 import { db, useApp } from '../../app/state';
 import { useWorkspace } from '../../app/workspace';
@@ -252,28 +252,51 @@ function Notifications() {
   );
 }
 
+/** Initials for an avatar, from the authenticated display name (never from untrusted input elsewhere). */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '?') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
 function UserMenu({ onTour }: { onTour: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { reviewer } = useApp();
   const ws = useWorkspace();
   useClickOutside(ref, () => setOpen(false));
+  // The signed-in identity comes from the API's login/registration response; the menu shows nothing else as a "user".
+  const user = ws.session?.user ?? null;
   return (
     <div className="relative" ref={ref}>
       <button className="flex h-9 items-center gap-2 rounded-[9px] pl-1 pr-1.5 hover:bg-hover" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="menu" aria-label="User menu">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-white" aria-hidden>CR</span>
+        <span className={cx('flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white', user ? 'bg-brand' : 'bg-faint')} aria-hidden>{user ? initials(user.displayName) : 'CR'}</span>
+        {user ? <span className="hidden max-w-[140px] truncate text-[13px] font-medium xl:inline">{user.displayName}</span> : null}
       </button>
       {open ? (
-        <div className="absolute right-0 top-11 z-50 w-[280px] animate-pop overflow-hidden rounded-panel border border-line bg-surface shadow-overlay" role="menu">
+        <div className="absolute right-0 top-11 z-50 w-[290px] animate-pop overflow-hidden rounded-panel border border-line bg-surface shadow-overlay" role="menu">
           <div className="border-b border-line px-4 py-3">
-            <div className="text-[13.5px] font-semibold">Clinical Reviewer</div>
-            <div className="text-xs text-muted">Demo Workspace · fictional profile</div>
+            {user ? (
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white" aria-hidden>{initials(user.displayName)}</span>
+                <div className="min-w-0">
+                  <div className="truncate text-[13.5px] font-semibold" data-testid="profile-name">{user.displayName}</div>
+                  <div className="truncate text-xs text-muted" data-testid="profile-email">{user.email}</div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="text-[13.5px] font-semibold">Clinical Reviewer</div>
+                <div className="text-xs text-muted">Demo Workspace · fictional profile</div>
+              </>
+            )}
             <div className="mt-1.5 flex items-center gap-1.5 text-[11.5px] text-faint" data-testid="current-user"><UserRound size={12} aria-hidden />{ws.session ? `${ws.session.user.displayName} (signed in to shared workspace)` : `${reviewer} — not authenticated`}</div>
           </div>
           <div className="py-1">
+            {user ? null : <MenuLink to="/settings" icon={LogIn} onClick={() => setOpen(false)}>Sign in or create account</MenuLink>}
             <MenuLink to="/settings" icon={Settings} onClick={() => setOpen(false)}>Settings</MenuLink>
             <MenuLink to="/help" icon={BookOpenText} onClick={() => setOpen(false)}>Help &amp; About</MenuLink>
             <button role="menuitem" className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-[13.5px] text-ink hover:bg-hover" onClick={() => { setOpen(false); onTour(); }}><PlayCircle size={16} className="text-faint" aria-hidden />Run guided demo</button>
+            {user ? <button role="menuitem" data-testid="menu-sign-out" className="flex w-full items-center gap-2.5 border-t border-line px-4 py-2 text-left text-[13.5px] text-ink hover:bg-hover" onClick={() => { setOpen(false); void ws.signOut(); }}><LogOut size={16} className="text-faint" aria-hidden />Sign out</button> : null}
           </div>
         </div>
       ) : null}
