@@ -30,8 +30,8 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60000,
       env: {
-        PORT: '8787', HOST: '127.0.0.1', CLINISCOPE_DATA_DIR: 'tmp/e2e-api', CLINISCOPE_ALLOW_REGISTRATION: 'true',
-        CLINISCOPE_ALLOWED_ORIGINS: 'http://localhost:4173', ANTHROPIC_API_KEY: '',
+        PORT: '8787', HOST: '127.0.0.1', MEDGUARD_DATA_DIR: 'tmp/e2e-api', MEDGUARD_ALLOW_REGISTRATION: 'true',
+        MEDGUARD_ALLOWED_ORIGINS: 'http://localhost:4173', ANTHROPIC_API_KEY: '',
       },
     },
     // TEST FIXTURE: local fake of the Messages API + a second API server configured to use it (AI pipeline e2e).
@@ -42,9 +42,9 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60000,
       env: {
-        PORT: '8789', HOST: '127.0.0.1', CLINISCOPE_DATA_DIR: 'tmp/e2e-api-ai', CLINISCOPE_ALLOW_REGISTRATION: 'true',
-        CLINISCOPE_ALLOWED_ORIGINS: 'http://localhost:4173', ANTHROPIC_API_KEY: 'sk-fixture-not-real',
-        CLINISCOPE_ANTHROPIC_BASE_URL: 'http://127.0.0.1:8788', CLINISCOPE_AI_FALLBACKS: 'false',
+        PORT: '8789', HOST: '127.0.0.1', MEDGUARD_DATA_DIR: 'tmp/e2e-api-ai', MEDGUARD_ALLOW_REGISTRATION: 'true',
+        MEDGUARD_ALLOWED_ORIGINS: 'http://localhost:4173', ANTHROPIC_API_KEY: 'sk-fixture-not-real',
+        MEDGUARD_ANTHROPIC_BASE_URL: 'http://127.0.0.1:8788', MEDGUARD_AI_FALLBACKS: 'false',
       },
     },
   ],

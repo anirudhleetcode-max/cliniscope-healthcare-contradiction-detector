@@ -2,7 +2,7 @@
 // (including original files) that can be restored as a NEW case. Nothing here
 // talks to a network; everything is built from the local IndexedDB data.
 import { z } from 'zod';
-import type { CliniscopeDB } from './db';
+import type { MedguardDB } from './db';
 import { sha256Hex } from './extract';
 import { uid } from './services';
 import { APP_VERSION } from './version';
@@ -12,7 +12,7 @@ import { CATEGORY_LABEL, FINDING_TYPE_LABEL, REVIEW_STATUS_LABEL } from './types
 export const SYNTHETIC_NOTICE = 'SYNTHETIC DEMONSTRATION DATA — NOT A REAL PATIENT RECORD';
 const DISCLAIMER = 'Findings are candidate inconsistencies produced by rules (and, if marked, AI-assisted proposals). They require professional review and are not diagnostic conclusions.';
 
-async function load(db: CliniscopeDB, caseId: string) {
+async function load(db: MedguardDB, caseId: string) {
   const c = await db.cases.get(caseId);
   if (!c) throw new Error('Case not found.');
   const [documents, statements, findings, events] = await Promise.all([
@@ -29,11 +29,11 @@ function classification(c: CaseRecord): string {
 }
 
 /** Human-and-machine-readable report: metadata, findings with evidence, decisions, notes and history. No document text bodies. */
-export async function buildCaseReport(db: CliniscopeDB, caseId: string) {
+export async function buildCaseReport(db: MedguardDB, caseId: string) {
   const { c, documents, findings, events } = await load(db, caseId);
   const docTitle = new Map(documents.map((d) => [d.id, d.title]));
   return {
-    format: 'cliniscope-case-report',
+    format: 'medguard-case-report',
     formatVersion: 1,
     appVersion: APP_VERSION,
     exportedAt: new Date().toISOString(),
@@ -77,7 +77,7 @@ const csvCell = (v: unknown) => {
   return `"${safe.replace(/"/g, '""')}"`;
 };
 
-export async function buildFindingsCsv(db: CliniscopeDB, caseId: string): Promise<string> {
+export async function buildFindingsCsv(db: MedguardDB, caseId: string): Promise<string> {
   const { c, documents, findings, events } = await load(db, caseId);
   const docTitle = new Map(documents.map((d) => [d.id, d.title]));
   const header = ['finding_id', 'title', 'category', 'finding_type', 'origin', 'review_status', 'superseded', 'evidence_quality', 'source_documents', 'source_A_quotes', 'source_B_quotes', 'relevant_dates', 'latest_decision_reason', 'reviewer_notes', 'created_at', 'updated_at'];
@@ -108,7 +108,7 @@ function base64ToBytes(s: string): Uint8Array {
   return out;
 }
 
-export async function buildBackup(db: CliniscopeDB, caseId: string) {
+export async function buildBackup(db: MedguardDB, caseId: string) {
   const { c, documents, statements, findings, events } = await load(db, caseId);
   const files: { documentId: string; base64: string }[] = [];
   for (const d of documents) {
@@ -117,14 +117,14 @@ export async function buildBackup(db: CliniscopeDB, caseId: string) {
   }
   const { remote: _r, ...caseLocal } = c;
   return {
-    format: 'cliniscope-backup', formatVersion: 1, appVersion: APP_VERSION, exportedAt: new Date().toISOString(),
+    format: 'medguard-backup', formatVersion: 1, appVersion: APP_VERSION, exportedAt: new Date().toISOString(),
     dataClassification: classification(c),
     case: caseLocal, documents, statements, findings, events, files,
   };
 }
 
 const BackupSchema = z.object({
-  format: z.literal('cliniscope-backup'),
+  format: z.literal('medguard-backup'),
   formatVersion: z.literal(1),
   case: z.object({ id: z.string(), label: z.string().max(200), isDemo: z.boolean() }).passthrough(),
   documents: z.array(z.object({ id: z.string(), caseId: z.string(), title: z.string(), extractedText: z.string(), contentHash: z.string(), fileKind: z.enum(['pdf', 'txt', 'docx', 'image']) }).passthrough()).max(500),
@@ -141,7 +141,7 @@ export class BackupError extends Error {}
  * data is never overwritten. Every statement and evidence quote is re-verified against the
  * document text, and every original file against its SHA-256 hash, before anything is written.
  */
-export async function restoreBackup(db: CliniscopeDB, raw: unknown): Promise<CaseRecord> {
+export async function restoreBackup(db: MedguardDB, raw: unknown): Promise<CaseRecord> {
   const parsed = BackupSchema.safeParse(raw);
   if (!parsed.success) throw new BackupError('This file is not a valid MEDGUARD backup (format or required fields do not match).');
   const b = parsed.data;

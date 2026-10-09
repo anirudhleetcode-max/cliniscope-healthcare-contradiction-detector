@@ -1,6 +1,6 @@
 // MEDGUARD offline support. Same-origin GET requests only; never caches
 // cross-origin traffic (e.g. an optional shared-workspace API).
-const CACHE = 'cliniscope-v1';
+const CACHE = 'medguard-v1';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {

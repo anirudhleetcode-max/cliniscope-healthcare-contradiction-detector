@@ -98,7 +98,7 @@ test('an outsider cannot open a case they were not invited to; signed-out users 
   await eve.goto('#/cases');
   await expect(eve.getByTestId('shared-cases')).toContainText('No shared cases yet');
   // Direct API probe with Eve's session for a non-existent/unshared case → 404.
-  const token = await eve.evaluate(() => JSON.parse(sessionStorage.getItem('cliniscope.session')!).token as string);
+  const token = await eve.evaluate(() => JSON.parse(sessionStorage.getItem('medguard.session')!).token as string);
   const r = await eve.request.get(`${API}/api/cases/case_doesnotexist01`, { headers: { Authorization: `Bearer ${token}` } });
   expect(r.status()).toBe(404);
   const anon = await eve.request.get(`${API}/api/cases`);

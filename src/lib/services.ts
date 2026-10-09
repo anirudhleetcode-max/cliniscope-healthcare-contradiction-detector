@@ -1,7 +1,7 @@
 // Application service layer: ingestion, analysis, review and audit.
 // All writes go through here so that every state change is paired with an
 // append-only audit event.
-import type { CliniscopeDB } from './db';
+import type { MedguardDB } from './db';
 import { isValidIsoDate } from './dates';
 import { detectContradictions } from './detect';
 import {
@@ -39,14 +39,14 @@ function eventTime(): string {
   return new Date(t).toISOString();
 }
 
-async function logEvent(db: CliniscopeDB, e: Omit<AuditEvent, 'id' | 'at'> & { kind: EventKind }): Promise<AuditEvent> {
+async function logEvent(db: MedguardDB, e: Omit<AuditEvent, 'id' | 'at'> & { kind: EventKind }): Promise<AuditEvent> {
   const ev: AuditEvent = { id: uid('ev'), at: eventTime(), ...e };
   await db.events.add(ev); // add(): never overwrites an existing event
   return ev;
 }
 
 // -------------------------------------------------------------------- cases
-export async function createCase(db: CliniscopeDB, label: string, opts: { isDemo?: boolean; actor?: string } = {}): Promise<CaseRecord> {
+export async function createCase(db: MedguardDB, label: string, opts: { isDemo?: boolean; actor?: string } = {}): Promise<CaseRecord> {
   const clean = label.trim().slice(0, 80);
   if (!clean) throw new ServiceError('Enter a case label (use a pseudonymous label, not a real patient name).');
   const c: CaseRecord = { id: uid('case'), label: clean, isDemo: !!opts.isDemo, createdAt: now(), updatedAt: now(), lastAnalyzedAt: null };
@@ -55,11 +55,11 @@ export async function createCase(db: CliniscopeDB, label: string, opts: { isDemo
   return c;
 }
 
-async function touchCase(db: CliniscopeDB, caseId: string, patch: Partial<CaseRecord> = {}): Promise<void> {
+async function touchCase(db: MedguardDB, caseId: string, patch: Partial<CaseRecord> = {}): Promise<void> {
   await db.cases.update(caseId, { updatedAt: now(), ...patch });
 }
 
-async function requireCase(db: CliniscopeDB, caseId: string): Promise<CaseRecord> {
+async function requireCase(db: MedguardDB, caseId: string): Promise<CaseRecord> {
   const c = await db.cases.get(caseId);
   if (!c) throw new ServiceError('Case not found. It may have been deleted.');
   return c;
@@ -80,7 +80,7 @@ export interface DocumentMeta {
 }
 
 export async function uploadDocument(
-  db: CliniscopeDB,
+  db: MedguardDB,
   extractor: Extractor,
   caseId: string,
   file: UploadInput,
@@ -174,7 +174,7 @@ export async function uploadDocument(
 }
 
 export async function updateDocumentMeta(
-  db: CliniscopeDB,
+  db: MedguardDB,
   documentId: string,
   patch: { title?: string; documentType?: DocumentType; documentDate?: string | null },
 ): Promise<DocumentRecord> {
@@ -192,7 +192,7 @@ export async function updateDocumentMeta(
   return next;
 }
 
-export async function deleteDocument(db: CliniscopeDB, documentId: string, actor = DEMO_REVIEWER): Promise<void> {
+export async function deleteDocument(db: MedguardDB, documentId: string, actor = DEMO_REVIEWER): Promise<void> {
   const doc = await db.documents.get(documentId);
   if (!doc) throw new ServiceError('Document not found.');
   await db.transaction('rw', [db.documents, db.files, db.statements, db.events, db.cases], async () => {
@@ -213,7 +213,7 @@ let analysisInFlight = new Map<string, Promise<AnalysisSummary>>();
  * status and history) are kept, new ones are added, and findings that are no
  * longer produced are marked stale — never deleted.
  */
-export function analyzeCase(db: CliniscopeDB, caseId: string, actor = DEMO_REVIEWER): Promise<AnalysisSummary> {
+export function analyzeCase(db: MedguardDB, caseId: string, actor = DEMO_REVIEWER): Promise<AnalysisSummary> {
   // Guard against duplicate concurrent analysis requests for the same case.
   const existing = analysisInFlight.get(caseId);
   if (existing) return existing;
@@ -226,7 +226,7 @@ export function _resetAnalysisGuard(): void {
   analysisInFlight = new Map();
 }
 
-async function runAnalysis(db: CliniscopeDB, caseId: string, actor: string): Promise<AnalysisSummary> {
+async function runAnalysis(db: MedguardDB, caseId: string, actor: string): Promise<AnalysisSummary> {
   const c = await requireCase(db, caseId);
   const docs = (await db.documents.where('caseId').equals(caseId).toArray()).filter((d) => d.extractedText && d.status !== 'failed');
   if (!docs.length) throw new ServiceError('There are no documents with extracted text to analyze in this case.');
@@ -299,7 +299,7 @@ async function runAnalysis(db: CliniscopeDB, caseId: string, actor: string): Pro
 
 // ------------------------------------------------------------------- review
 export async function transitionFinding(
-  db: CliniscopeDB,
+  db: MedguardDB,
   findingId: string,
   to: ReviewStatus,
   opts: { reason?: string; reviewer?: string } = {},
@@ -321,7 +321,7 @@ export async function transitionFinding(
   });
 }
 
-export async function addReviewerNote(db: CliniscopeDB, findingId: string, note: string, reviewer?: string): Promise<AuditEvent> {
+export async function addReviewerNote(db: MedguardDB, findingId: string, note: string, reviewer?: string): Promise<AuditEvent> {
   const text = note.trim();
   if (!text) throw new ReviewError('A note cannot be empty.');
   if (text.length > 4000) throw new ReviewError('Notes are limited to 4000 characters.');
@@ -344,7 +344,7 @@ export interface DemoFile {
 }
 
 /** Deletes a case and everything that belongs to it (only that case). */
-export async function deleteCase(db: CliniscopeDB, caseId: string): Promise<void> {
+export async function deleteCase(db: MedguardDB, caseId: string): Promise<void> {
   await db.transaction('rw', [db.cases, db.documents, db.files, db.statements, db.findings, db.events], async () => {
     await db.documents.where('caseId').equals(caseId).delete();
     await db.files.where('caseId').equals(caseId).delete();
@@ -361,7 +361,7 @@ export async function deleteCase(db: CliniscopeDB, caseId: string): Promise<void
  * Only demo cases are removed on reset; user-created cases are untouched.
  */
 export async function seedDemoCase(
-  db: CliniscopeDB,
+  db: MedguardDB,
   extractor: Extractor,
   files: { meta: DemoFile; bytes: Uint8Array }[],
   onProgress?: (message: string) => void,
@@ -394,7 +394,7 @@ function seedMark(): string {
  * (a separate, audited transition), so the state machine is never bypassed.
  */
 export async function decideFinding(
-  db: CliniscopeDB,
+  db: MedguardDB,
   findingId: string,
   to: ReviewStatus,
   opts: { reason?: string; reviewer?: string } = {},
@@ -412,7 +412,7 @@ export async function decideFinding(
  * Only demo cases are removed and recreated; user-created cases are untouched.
  */
 export async function seedDemoWorkspace(
-  db: CliniscopeDB,
+  db: MedguardDB,
   extractor: Extractor,
   primaryFiles: { meta: DemoFile; bytes: Uint8Array }[],
   onProgress?: (message: string) => void,
@@ -452,7 +452,7 @@ export async function seedDemoWorkspace(
  * Reconciled by fingerprint; existing findings keep their review state.
  */
 export async function addAiFindings(
-  db: CliniscopeDB,
+  db: MedguardDB,
   caseId: string,
   drafts: import('./detect').DraftFinding[],
   info: { model: string; actor: string; rejected: number; corroborated: string[]; consistent: number; downgraded: number },
@@ -484,6 +484,6 @@ export async function addAiFindings(
   return { created, retained };
 }
 
-export async function logAiFailure(db: CliniscopeDB, caseId: string, actor: string, message: string): Promise<void> {
+export async function logAiFailure(db: MedguardDB, caseId: string, actor: string, message: string): Promise<void> {
   await logEvent(db, { caseId, kind: 'ai_analysis_failed', actor, detail: message });
 }

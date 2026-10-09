@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { CliniscopeDB } from '../../src/lib/db';
+import { MedguardDB } from '../../src/lib/db';
 import {
   addReviewerNote, analyzeCase, createCase, deleteDocument, seedDemoCase, transitionFinding, uploadDocument,
   type Extractor,
@@ -13,10 +13,10 @@ import { demoPath, extractFile } from './helpers';
 const extractor: Extractor = (kind, bytes) => extractFile(`x.${kind}`, bytes);
 const enc = (s: string) => new TextEncoder().encode(s);
 let dbName = 0;
-let db: CliniscopeDB;
+let db: MedguardDB;
 
 beforeEach(() => {
-  db = new CliniscopeDB(`test-${++dbName}`);
+  db = new MedguardDB(`test-${++dbName}`);
 });
 
 async function demo() {
@@ -103,7 +103,7 @@ describe('review workflow and audit trail', () => {
     await transitionFinding(db, f.id, 'resolved', { reason: 'Prescriber confirmed 1000 mg is current; reconciliation record outdated.' });
     const name = db.name;
     db.close();
-    const reopened = new CliniscopeDB(name);
+    const reopened = new MedguardDB(name);
     const again = (await reopened.findings.get(f.id))!;
     expect(again.reviewStatus).toBe('resolved');
     const evs = await reopened.events.where('findingId').equals(f.id).sortBy('at');

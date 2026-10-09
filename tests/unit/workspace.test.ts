@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { CliniscopeDB } from '../../src/lib/db';
+import { MedguardDB } from '../../src/lib/db';
 import {
   addReviewerNote, analyzeCase, createCase, decideFinding, seedDemoWorkspace, transitionFinding, uploadDocument, type Extractor,
 } from '../../src/lib/services';
@@ -13,8 +13,8 @@ import { demoPath, extractFile } from './helpers';
 const extractor: Extractor = (kind, bytes) => extractFile(`x.${kind}`, bytes);
 const enc = (s: string) => new TextEncoder().encode(s);
 let n = 0;
-let db: CliniscopeDB;
-beforeEach(() => { db = new CliniscopeDB(`ws-${++n}`); });
+let db: MedguardDB;
+beforeEach(() => { db = new MedguardDB(`ws-${++n}`); });
 
 async function primaryFiles() {
   const { DEMO_MANIFEST } = await import('../../scripts/demo-content.mjs');

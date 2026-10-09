@@ -1,5 +1,5 @@
 {
-  "name": "cliniscope-healthcare-contradiction-detector",
+  "name": "medguard",
   "private": true,
   "version": "1.0.0",
   "description": "Evidence-first healthcare record contradiction detection with source-level traceability, context-aware discrepancy analysis, and an auditable human-review workflow. Built for PS-11R3.",

@@ -50,7 +50,7 @@ async function register(email: string, name: string) {
 }
 
 beforeAll(async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'cliniscope-api-'));
+  const dir = mkdtempSync(join(tmpdir(), 'medguard-api-'));
   const config = { ...loadConfig({}), dataDir: dir, allowRegistration: true, allowedOrigins: [ORIGIN], anthropicApiKey: null };
   app = createApp({ config, ai: mockAi, log: () => {} });
   await new Promise<void>((r) => app.server.listen(0, '127.0.0.1', () => r()));
@@ -189,7 +189,7 @@ describe('shared workspace API: cases, permissions and two-user review', () => {
     expect(got.status).toBe(200);
     expect(Buffer.from(await got.arrayBuffer()).toString()).toBe('%PDF-1.4 synthetic');
     expect((await api(`/api/cases/${caseId}/documents/${docId}/file`, { token: mallory })).status).toBe(404);
-    expect((await api(`/api/cases/${caseId}/documents/..%2F..%2Fcliniscope.db/file`, { token: alice })).status).toBe(404);
+    expect((await api(`/api/cases/${caseId}/documents/..%2F..%2Fmedguard.db/file`, { token: alice })).status).toBe(404);
   });
 });
 

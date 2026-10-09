@@ -25,7 +25,7 @@ export interface AppDeps { config: ServerConfig; db?: Db; ai?: AiProvider | null
 
 export function createApp(deps: AppDeps): { server: Server; db: Db; close: () => void } {
   const cfg = deps.config;
-  const db = deps.db ?? openDb(join(cfg.dataDir, 'cliniscope.db'));
+  const db = deps.db ?? openDb(join(cfg.dataDir, 'medguard.db'));
   const ai = deps.ai === undefined ? providerFromConfig(cfg) : deps.ai;
   const filesDir = resolve(cfg.dataDir, 'files');
   mkdirSync(filesDir, { recursive: true });
@@ -117,7 +117,7 @@ export function createApp(deps: AppDeps): { server: Server; db: Db; close: () =>
   const route = (method: string, path: string, auth: boolean, h: Handler) => routes.push({ method, re: new RegExp(`^${path.replace(/:[a-z]+/g, '([^/]+)')}$`), auth, h });
 
   route('GET', '/api/health', false, () => ({
-    ok: true, service: 'cliniscope-api', version: API_VERSION, time: now(),
+    ok: true, service: 'medguard-api', version: API_VERSION, time: now(),
     ai: { configured: !!ai, provider: ai?.name ?? null, model: ai?.model ?? null },
     registration: cfg.allowRegistration,
   }));
