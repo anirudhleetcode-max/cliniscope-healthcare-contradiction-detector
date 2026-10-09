@@ -1,4 +1,4 @@
-# MEDGAURD architecture notes
+# MEDGUARD architecture notes
 
 > v1.1 adds OCR, an optional shared-workspace API server and AI-assisted reasoning; see the sections at the end.
 

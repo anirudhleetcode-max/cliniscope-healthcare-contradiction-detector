@@ -14,8 +14,8 @@ const STEPS = [
 export function Help() {
   return (
     <div className="animate-fade-up">
-      <PageHeader title="Help & About" description="MEDGAURD — Healthcare Record Contradiction Detector (PS-11R3). Find contradictions. Preserve clinical context. Support better decisions. Frontend demonstration build with synthetic data." />
-      <div className="mb-6"><Callout tone="warn" title="Clinical review is required">MEDGAURD flags possible documentation inconsistencies. It does not diagnose, does not decide which record is correct, is not clinically validated, has no regulatory approval and is not HIPAA-certified. Use synthetic data only.</Callout></div>
+      <PageHeader title="Help & About" description="MEDGUARD — Healthcare Record Contradiction Detector (PS-11R3). Find contradictions. Preserve clinical context. Support better decisions. Frontend demonstration build with synthetic data." />
+      <div className="mb-6"><Callout tone="warn" title="Clinical review is required">MEDGUARD flags possible documentation inconsistencies. It does not diagnose, does not decide which record is correct, is not clinically validated, has no regulatory approval and is not HIPAA-certified. Use synthetic data only.</Callout></div>
       <div className="grid gap-6 lg:grid-cols-2">
         <SectionCard title="Workflow">
           <ol className="space-y-3">{STEPS.map(([t, b], i) => (

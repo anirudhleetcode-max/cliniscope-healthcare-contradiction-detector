@@ -92,7 +92,7 @@ jobs:
             || gh api -X POST "repos/${{ github.repository }}/pages" -f 'source[branch]=gh-pages' -f 'source[path]=/' \
             || true
           for i in $(seq 1 30); do
-            if curl -sf "$SITE_URL" | grep -q 'MEDGAURD'; then echo "available=true" >> "$GITHUB_OUTPUT"; echo "Live: $SITE_URL"; exit 0; fi
+            if curl -sf "$SITE_URL" | grep -q 'MEDGUARD'; then echo "available=true" >> "$GITHUB_OUTPUT"; echo "Live: $SITE_URL"; exit 0; fi
             echo "attempt $i: $SITE_URL not serving yet"; sleep 10
           done
           echo "available=false" >> "$GITHUB_OUTPUT"

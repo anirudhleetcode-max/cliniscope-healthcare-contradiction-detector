@@ -1,4 +1,4 @@
-# MEDGAURD
+# MEDGUARD
 
 **Healthcare Record Contradiction Detector** — *Find contradictions. Preserve clinical context. Support better decisions.*
 
@@ -9,9 +9,9 @@
 
 **Live demo (static frontend):** https://anirudhleetcode-max.github.io/cliniscope-healthcare-contradiction-detector/
 
-> **Naming note.** The project was renamed from CLINISCOPE to **MEDGAURD** (spelling intentional). The GitHub repository and Pages URL keep their original `cliniscope-healthcare-contradiction-detector` path. Technical identifiers also keep the old name for compatibility: `CLINISCOPE_*` server environment variables, the browser database and storage keys (renaming them would orphan existing local data), the `cliniscope-backup` / `cliniscope-case-report` file formats (so older backups still restore), the offline cache name, and Docker / volume / SQLite file names.
+> **Naming note.** The project was renamed from CLINISCOPE to **MEDGUARD**. The GitHub repository and Pages URL keep their original `cliniscope-healthcare-contradiction-detector` path. Technical identifiers also keep the old name for compatibility: `CLINISCOPE_*` server environment variables, the browser database and storage keys (renaming them would orphan existing local data), the `cliniscope-backup` / `cliniscope-case-report` file formats (so older backups still restore), the offline cache name, and Docker / volume / SQLite file names.
 
-> ⚠️ **Hackathon research prototype. Review-support tool, not a diagnostic system.** MEDGAURD flags *possible* inconsistencies and shows the source evidence for each. It never decides which statement is medically correct. It has no regulatory certification and no compliance attestation (HIPAA or other). Use **fictional demonstration data only**: *not for clinical use*.
+> ⚠️ **Hackathon research prototype. Review-support tool, not a diagnostic system.** MEDGUARD flags *possible* inconsistencies and shows the source evidence for each. It never decides which statement is medically correct. It has no regulatory certification and no compliance attestation (HIPAA or other). Use **fictional demonstration data only**: *not for clinical use*.
 
 ---
 
@@ -240,7 +240,7 @@ See [`docs/JUDGE_DEMO.md`](docs/JUDGE_DEMO.md) for the three-minute script.
 ## Security & privacy
 - Uploaded content is untrusted and rendered only as text, never as HTML. The Content-Security-Policy is strict; `connect-src` permits HTTPS API servers and localhost.
 - In local mode, original files never leave the browser and get only temporary object URLs. In shared mode they are stored privately on the server and served only to case members.
-- The AI key is server-only. Documents are sent to the external provider only after explicit consent, and only synthetic data should be used. Provider data retention depends on the operator's account and is not verified by MEDGAURD.
+- The AI key is server-only. Documents are sent to the external provider only after explicit consent, and only synthetic data should be used. Provider data retention depends on the operator's account and is not verified by MEDGUARD.
 - **Limitations:**
   - no SSO, MFA, password reset or email verification;
   - bearer tokens are kept in `sessionStorage`, which is vulnerable to XSS on the same origin (mitigated by the CSP);

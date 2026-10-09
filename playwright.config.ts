@@ -24,7 +24,7 @@ export default defineConfig({
       timeout: 120000,
     },
     {
-      // Real MEDGAURD API server with a throw-away database for the shared-workspace tests.
+      // Real MEDGUARD API server with a throw-away database for the shared-workspace tests.
       command: 'rm -rf tmp/e2e-api && npx tsx server/index.ts',
       url: 'http://localhost:8787/api/health',
       reuseExistingServer: false,

@@ -1,4 +1,4 @@
-# Render Blueprint for the MEDGAURD shared-workspace API (optional).
+# Render Blueprint for the MEDGUARD shared-workspace API (optional).
 # The static frontend stays on GitHub Pages; point it at this service's URL in About & settings.
 services:
   - type: web

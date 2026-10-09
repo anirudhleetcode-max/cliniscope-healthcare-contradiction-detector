@@ -1,4 +1,4 @@
-/** MEDGAURD mark: a guard shield framing two record lines (original artwork). */
+/** MEDGUARD mark: a guard shield framing two record lines (original artwork). */
 export function BrandMark({ size = 32 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden className="shrink-0">

@@ -1,4 +1,4 @@
-// MEDGAURD shared-workspace API. Plain node:http, no framework.
+// MEDGUARD shared-workspace API. Plain node:http, no framework.
 // Authorization is enforced here, per request, from the case_members table.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';

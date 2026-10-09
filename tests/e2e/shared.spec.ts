@@ -1,7 +1,7 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 
 // Two genuinely separate browser contexts (separate storage, separate sessions)
-// talk to a real MEDGAURD API server. Skipped when no API server is available
+// talk to a real MEDGUARD API server. Skipped when no API server is available
 // (e.g. production smoke tests against static GitHub Pages).
 const API = process.env.API_URL ?? (process.env.BASE_URL ? '' : 'http://localhost:8787');
 test.skip(!API, 'No shared-workspace API server configured for this run');

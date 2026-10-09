@@ -13,7 +13,7 @@ mkdirSync(out, { recursive: true });
 async function makePdf(pages, { title }) {
   const pdf = await PDFDocument.create();
   pdf.setTitle(title);
-  pdf.setAuthor('MEDGAURD synthetic demo generator');
+  pdf.setAuthor('MEDGUARD synthetic demo generator');
   pdf.setCreationDate(new Date('2026-03-12T00:00:00Z'));
   pdf.setModificationDate(new Date('2026-03-12T00:00:00Z'));
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -51,7 +51,7 @@ writeFileSync(new URL('sample-follow-up-note-2026-03-20.txt', out), FOLLOW_UP_NO
 writeFileSync(new URL('sample-scanned-no-text-layer.pdf', out), await makeScannedPdf());
 
 const doc = new Document({
-  creator: 'MEDGAURD synthetic demo generator',
+  creator: 'MEDGUARD synthetic demo generator',
   title: 'Patient Intake Form (synthetic)',
   sections: [{ children: INTAKE_FORM_PARAGRAPHS.map((t) => new Paragraph({ children: [new TextRun({ text: t, bold: t === BANNER })] })) }],
 });

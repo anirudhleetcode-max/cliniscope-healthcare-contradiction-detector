@@ -1,9 +1,9 @@
-# MEDGAURD design system
+# MEDGUARD design system
 
 A specification that lets the frontend be rebuilt as a Figma library. No Figma file was created; there was no Figma integration in the build environment. The single source of truth for the tokens is `src/index.css` (CSS variables), and Tailwind maps to it in `tailwind.config.js`. The primitives are in `src/components/ui.tsx`.
 
 ## 1. Brand concept
-MEDGAURD is a precise, calm clinical review workspace for the Healthcare Record Contradiction Detector (tagline: *Find contradictions. Preserve clinical context. Support better decisions.*). The mark (`src/components/shell/BrandMark.tsx`, `public/favicon.svg`) is a guard shield framing two record lines, standing for protecting the integrity of the record. The wordmark is MEDGAURD (spelling intentional) in bold with 0.08em tracking, and the descriptor is "Contradiction Detector".
+MEDGUARD is a precise, calm clinical review workspace for the Healthcare Record Contradiction Detector (tagline: *Find contradictions. Preserve clinical context. Support better decisions.*). The mark (`src/components/shell/BrandMark.tsx`, `public/favicon.svg`) is a guard shield framing two record lines, standing for protecting the integrity of the record. The wordmark is MEDGUARD in bold with 0.08em tracking, and the descriptor is "Contradiction Detector".
 
 ## 2. Design principles
 1. **Evidence first.** Quotations are the most legible element on a screen. Interpretation is visually secondary and labelled as interpretation.

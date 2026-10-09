@@ -1,5 +1,5 @@
 // Browser side of AI-assisted reasoning: sends the case text to the
-// configured MEDGAURD server (which holds the provider key), then
+// configured MEDGUARD server (which holds the provider key), then
 // re-verifies the returned structured output against the LOCAL copy of the
 // documents before anything is stored.
 import type { CliniscopeDB } from './db';

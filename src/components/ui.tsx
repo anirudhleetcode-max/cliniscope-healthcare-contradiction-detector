@@ -1,4 +1,4 @@
-// MEDGAURD component library: primitives shared by every page.
+// MEDGUARD component library: primitives shared by every page.
 // Visual rules live in docs/FIGMA_DESIGN_SYSTEM.md; tokens live in src/index.css.
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';

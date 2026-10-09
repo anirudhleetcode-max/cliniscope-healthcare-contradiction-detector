@@ -1,4 +1,4 @@
-# MEDGAURD — three-minute judge demonstration
+# MEDGUARD — three-minute judge demonstration
 
 > The current screen-by-screen script for the redesigned workspace is [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md). This page keeps the offline preparation and backup instructions; where it says *Review queue*, findings are now listed under **Contradictions**, and the case-level buttons (Analyze, Export) are on the case workspace.
 
@@ -16,7 +16,7 @@ Runs entirely in **local mode**: no server, login, API key or AI service. Every 
    - Keep screenshots of the queue and of one finding as a last resort.
 
 ## 0:00 – 0:20 · The problem
-"Medical records disagree: discharge summaries, intake forms, medication lists, lab reports and scanned letters. Checking them by hand is slow and error-prone. MEDGAURD flags *potential* contradictions, shows exactly where each statement came from, and leaves the decision to a professional."
+"Medical records disagree: discharge summaries, intake forms, medication lists, lab reports and scanned letters. Checking them by hand is slow and error-prone. MEDGUARD flags *potential* contradictions, shows exactly where each statement came from, and leaves the decision to a professional."
 
 ## 0:20 – 0:45 · Records, including a scan
 1. **Document library**: five records in five formats.
