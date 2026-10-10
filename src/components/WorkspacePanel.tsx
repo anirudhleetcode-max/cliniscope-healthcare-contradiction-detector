@@ -29,12 +29,23 @@ export function WorkspacePanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submit = async () => {
+  // Reads the form itself, so browser-autofilled credentials (which may not fire React change events)
+  // are used, and the button is never silently disabled: missing fields produce a visible message.
+  const submit = async (form?: HTMLFormElement | null) => {
+    if (busy) return;
+    const fd = form ? new FormData(form) : null;
+    const e = String(fd?.get('email') ?? email).trim();
+    const p = String(fd?.get('password') ?? password);
+    const n = String(fd?.get('displayName') ?? name).trim();
+    if (!e || !p || (mode === 'register' && !n)) {
+      setError(mode === 'register' ? 'Enter your display name, email and password.' : 'Enter your email and password.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      if (mode === 'login') await ws.signIn(email, password);
-      else await ws.register(email, password, name);
+      if (mode === 'login') await ws.signIn(e, p);
+      else await ws.register(e, p, n);
       setPassword('');
       toast('success', 'Signed in to the shared workspace.');
     } catch (e) {
@@ -95,13 +106,15 @@ export function WorkspacePanel() {
             <button role="tab" aria-selected={mode === 'login'} className={cx('rounded-md px-2.5 py-1', mode === 'login' ? 'bg-brand-50 font-semibold text-brand-700' : 'text-muted')} onClick={() => setMode('login')}>Sign in</button>
             {ws.health.registration ? <button role="tab" aria-selected={mode === 'register'} className={cx('rounded-md px-2.5 py-1', mode === 'register' ? 'bg-brand-50 font-semibold text-brand-700' : 'text-muted')} onClick={() => setMode('register')}>Create account</button> : null}
           </div>
-          {mode === 'register' ? <div><label className="label" htmlFor="ws-name">Display name</label><input id="ws-name" className="input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" data-testid="ws-name" /></div> : null}
-          <div><label className="label" htmlFor="ws-email">Email</label><input id="ws-email" type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" data-testid="ws-email" /></div>
-          <div><label className="label" htmlFor="ws-pw">Password {mode === 'register' ? '(min. 10 characters)' : ''}</label><input id="ws-pw" type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }} data-testid="ws-password" /></div>
+          <form className="space-y-2" noValidate onSubmit={(ev) => { ev.preventDefault(); void submit(ev.currentTarget); }} data-testid="sign-in-form">
+          {mode === 'register' ? <div><label className="label" htmlFor="ws-name">Display name</label><input id="ws-name" name="displayName" className="input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" data-testid="ws-name" /></div> : null}
+          <div><label className="label" htmlFor="ws-email">Email</label><input id="ws-email" name="email" type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" data-testid="ws-email" /></div>
+          <div><label className="label" htmlFor="ws-pw">Password {mode === 'register' ? '(min. 10 characters)' : ''}</label><input id="ws-pw" name="password" type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} data-testid="ws-password" /></div>
           {error ? <p className="text-xs font-medium text-crit" role="alert">{error}</p> : null}
-          <button className="btn-primary w-full" disabled={busy || !email || !password} onClick={submit} data-testid="ws-submit">{mode === 'login' ? <><LogIn size={15} />Sign in</> : <><UserPlus size={15} />Create account</>}</button>
+          <button type="submit" className="btn-primary w-full" disabled={busy} aria-busy={busy} data-testid="ws-submit">{mode === 'login' ? <><LogIn size={15} />Sign in</> : <><UserPlus size={15} />Create account</>}</button>
+          </form>
           {ws.health.googleSignIn ? (
-            <button className="btn-secondary w-full" disabled={googleBusy} aria-busy={googleBusy} onClick={() => void google(false)} data-testid="google-sign-in">{googleBusy ? 'Opening Google…' : 'Continue with Google'}</button>
+            <button type="button" className="btn-secondary w-full" disabled={googleBusy} aria-busy={googleBusy} onClick={() => void google(false)} data-testid="google-sign-in">{googleBusy ? 'Opening Google…' : 'Continue with Google'}</button>
           ) : null}
           <p className="text-[11px] text-muted">Passwords are hashed with scrypt on the server. The session token is kept only for this browser tab.</p>
         </div>
