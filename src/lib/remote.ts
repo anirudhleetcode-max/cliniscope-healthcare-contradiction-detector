@@ -92,6 +92,7 @@ export const remoteApi = {
   createCase: (s: RemoteSession, id: string | undefined, label: string) => apiFetch<RemoteSnapshot>(s.serverUrl, '/api/cases', { token: s.token, body: { id, label } }),
   getCase: (s: RemoteSession, id: string) => apiFetch<RemoteSnapshot>(s.serverUrl, `/api/cases/${encodeURIComponent(id)}`, { token: s.token }),
   addMember: (s: RemoteSession, id: string, email: string, role: 'reviewer' | 'viewer') => apiFetch<RemoteSnapshot>(s.serverUrl, `/api/cases/${encodeURIComponent(id)}/members`, { token: s.token, body: { email, role } }),
+  transferOwnership: (s: RemoteSession, id: string, userId: string) => apiFetch<RemoteSnapshot>(s.serverUrl, `/api/cases/${encodeURIComponent(id)}/transfer-ownership`, { token: s.token, body: { userId } }),
   removeMember: (s: RemoteSession, id: string, userId: string) => apiFetch<RemoteSnapshot>(s.serverUrl, `/api/cases/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`, { token: s.token, method: 'DELETE' }),
   snapshot: (s: RemoteSession, id: string, body: { documents: DocumentRecord[]; statements: ClinicalStatement[]; findings: Finding[]; removedDocumentIds?: string[]; analyzed?: boolean; detail?: string }) =>
     apiFetch<RemoteSnapshot>(s.serverUrl, `/api/cases/${encodeURIComponent(id)}/snapshot`, { token: s.token, method: 'PUT', body, timeoutMs: 60000 }),

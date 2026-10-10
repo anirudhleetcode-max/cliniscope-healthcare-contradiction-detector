@@ -274,3 +274,39 @@ test('accounts in one browser: no demo while signed in, records persist, and not
   await page.getByTestId('shared-cases-error').getByRole('button', { name: 'Retry' }).click();
   await expect(page.getByTestId('shared-cases')).toContainText('No shared cases yet');
 });
+
+test('the owner hands the case to a reviewer; the role banner on each finding follows the change', async ({ browser }) => {
+  test.setTimeout(180000);
+  const own = await signUp(browser, 'Tara Owner', `tara-${run}@example.test`);
+  const rev = await signUp(browser, 'Uma Reviewer', `uma-${run}@example.test`);
+  await own.goto('#/cases');
+  await own.getByTestId('new-case').click();
+  await own.getByTestId('new-case-label').fill(`XFER-${run} · synthetic`);
+  await own.getByTestId('create-shared-case').click();
+  await expect(own).toHaveURL(/#\/documents/);
+  await own.getByTestId('file-input').setInputFiles([
+    { name: 'a-2026-03-12.txt', mimeType: 'text/plain', buffer: Buffer.from('ALLERGIES\nPenicillin allergy documented.') },
+    { name: 'b-2026-03-15.txt', mimeType: 'text/plain', buffer: Buffer.from('Allergies: No known drug allergies.') },
+  ]);
+  await own.getByTestId('upload-submit').click();
+  await expect(own.getByTestId('upload-summary')).toBeVisible({ timeout: 30000 });
+  await own.goto('#/contradictions?case=current&q=penicillin');
+  await own.getByTestId('finding-link').first().click();
+  await expect(own.getByTestId('role-banner')).toContainText('Your role: Owner');
+  const findingUrl = own.url().split('#')[1];
+  await own.goto('#/case');
+  await own.getByTestId('member-email').fill(`uma-${run}@example.test`);
+  await own.getByTestId('add-member').click();
+  await expect(own.getByTestId('member-list')).toContainText('Uma Reviewer');
+  await own.getByTestId('make-owner').click();
+  await own.getByTestId('confirm-transfer-owner').click();
+  await expect(own.getByRole('status').filter({ hasText: 'is now the owner of this case' })).toBeVisible();
+  await expect(own.getByTestId('member-email')).toHaveCount(0); // no longer the owner: no Share form
+  await own.goto(`#${findingUrl}`);
+  await expect(own.getByTestId('role-banner')).toContainText('Your role: Reviewer');
+  await rev.goto('#/cases');
+  await rev.getByTestId('shared-cases').getByRole('button', { name: 'Open shared case' }).click();
+  await expect(rev.getByTestId('mode-chip')).toContainText('Shared workspace · owner');
+  await rev.goto('#/case');
+  await expect(rev.getByTestId('member-email')).toBeVisible();
+});

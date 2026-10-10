@@ -7,7 +7,7 @@ import { formatDateTime } from '../lib/dates';
 import { Badge, MetricCard, SectionCard } from './ui';
 
 const KIND_LABEL: Record<string, string> = {
-  case_shared: 'Case shared', member_added: 'Reviewer added', member_removed: 'Reviewer removed', status_changed: 'Review decision',
+  case_shared: 'Case shared', member_added: 'Reviewer added', member_removed: 'Reviewer removed', owner_transferred: 'Ownership transferred', status_changed: 'Review decision',
   note_added: 'Note added', document_uploaded: 'Document uploaded', analysis_completed: 'Analysis synchronized', case_created: 'Case created',
 };
 

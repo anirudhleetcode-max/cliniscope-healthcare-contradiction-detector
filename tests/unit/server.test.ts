@@ -231,6 +231,40 @@ describe('roles: the owner manages access; reviewers and viewers cannot', () => 
     expect((await api(`/api/cases/${id}`, { token: viewer })).status).toBe(404);
     expect(rm.json.events.some((e: any) => e.kind === 'member_removed')).toBe(true);
   });
+
+  it('transfers ownership to an existing member only; the previous owner becomes a reviewer', async () => {
+    const a = await register('xfer-a@example.test', 'Xfer Owner');
+    const b = await register('xfer-b@example.test', 'Xfer Reviewer');
+    const v = await register('xfer-v@example.test', 'Xfer Viewer');
+    const out = await register('xfer-out@example.test', 'Xfer Outsider');
+    const id = (await api('/api/cases', { token: a, body: { label: 'XFER · synthetic' } })).json.case.id;
+    await api(`/api/cases/${id}/members`, { token: a, body: { email: 'xfer-b@example.test', role: 'reviewer' } });
+    const snap = (await api(`/api/cases/${id}/members`, { token: a, body: { email: 'xfer-v@example.test', role: 'viewer' } })).json;
+    const idOf = (email: string) => snap.members.find((m: any) => m.email === email).userId;
+    const [aId, bId, vId] = [idOf('xfer-a@example.test'), idOf('xfer-b@example.test'), idOf('xfer-v@example.test')];
+    const outId = (await api('/api/auth/me', { token: out })).json.user.id;
+    // Only the owner may transfer; reviewers and viewers get 403, outsiders 404.
+    expect((await api(`/api/cases/${id}/transfer-ownership`, { token: b, body: { userId: bId } })).status).toBe(403);
+    expect((await api(`/api/cases/${id}/transfer-ownership`, { token: v, body: { userId: vId } })).status).toBe(403);
+    expect((await api(`/api/cases/${id}/transfer-ownership`, { token: out, body: { userId: outId } })).status).toBe(404);
+    // Target must be an existing member, not the owner; invalid input is rejected.
+    expect((await api(`/api/cases/${id}/transfer-ownership`, { token: a, body: { userId: outId } })).status).toBe(404);
+    expect((await api(`/api/cases/${id}/transfer-ownership`, { token: a, body: { userId: aId } })).status).toBe(400);
+    expect((await api(`/api/cases/${id}/transfer-ownership`, { token: a, body: { userId: bId, role: 'owner' } })).status).toBe(400);
+    // Transfer: B is owner, A is reviewer, the case's owner changes, and it is audited.
+    const t = await api(`/api/cases/${id}/transfer-ownership`, { token: a, body: { userId: bId } });
+    expect(t.status).toBe(200);
+    const roles = Object.fromEntries(t.json.members.map((m: any) => [m.email, m.role]));
+    expect(roles).toMatchObject({ 'xfer-a@example.test': 'reviewer', 'xfer-b@example.test': 'owner', 'xfer-v@example.test': 'viewer' });
+    expect(t.json.members.filter((m: any) => m.role === 'owner')).toHaveLength(1);
+    expect(t.json.case.owner).toContain('xfer-b@example.test');
+    expect(t.json.events.some((e: any) => e.kind === 'owner_transferred')).toBe(true);
+    // The new owner manages access; the former owner no longer can, but can still review.
+    expect((await api(`/api/cases/${id}/members`, { token: a, body: { email: 'xfer-out@example.test', role: 'viewer' } })).status).toBe(403);
+    expect((await api(`/api/cases/${id}/members/${vId}`, { method: 'DELETE', token: b })).status).toBe(200);
+    expect((await api('/api/cases', { token: a })).json.cases.find((c: any) => c.id === id).role).toBe('reviewer');
+    expect((await api(`/api/cases/${id}/transfer-ownership`, { token: b, body: { userId: aId } })).status).toBe(200);
+  });
 });
 
 describe('profile and signed-in overview', () => {
