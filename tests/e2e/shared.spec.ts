@@ -353,3 +353,27 @@ test('a viewer sees the finding read-only: role banner, read-only message, no re
   await expect(own.getByTestId('review-actions')).toBeVisible();
   await expect(own.getByTestId('note-input')).toBeVisible();
 });
+
+test('sign-in is never a dead click: empty fields explain themselves, Enter submits, autofilled values are used', async ({ page }) => {
+  await page.goto('#/settings#workspace');
+  await page.getByTestId('server-url').fill(API);
+  await page.getByTestId('save-server-url').click();
+  await expect(page.getByTestId('server-health')).toContainText('Reachable', { timeout: 100_000 });
+  // Clicking with nothing typed is not silently ignored.
+  await expect(page.getByTestId('ws-submit')).toBeEnabled();
+  await page.getByTestId('ws-submit').click();
+  await expect(page.getByRole('alert')).toContainText('Enter your email and password.');
+  // Wrong credentials reach the server and its error is shown.
+  await page.getByTestId('ws-email').fill(`nobody-${run}@example.test`);
+  await page.getByTestId('ws-password').fill('wrong-password-123');
+  await page.getByTestId('ws-password').press('Enter');
+  await expect(page.getByRole('alert')).not.toContainText('Enter your email and password.', { timeout: 30_000 });
+  // Values set the way browser autofill does (DOM value, no React change event) are still submitted.
+  await page.getByRole('tab', { name: 'Create account' }).click();
+  await page.evaluate(([n, e, p]) => {
+    const set = (id: string, v: string) => { const el = document.getElementById(id) as HTMLInputElement; Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, v); };
+    set('ws-name', n); set('ws-email', e); set('ws-pw', p);
+  }, ['Autofill User', `autofill-${run}@example.test`, PASSWORD]);
+  await page.getByTestId('ws-submit').click();
+  await expect(page.getByTestId('signed-in-as')).toHaveText('Autofill User');
+});
