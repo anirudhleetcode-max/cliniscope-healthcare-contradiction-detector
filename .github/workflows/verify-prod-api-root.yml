@@ -16,8 +16,9 @@ jobs:
         run: |
           js=$(curl -s "$SITE" | grep -o 'assets/index-[^"]*\.js' | head -1); echo "live bundle: $js"
           curl -s "$SITE$js" -o bundle.js
-          for m in demo-hidden-note shared-cases-error purgeRemoteCache 'not shown while you are signed in' 'medguard-api-duti.onrender.com'; do printf '%-40s %s\n' "$m" "$(grep -c -- "$m" bundle.js)"; done
+          for m in make-owner role-banner 'Transfer ownership' 'Your role: ' 'medguard-api-duti.onrender.com'; do printf '%-40s %s\n' "$m" "$(grep -c -- "$m" bundle.js)"; done
           for i in $(seq 1 30); do [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/api/ready")" = 200 ] && break; sleep 10; done
+          echo "openapi lists transfer-ownership: $(curl -s "$API/api/openapi.json" | grep -c transfer-ownership)"
           for p in / /api/health /api/ready /nope; do echo "GET $p -> $(curl -s -o b.json -w '%{http_code}' "$API$p") $(head -c 200 b.json)"; echo; done
           for p in /api/overview /api/cases /api/cases/case_abcdefghijkl /api/activity /api/auth/me; do
             echo "no session  GET $p -> $(curl -s -o /dev/null -w '%{http_code}' "$API$p")"
