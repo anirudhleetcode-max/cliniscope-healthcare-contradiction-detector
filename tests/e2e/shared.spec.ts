@@ -310,3 +310,46 @@ test('the owner hands the case to a reviewer; the role banner on each finding fo
   await rev.goto('#/case');
   await expect(rev.getByTestId('member-email')).toBeVisible();
 });
+
+test('a viewer sees the finding read-only: role banner, read-only message, no review buttons or notes box', async ({ browser }) => {
+  test.setTimeout(180000);
+  const own = await signUp(browser, 'Vera Owner', `vera-${run}@example.test`);
+  const view = await signUp(browser, 'Wes Viewer', `wes-${run}@example.test`);
+  await own.goto('#/cases');
+  await own.getByTestId('new-case').click();
+  await own.getByTestId('new-case-label').fill(`VIEW-${run} · synthetic`);
+  await own.getByTestId('create-shared-case').click();
+  await expect(own).toHaveURL(/#\/documents/);
+  await own.getByTestId('file-input').setInputFiles([
+    { name: 'a-2026-03-12.txt', mimeType: 'text/plain', buffer: Buffer.from('ALLERGIES\nPenicillin allergy documented.') },
+    { name: 'b-2026-03-15.txt', mimeType: 'text/plain', buffer: Buffer.from('Allergies: No known drug allergies.') },
+  ]);
+  await own.getByTestId('upload-submit').click();
+  await expect(own.getByTestId('upload-summary')).toBeVisible({ timeout: 30000 });
+  await own.goto('#/case');
+  await own.getByTestId('member-email').fill(`wes-${run}@example.test`);
+  await own.getByLabel('Role').selectOption('viewer');
+  await own.getByTestId('add-member').click();
+  await expect(own.getByTestId('member-list')).toContainText('Wes Viewer');
+  await view.goto('#/cases');
+  await view.getByTestId('shared-cases').getByRole('button', { name: 'Open shared case' }).click();
+  await expect(view.getByTestId('mode-chip')).toContainText('Shared workspace · viewer');
+  await view.goto('#/contradictions?case=current&q=penicillin');
+  await view.getByTestId('finding-link').first().click();
+  // The finding itself is readable.
+  await expect(view.getByTestId('finding-title')).toContainText('Penicillin');
+  await expect(view.getByTestId('evidence-comparison')).toBeVisible();
+  // Role and read-only state are explicit; no write controls exist.
+  await expect(view.getByTestId('role-banner')).toContainText('Your role: Viewer');
+  await expect(view.getByTestId('viewer-readonly')).toContainText('Read-only access');
+  await expect(view.getByTestId('viewer-readonly')).toContainText('You do not have permission to review or modify this finding.');
+  await expect(view.getByTestId('review-actions')).toHaveCount(0);
+  await expect(view.getByRole('button', { name: /Begin review|Mark as resolved|Confirm discrepancy|Dismiss/ })).toHaveCount(0);
+  await expect(view.getByTestId('note-input')).toHaveCount(0);
+  await expect(view.getByTestId('save-note')).toHaveCount(0);
+  // The owner (reviewer-capable) still has the review interface.
+  await own.goto('#/contradictions?case=current&q=penicillin');
+  await own.getByTestId('finding-link').first().click();
+  await expect(own.getByTestId('review-actions')).toBeVisible();
+  await expect(own.getByTestId('note-input')).toBeVisible();
+});
