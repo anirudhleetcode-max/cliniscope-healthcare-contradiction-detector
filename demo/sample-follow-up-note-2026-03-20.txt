@@ -1,0 +1,15 @@
+DEMO CASE — SYNTHETIC DATA — NOT A REAL PATIENT
+PRIMARY CARE FOLLOW-UP NOTE (fictional)
+Patient: Synthetic Patient SP-0042
+Visit date: 20 March 2026
+
+CURRENT MEDICATIONS
+Metformin 500 mg twice daily.
+Lisinopril 20 mg once daily.
+Atorvastatin 40 mg at night.
+
+ALLERGIES
+Penicillin allergy confirmed with patient today (hives in 2019).
+
+SOCIAL HISTORY
+Current smoker, smokes 5 cigarettes per day.

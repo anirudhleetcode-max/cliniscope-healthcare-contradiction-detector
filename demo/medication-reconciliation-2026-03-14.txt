@@ -1,0 +1,19 @@
+DEMO CASE — SYNTHETIC DATA — NOT A REAL PATIENT
+MEDICATION RECONCILIATION RECORD (fictional pharmacy service)
+Patient: Synthetic Patient SP-0042
+Date of birth: 4 February 1961
+Reconciliation date: 14 March 2026
+Reconciled by: Demo pharmacist (synthetic identity)
+
+ALLERGIES / INTOLERANCES
+- Penicillin - hives (per discharge summary).
+- Possible reaction to sulfa antibiotics as a child, patient unsure, not verified.
+
+ACTIVE MEDICATIONS
+1. Metformin 500 mg twice daily by mouth with meals.
+2. Lisinopril 20 mg once daily (increased from 10 mg on 13 March 2026 by primary care).
+3. Atorvastatin 20 mg at night.
+4. Aspirin 81 mg once daily.
+
+INDICATIONS ON FILE
+Type 2 diabetes mellitus; hypertension.
