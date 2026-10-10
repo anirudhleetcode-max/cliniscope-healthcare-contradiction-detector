@@ -154,8 +154,14 @@ export function ReviewPanel({ finding, caseRec, onSaved, testId }: { finding: Fi
           <p className="mb-3 text-xs text-muted">Local demonstration · reviewing as <span className="font-medium text-ink">{reviewer}</span>. Decisions are stored in this browser only and are not shared with anyone.</p>
         )}
         {caseRec?.remote ? <RoleBanner role={caseRec.remote.role} /> : null}
-        {viewer ? <p className="mb-2 rounded-md bg-subtle px-3 py-2 text-xs text-muted" data-testid="viewer-readonly">You have read-only (viewer) access to this case.</p> : null}
-        <div className={cx('flex flex-col gap-2', viewer && 'hidden')} data-testid="review-actions">
+        {viewer ? (
+          <div className="mb-2 rounded-md bg-subtle px-3 py-2 text-xs text-muted" role="note" data-testid="viewer-readonly">
+            <div className="text-[13px] font-semibold text-ink">Read-only access</div>
+            You do not have permission to review or modify this finding.
+          </div>
+        ) : null}
+        {/* Viewers get no write controls at all (the server also refuses their writes with 403). */}
+        {viewer ? null : <div className="flex flex-col gap-2" data-testid="review-actions">
           {allowed.map((to) => {
             const m = ACTION_META[to];
             const reopen = to === 'in_review' && finding.reviewStatus !== 'unreviewed' && finding.reviewStatus !== 'needs_info';
@@ -169,7 +175,7 @@ export function ReviewPanel({ finding, caseRec, onSaved, testId }: { finding: Fi
               </button>
             );
           })}
-        </div>
+        </div>}
         <p className="mt-3 text-xs leading-relaxed text-muted">A decision records the reviewer's judgement about the documentation. It does not establish which statement is medically correct.</p>
         {viewer ? null : <NoteForm finding={finding} caseRec={caseRec} />}
       </div>

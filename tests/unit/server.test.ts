@@ -181,6 +181,13 @@ describe('shared workspace API: cases, permissions and two-user review', () => {
     expect((await api(`/api/cases/${caseId}`, { token: carol })).json.findings.find((f: any) => f.id === pen.id).reviewStatus).toBe('resolved');
     expect((await api(`/api/findings/${pen.id}/transition`, { token: carol, body: { to: 'in_review', reason: 'reopen please' } })).status).toBe(403);
     expect((await api(`/api/findings/${pen.id}/notes`, { token: carol, body: { note: 'hi' } })).status).toBe(403);
+    // The viewer can still read the finding, its evidence and its history; the attempts above changed nothing.
+    for (const path of [`/api/findings/${pen.id}`, `/api/findings/${pen.id}/evidence`, `/api/findings/${pen.id}/history`]) {
+      expect((await api(path, { token: carol })).status).toBe(200);
+      expect((await api(path)).status).toBe(401); // no session
+    }
+    expect((await api(`/api/cases/${caseId}`, { token: carol })).json.findings.find((f: any) => f.id === pen.id).reviewStatus).toBe('resolved');
+    expect((await api(`/api/cases/${caseId}`, { method: 'PATCH', token: carol, body: { label: 'Renamed by viewer' } })).status).toBe(403);
     expect((await api(`/api/findings/${pen.id}/transition`, { token: mallory, body: { to: 'in_review', reason: 'reopen please' } })).status).toBe(404);
   });
 
