@@ -367,7 +367,8 @@ test('sign-in is never a dead click: empty fields explain themselves, Enter subm
   await page.getByTestId('ws-email').fill(`nobody-${run}@example.test`);
   await page.getByTestId('ws-password').fill('wrong-password-123');
   await page.getByTestId('ws-password').press('Enter');
-  await expect(page.getByRole('alert')).not.toContainText('Enter your email and password.', { timeout: 30_000 });
+  await expect(page.getByRole('alert')).toContainText('Incorrect email or password.', { timeout: 30_000 });
+  await expect(page.getByTestId('ws-submit')).toBeEnabled(); // the request has finished
   // Values set the way browser autofill does (DOM value, no React change event) are still submitted.
   await page.getByRole('tab', { name: 'Create account' }).click();
   await page.evaluate(([n, e, p]) => {

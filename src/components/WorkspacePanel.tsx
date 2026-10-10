@@ -23,20 +23,18 @@ export function WorkspacePanel() {
     try { await ws.startGoogle(link); } // navigates away on success
     catch (e) { toast('error', `Google sign-in could not start: ${(e as Error).message}`); setGoogleBusy(false); }
   };
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reads the form itself, so browser-autofilled credentials (which may not fire React change events)
-  // are used, and the button is never silently disabled: missing fields produce a visible message.
-  const submit = async (form?: HTMLFormElement | null) => {
+  // The fields are uncontrolled and read from the form itself: browser-autofilled credentials (which may not
+  // fire React change events) are used, and a re-render can never reset what the browser filled in.
+  // The button is never silently disabled: missing fields produce a visible message.
+  const submit = async (form: HTMLFormElement) => {
     if (busy) return;
-    const fd = form ? new FormData(form) : null;
-    const e = String(fd?.get('email') ?? email).trim();
-    const p = String(fd?.get('password') ?? password);
-    const n = String(fd?.get('displayName') ?? name).trim();
+    const fd = new FormData(form);
+    const e = String(fd.get('email') ?? '').trim();
+    const p = String(fd.get('password') ?? '');
+    const n = String(fd.get('displayName') ?? '').trim();
     if (!e || !p || (mode === 'register' && !n)) {
       setError(mode === 'register' ? 'Enter your display name, email and password.' : 'Enter your email and password.');
       return;
@@ -46,7 +44,6 @@ export function WorkspacePanel() {
     try {
       if (mode === 'login') await ws.signIn(e, p);
       else await ws.register(e, p, n);
-      setPassword('');
       toast('success', 'Signed in to the shared workspace.');
     } catch (e) {
       setError((e as Error).message);
@@ -107,9 +104,9 @@ export function WorkspacePanel() {
             {ws.health.registration ? <button role="tab" aria-selected={mode === 'register'} className={cx('rounded-md px-2.5 py-1', mode === 'register' ? 'bg-brand-50 font-semibold text-brand-700' : 'text-muted')} onClick={() => setMode('register')}>Create account</button> : null}
           </div>
           <form className="space-y-2" noValidate onSubmit={(ev) => { ev.preventDefault(); void submit(ev.currentTarget); }} data-testid="sign-in-form">
-          {mode === 'register' ? <div><label className="label" htmlFor="ws-name">Display name</label><input id="ws-name" name="displayName" className="input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" data-testid="ws-name" /></div> : null}
-          <div><label className="label" htmlFor="ws-email">Email</label><input id="ws-email" name="email" type="email" className="input" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" data-testid="ws-email" /></div>
-          <div><label className="label" htmlFor="ws-pw">Password {mode === 'register' ? '(min. 10 characters)' : ''}</label><input id="ws-pw" name="password" type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} data-testid="ws-password" /></div>
+          {mode === 'register' ? <div><label className="label" htmlFor="ws-name">Display name</label><input id="ws-name" name="displayName" className="input" autoComplete="name" data-testid="ws-name" /></div> : null}
+          <div><label className="label" htmlFor="ws-email">Email</label><input id="ws-email" name="email" type="email" className="input" autoComplete="username" data-testid="ws-email" /></div>
+          <div><label className="label" htmlFor="ws-pw">Password {mode === 'register' ? '(min. 10 characters)' : ''}</label><input id="ws-pw" name="password" type="password" className="input" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} data-testid="ws-password" /></div>
           {error ? <p className="text-xs font-medium text-crit" role="alert">{error}</p> : null}
           <button type="submit" className="btn-primary w-full" disabled={busy} aria-busy={busy} data-testid="ws-submit">{mode === 'login' ? <><LogIn size={15} />Sign in</> : <><UserPlus size={15} />Create account</>}</button>
           </form>
